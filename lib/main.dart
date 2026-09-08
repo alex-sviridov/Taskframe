@@ -1,22 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/app.dart';
 
-/// Temporary bootstrap widget; replaced once theming and routing land.
+/// Entry point: boots the app inside a Riverpod [ProviderScope].
 void main() {
-  runApp(const ProviderScope(child: _PlaceholderApp()));
-}
-
-class _PlaceholderApp extends StatelessWidget {
-  const new();
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('taskframe'),
-        ),
-      ),
-    );
-  }
+  runApp(const ProviderScope(child: App()));
 }
