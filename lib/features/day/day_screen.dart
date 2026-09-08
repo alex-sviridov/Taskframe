@@ -8,8 +8,7 @@ final appVersionProvider = Provider<String>((ref) => '0.1.0-smoke');
 /// Empty day screen used to smoke-test that the app shell renders.
 class DayScreen extends ConsumerWidget {
   /// Creates a [DayScreen].
-  // ignore: unnecessary_type_name_in_constructor
-  const DayScreen({super.key});
+  const new({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
