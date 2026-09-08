@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Temporary bootstrap widget; replaced once theming and routing land.
 void main() {
-  runApp(const _PlaceholderApp());
+  runApp(const ProviderScope(child: _PlaceholderApp()));
 }
 
 class _PlaceholderApp extends StatelessWidget {
-  const _PlaceholderApp();
+  const new();
 
   @override
   Widget build(BuildContext context) {
