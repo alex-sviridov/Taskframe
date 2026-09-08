@@ -38,9 +38,11 @@ test:
 
 test-coverage:
 	flutter test --coverage
-	@command -v genhtml >/dev/null 2>&1 && \
-		genhtml $(COVERAGE_DIR)/lcov.info -o $(COVERAGE_DIR)/html || \
-		echo "genhtml not found; coverage/lcov.info generated, skipping HTML report"
+	@if command -v genhtml >/dev/null 2>&1; then \
+		genhtml $(COVERAGE_DIR)/lcov.info -o $(COVERAGE_DIR)/html; \
+	else \
+		echo "genhtml not found; coverage/lcov.info generated, skipping HTML report"; \
+	fi
 
 check: format-check analyze test
 
