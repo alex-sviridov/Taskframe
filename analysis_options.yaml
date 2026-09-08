@@ -8,6 +8,8 @@ analyzer:
   exclude:
     - '**/*.g.dart'
     - '**/*.freezed.dart'
+    # Auto-appended by `flutter analyze`'s own one-time migration; harmless
+    # (no .dart files live under these dirs), kept for clarity.
     - build/**
     - android/**
     - ios/**

@@ -1,5 +1,5 @@
 name: taskframe
-description: "A new Flutter project."
+description: "Taskframe - a smoke test of the Flutter + Riverpod + go_router stack."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
