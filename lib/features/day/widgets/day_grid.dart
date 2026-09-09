@@ -192,7 +192,6 @@ class _DayGridState extends State<DayGrid> {
                   labelStyle: Theme.of(context).textTheme.labelSmall,
                   gridLeft: _gridLeft,
                   showLabels: widget.showHourLabels,
-                  nowLineY: nowLineY,
                 ),
               ),
             ),
@@ -203,7 +202,11 @@ class _DayGridState extends State<DayGrid> {
               left: _gridLeft,
               right: 0,
               height: _offsetFor(block.end) - _offsetFor(block.start),
-              child: BlockView(block: block),
+              child: Container(
+                color: scheme.surface,
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: BlockView(block: block),
+              ),
             ),
           if (draft != null)
             Positioned(
@@ -211,9 +214,19 @@ class _DayGridState extends State<DayGrid> {
               left: _gridLeft,
               right: 0,
               height: _offsetFor(draft.end) - _offsetFor(draft.start),
-              child: _DraftOverlay(
-                onCreateEvent: () => _create(BlockKind.anchor),
-                onCreateFrame: () => _create(BlockKind.frame),
+              child: Container(
+                color: scheme.surface,
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: _DraftOverlay(
+                  onCreateEvent: () => _create(BlockKind.anchor),
+                  onCreateFrame: () => _create(BlockKind.frame),
+                ),
+              ),
+            ),
+          if (nowLineY != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: _NowLinePainter(y: nowLineY)),
               ),
             ),
         ],
@@ -357,7 +370,6 @@ class _DayGridPainter extends CustomPainter {
     required this.labelStyle,
     required this.gridLeft,
     required this.showLabels,
-    required this.nowLineY,
   });
 
   final DaySettings settings;
@@ -367,12 +379,7 @@ class _DayGridPainter extends CustomPainter {
   final double gridLeft;
   final bool showLabels;
 
-  /// Pixel y-offset of the current-time marker line, or `null` to hide it
-  /// (not today, or the current time falls outside the visible hours).
-  final double? nowLineY;
-
   static const double _labelLeft = 4;
-  static const Color _nowLineColor = Color(0xFF8B0000);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -417,16 +424,6 @@ class _DayGridPainter extends CustomPainter {
         painter.paint(canvas, Offset(_labelLeft, labelY));
       }
     }
-
-    final markerY = nowLineY;
-    if (markerY != null) {
-      final nowPaint = Paint()
-        ..color = _nowLineColor
-        ..strokeWidth = 2;
-      canvas
-        ..drawLine(Offset(0, markerY), Offset(size.width, markerY), nowPaint)
-        ..drawCircle(Offset(0, markerY), 3, nowPaint);
-    }
   }
 
   @override
@@ -436,6 +433,29 @@ class _DayGridPainter extends CustomPainter {
       oldDelegate.lineColor != lineColor ||
       oldDelegate.labelStyle != labelStyle ||
       oldDelegate.gridLeft != gridLeft ||
-      oldDelegate.showLabels != showLabels ||
-      oldDelegate.nowLineY != nowLineY;
+      oldDelegate.showLabels != showLabels;
+}
+
+/// Draws the current-time marker line above the blocks, so it stays visible
+/// even where a block's opaque background would otherwise hide it.
+class _NowLinePainter extends CustomPainter {
+  const new({required this.y});
+
+  final double y;
+
+  static const Color _color = Color(0xFF8B0000);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _color
+      ..strokeWidth = 2;
+    canvas
+      ..drawLine(Offset(0, y), Offset(size.width, y), paint)
+      ..drawCircle(Offset(0, y), 3, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _NowLinePainter oldDelegate) =>
+      oldDelegate.y != y;
 }
