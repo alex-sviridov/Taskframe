@@ -15,12 +15,24 @@ abstract class DayBlocksRepository {
     required DateTime end,
     required BlockKind kind,
   });
+
+  /// Moves [block] from [fromDate] to [toDate], updating its start/end to
+  /// [newStart]/[newEnd], and returns the updated block. [fromDate] and
+  /// [toDate] may be the same date.
+  Future<TimeObject> move(
+    TimeObject block, {
+    required DateTime fromDate,
+    required DateTime toDate,
+    required DateTime newStart,
+    required DateTime newEnd,
+  });
 }
 
 /// A [DayBlocksRepository] that keeps added blocks in memory for the life
 /// of the app, seeded with a hardcoded set of blocks for today.
 class InMemoryDayBlocksRepository implements DayBlocksRepository {
   final Map<DateTime, List<TimeObject>> _added = {};
+  final Set<String> _movedSeedIds = {};
   int _nextId = 0;
 
   @override
@@ -47,6 +59,37 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
     final key = _dateKey(date);
     _added[key] = [...?_added[key], block];
     return block;
+  }
+
+  @override
+  Future<TimeObject> move(
+    TimeObject block, {
+    required DateTime fromDate,
+    required DateTime toDate,
+    required DateTime newStart,
+    required DateTime newEnd,
+  }) async {
+    final fromKey = _dateKey(fromDate);
+    final toKey = _dateKey(toDate);
+
+    final fromList = _added[fromKey];
+    if (fromList != null && fromList.any((b) => b.id == block.id)) {
+      _added[fromKey] = fromList.where((b) => b.id != block.id).toList();
+    } else {
+      _movedSeedIds.add(block.id);
+    }
+
+    final moved = TimeObject(
+      id: block.id,
+      title: block.title,
+      start: newStart,
+      end: newEnd,
+      kind: block.kind,
+      locked: block.locked,
+    );
+
+    _added[toKey] = [...?_added[toKey], moved];
+    return moved;
   }
 
   static DateTime _dateKey(DateTime date) =>
@@ -107,6 +150,6 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
         kind: BlockKind.frame,
         locked: false,
       ),
-    ];
+    ].where((block) => !_movedSeedIds.contains(block.id)).toList();
   }
 }

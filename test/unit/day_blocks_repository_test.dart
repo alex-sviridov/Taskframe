@@ -87,5 +87,126 @@ void main() {
 
       expect(first.id, isNot(equals(second.id)));
     });
+
+    test('move updates an added block\'s start, end and date', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final laterDate = date.add(const Duration(days: 1));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      final moved = await repository.move(
+        added,
+        fromDate: date,
+        toDate: laterDate,
+        newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
+        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+      );
+
+      expect(moved.id, added.id);
+      expect(
+        moved.start,
+        DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
+      );
+      expect(
+        moved.end,
+        DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+      );
+    });
+
+    test('move removes the block from its original date', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final laterDate = date.add(const Duration(days: 1));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      await repository.move(
+        added,
+        fromDate: date,
+        toDate: laterDate,
+        newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
+        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+      );
+
+      expect(await repository.load(date), isEmpty);
+    });
+
+    test('move adds the block to its new date', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final laterDate = date.add(const Duration(days: 1));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      await repository.move(
+        added,
+        fromDate: date,
+        toDate: laterDate,
+        newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
+        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+      );
+
+      final blocks = await repository.load(laterDate);
+      expect(blocks, hasLength(1));
+      expect(blocks.single.id, added.id);
+    });
+
+    test('moving a seeded block removes it from today and adds it to the '
+        'new date', () async {
+      final today = DateTime.now();
+      final tomorrow = today.add(const Duration(days: 1));
+      final seeded = (await repository.load(today))
+          .firstWhere((b) => b.id == 'breakfast');
+
+      await repository.move(
+        seeded,
+        fromDate: today,
+        toDate: tomorrow,
+        newStart: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 8),
+        newEnd: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 8, 30),
+      );
+
+      final todayBlocks = await repository.load(today);
+      expect(todayBlocks.where((b) => b.id == 'breakfast'), isEmpty);
+
+      final tomorrowBlocks = await repository.load(tomorrow);
+      expect(tomorrowBlocks.single.id, 'breakfast');
+      expect(
+        tomorrowBlocks.single.start,
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 8),
+      );
+    });
+
+    test('move within the same date just updates the block\'s time', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      await repository.move(
+        added,
+        fromDate: date,
+        toDate: date,
+        newStart: DateTime(date.year, date.month, date.day, 15),
+        newEnd: DateTime(date.year, date.month, date.day, 15, 30),
+      );
+
+      final blocks = await repository.load(date);
+      expect(blocks, hasLength(1));
+      expect(blocks.single.start, DateTime(date.year, date.month, date.day, 15));
+    });
   });
 }
