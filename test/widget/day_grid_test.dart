@@ -144,6 +144,31 @@ void main() {
       expect(sizedBox.height, 68 * 8.0);
     });
 
+    testWidgets('positions a block flush left when hour labels are hidden', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DayGrid(
+              date: _date,
+              blocks: [_workBlock],
+              settings: _settings,
+              slotHeight: _slotHeight,
+              showHourLabels: false,
+              onCreateBlock: ({required start, required end, required kind}) {},
+            ),
+          ),
+        ),
+      );
+
+      final positioned = tester.widget<Positioned>(
+        find.ancestor(of: find.text('Work'), matching: find.byType(Positioned)),
+      );
+
+      expect(positioned.left, 4);
+    });
+
     testWidgets('a horizontal drag on free space is forwarded to the caller', (
       tester,
     ) async {

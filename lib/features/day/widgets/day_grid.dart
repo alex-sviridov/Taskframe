@@ -19,6 +19,7 @@ class DayGrid extends StatefulWidget {
     required this.settings,
     required this.slotHeight,
     required this.onCreateBlock,
+    this.showHourLabels = true,
     this.onSwipeStart,
     this.onSwipeUpdate,
     this.onSwipeEnd,
@@ -37,6 +38,13 @@ class DayGrid extends StatefulWidget {
 
   /// Pixel height of a single 15-minute slot.
   final double slotHeight;
+
+  /// Whether this grid draws its own hour-label gutter on the left.
+  ///
+  /// `false` in week view, where a single `HourGutter` draws the labels
+  /// once for all day columns; this grid still draws its own horizontal
+  /// gridlines regardless.
+  final bool showHourLabels;
 
   /// Called when the user confirms a new block from the draft.
   final void Function({
@@ -71,6 +79,8 @@ class _DayGridState extends State<DayGrid> {
       (widget.settings.dayEndHour - widget.settings.dayStartHour) * 4;
 
   double get _dayStartInMinutes => widget.settings.dayStartHour * 60;
+
+  double get _gridLeft => widget.showHourLabels ? 48 : 4;
 
   double _offsetFor(DateTime time) {
     final minutesFromStart = time.hour * 60 + time.minute - _dayStartInMinutes;
@@ -137,6 +147,8 @@ class _DayGridState extends State<DayGrid> {
                   slotHeight: widget.slotHeight,
                   lineColor: scheme.outlineVariant,
                   labelStyle: Theme.of(context).textTheme.labelSmall,
+                  gridLeft: _gridLeft,
+                  showLabels: widget.showHourLabels,
                 ),
               ),
             ),
@@ -144,7 +156,7 @@ class _DayGridState extends State<DayGrid> {
           for (final block in widget.blocks)
             Positioned(
               top: _offsetFor(block.start),
-              left: 48,
+              left: _gridLeft,
               right: 8,
               height: _offsetFor(block.end) - _offsetFor(block.start),
               child: BlockView(block: block),
@@ -152,7 +164,7 @@ class _DayGridState extends State<DayGrid> {
           if (draft != null)
             Positioned(
               top: _offsetFor(draft.start),
-              left: 48,
+              left: _gridLeft,
               right: 8,
               height: _offsetFor(draft.end) - _offsetFor(draft.start),
               child: _DraftOverlay(
@@ -299,15 +311,18 @@ class _DayGridPainter extends CustomPainter {
     required this.slotHeight,
     required this.lineColor,
     required this.labelStyle,
+    required this.gridLeft,
+    required this.showLabels,
   });
 
   final DaySettings settings;
   final double slotHeight;
   final Color lineColor;
   final TextStyle? labelStyle;
+  final double gridLeft;
+  final bool showLabels;
 
   static const double _labelLeft = 4;
-  static const double _gridLeft = 48;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -321,18 +336,20 @@ class _DayGridPainter extends CustomPainter {
     final totalHours = settings.dayEndHour - settings.dayStartHour;
     for (var hour = 0; hour <= totalHours; hour++) {
       final y = hour * 4 * slotHeight;
-      canvas.drawLine(Offset(_gridLeft, y), Offset(size.width, y), hourPaint);
+      canvas.drawLine(Offset(gridLeft, y), Offset(size.width, y), hourPaint);
 
       if (hour < totalHours) {
         for (var quarter = 1; quarter < 4; quarter++) {
           final qy = y + quarter * slotHeight;
           canvas.drawLine(
-            Offset(_gridLeft, qy),
+            Offset(gridLeft, qy),
             Offset(size.width, qy),
             quarterPaint,
           );
         }
       }
+
+      if (!showLabels) continue;
 
       final labelHour = settings.dayStartHour + hour;
       if (labelHour.isEven) {
@@ -350,5 +367,7 @@ class _DayGridPainter extends CustomPainter {
       oldDelegate.settings != settings ||
       oldDelegate.slotHeight != slotHeight ||
       oldDelegate.lineColor != lineColor ||
-      oldDelegate.labelStyle != labelStyle;
+      oldDelegate.labelStyle != labelStyle ||
+      oldDelegate.gridLeft != gridLeft ||
+      oldDelegate.showLabels != showLabels;
 }
