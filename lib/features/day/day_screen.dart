@@ -298,31 +298,40 @@ class _SchedulePage extends ConsumerWidget {
         children: [
           SizedBox(
             height: _headerHeight,
-            child: Row(
-              children: [
-                if (!_showHourLabels)
-                  const SizedBox(width: HourGutter.width),
-                for (final date in dates)
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        key: dayCount == 1
-                            ? const Key('day-screen-date-label')
-                            : Key(
+            child: dayCount == 1
+                ? Center(
+                    child: Text(
+                      key: const Key('day-screen-date-label'),
+                      formatDayHeaderLabel(
+                        dates.first,
+                        showWeekday: true,
+                        pattern: settings.dateFormat,
+                      ),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  )
+                : Row(
+                    children: [
+                      const SizedBox(width: HourGutter.width),
+                      for (final date in dates)
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              key: Key(
                                 'day-screen-date-label-'
                                 '${date.toIso8601String()}',
                               ),
-                        formatDayHeaderLabel(
-                          date,
-                          showWeekday: dayCount == 1,
-                          pattern: settings.dateFormat,
+                              formatDayHeaderLabel(
+                                date,
+                                showWeekday: false,
+                                pattern: settings.dateFormat,
+                              ),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
                         ),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
+                    ],
                   ),
-              ],
-            ),
           ),
           Expanded(
             child: LayoutBuilder(
