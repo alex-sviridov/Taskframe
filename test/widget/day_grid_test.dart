@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +69,21 @@ Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
   await tester.pump(const Duration(milliseconds: 50));
   await tester.tapAt(position);
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Starts a touch drag on [block] within a single-column [_pump]ed grid,
+/// waiting out the long-press timeout before the first move so the
+/// gesture arena has resolved in favor of the long-press recognizer.
+Future<TestGesture> _startTouchDrag(
+  WidgetTester tester,
+  Offset position,
+) async {
+  final gesture = await tester.startGesture(
+    position,
+    kind: PointerDeviceKind.touch,
+  );
+  await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+  return gesture;
 }
 
 void main() {
@@ -423,6 +439,122 @@ void main() {
         await _pump(tester, [_workBlock], container: container);
 
         expect(find.text('Work'), findsNothing);
+      });
+    });
+
+    group('block drag', () {
+      testWidgets('a mouse drag on a block starts immediately, no hold '
+          'needed', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        // 300 is inside Work's y range (192-448).
+        final gesture = await tester.startGesture(
+          const Offset(200, 300),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+
+        expect(container.read(dragStateProvider), isNotNull);
+        await gesture.up();
+      });
+
+      testWidgets('a touch drag on a block requires a long-press to start', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        final gesture = await tester.startGesture(
+          const Offset(200, 300),
+          kind: PointerDeviceKind.touch,
+        );
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+
+        // No long-press timeout elapsed yet: no drag started.
+        expect(container.read(dragStateProvider), isNull);
+
+        await gesture.up();
+      });
+
+      testWidgets('a long-press-and-move on a block starts a drag on '
+          'touch', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        final gesture = await _startTouchDrag(
+          tester,
+          const Offset(200, 300),
+        );
+        await gesture.moveBy(const Offset(0, 32));
+        await tester.pump();
+
+        expect(container.read(dragStateProvider), isNotNull);
+        await gesture.up();
+      });
+
+      testWidgets('releasing a drag over a valid slot commits the move', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        final gesture = await _startTouchDrag(
+          tester,
+          const Offset(200, 300),
+        );
+        // Move down by 32px = 2 slots = 30 minutes.
+        await gesture.moveBy(const Offset(0, 32));
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+
+        expect(container.read(dragStateProvider), isNull);
+      });
+
+      testWidgets('a locked block ignores drag gestures', (tester) async {
+        final locked = TimeObject(
+          id: '1',
+          title: 'Locked',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 13),
+          kind: BlockKind.frame,
+          locked: true,
+        );
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [locked], container: container);
+
+        final gesture = await tester.startGesture(
+          const Offset(200, 300),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+
+        expect(container.read(dragStateProvider), isNull);
+        await gesture.up();
+      });
+
+      testWidgets('a plain tap on a block still dismisses an open draft', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        await _pump(tester, [_workBlock]);
+        await _doubleTapAt(tester, const Offset(200, 500));
+        expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
+
+        await tester.tapAt(const Offset(200, 300));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.bySemanticsLabel('Create Event'), findsNothing);
+        semantics.dispose();
       });
     });
   });

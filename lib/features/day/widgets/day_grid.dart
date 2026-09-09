@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
@@ -7,6 +8,7 @@ import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
+import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
 /// The 15-minute-aligned timeline: an hour grid with [blocks] drawn on top.
 ///
@@ -216,18 +218,33 @@ class _DayGridState extends ConsumerState<DayGrid> {
             ),
           ),
           for (final block in widget.blocks)
-            if (block.id != hiddenBlockId)
-              Positioned(
-                top: _offsetFor(block.start),
-                left: _gridLeft,
-                right: 0,
-                height: _offsetFor(block.end) - _offsetFor(block.start),
-                child: Container(
-                  color: scheme.surface,
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: BlockView(block: block),
-                ),
+            Positioned(
+              top: _offsetFor(block.start),
+              left: _gridLeft,
+              right: 0,
+              height: _offsetFor(block.end) - _offsetFor(block.start),
+              // Stays mounted even while its own drag is in progress
+              // (rather than being filtered out of this loop), so its
+              // gesture recognizer keeps the pointer route that started
+              // the drag alive; only its visible content is swapped out
+              // for an invisible placeholder, leaving the landzone shadow
+              // to represent the block's current drag position instead.
+              child: _DraggableBlock(
+                block: block,
+                date: widget.date,
+                pageDates: _pageDates,
+                settings: widget.settings,
+                slotHeight: widget.slotHeight,
+                onDismissDraft: _dismissDraft,
+                child: block.id == hiddenBlockId
+                    ? const SizedBox.shrink()
+                    : Container(
+                        color: scheme.surface,
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: BlockView(block: block),
+                      ),
               ),
+            ),
           if (draft != null)
             Positioned(
               top: _offsetFor(draft.start),
@@ -274,6 +291,140 @@ class _DayGridState extends ConsumerState<DayGrid> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Wraps one rendered block with its drag gestures: a long-press-and-move
+/// on touch, an immediate pan on mouse/trackpad, and a plain tap
+/// (forwarded to [onDismissDraft]) on any device. Locked blocks only get
+/// the tap handler.
+class _DraggableBlock extends ConsumerWidget {
+  const _DraggableBlock({
+    required this.block,
+    required this.date,
+    required this.pageDates,
+    required this.settings,
+    required this.slotHeight,
+    required this.onDismissDraft,
+    required this.child,
+  });
+
+  final TimeObject block;
+  final DateTime date;
+  final List<DateTime> pageDates;
+  final DaySettings settings;
+  final double slotHeight;
+  final VoidCallback onDismissDraft;
+  final Widget child;
+
+  void _start(WidgetRef ref, Offset globalPosition) {
+    ref
+        .read(dragStateProvider.notifier)
+        .start(
+          block: block,
+          originalDate: date,
+          pointerGlobalPosition: globalPosition,
+        );
+  }
+
+  void _update(WidgetRef ref, Offset globalPosition) {
+    final target = resolveDragTarget(
+      globalPosition: globalPosition,
+      pageDates: pageDates,
+      settings: settings,
+      slotHeight: slotHeight,
+    );
+    ref
+        .read(dragStateProvider.notifier)
+        .updatePointer(
+          globalPosition,
+          targetDate: target?.date,
+          targetStart: target?.start,
+        );
+  }
+
+  void _end(WidgetRef ref, Offset globalPosition) {
+    final notifier = ref.read(dragStateProvider.notifier);
+    final target = resolveDragTarget(
+      globalPosition: globalPosition,
+      pageDates: pageDates,
+      settings: settings,
+      slotHeight: slotHeight,
+    );
+    if (target == null) {
+      notifier.cancel();
+    } else {
+      unawaited(notifier.drop());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (block.locked) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onDismissDraft,
+        child: child,
+      );
+    }
+
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        TapGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+              TapGestureRecognizer.new,
+              (recognizer) => recognizer.onTap = onDismissDraft,
+            ),
+        LongPressGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+              () => LongPressGestureRecognizer()
+                ..supportedDevices = {PointerDeviceKind.touch},
+              (recognizer) {
+                recognizer
+                  ..onLongPressStart = (details) {
+                    _start(ref, details.globalPosition);
+                  }
+                  ..onLongPressMoveUpdate = (details) {
+                    _update(ref, details.globalPosition);
+                  }
+                  ..onLongPressEnd = (details) {
+                    _end(ref, details.globalPosition);
+                  }
+                  ..onLongPressCancel = () {
+                    ref.read(dragStateProvider.notifier).cancel();
+                  };
+              },
+            ),
+        PanGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
+              () => PanGestureRecognizer()
+                ..supportedDevices = {
+                  PointerDeviceKind.mouse,
+                  PointerDeviceKind.trackpad,
+                },
+              (recognizer) {
+                recognizer
+                  ..onStart = (details) {
+                    _start(ref, details.globalPosition);
+                  }
+                  ..onUpdate = (details) {
+                    _update(ref, details.globalPosition);
+                  }
+                  ..onEnd = (_) {
+                    final position = ref
+                        .read(dragStateProvider)
+                        ?.pointerGlobalPosition;
+                    if (position != null) _end(ref, position);
+                  }
+                  ..onCancel = () {
+                    ref.read(dragStateProvider.notifier).cancel();
+                  };
+              },
+            ),
+      },
+      child: child,
     );
   }
 }
