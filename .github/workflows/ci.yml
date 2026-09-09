@@ -15,6 +15,11 @@ jobs:
           channel: stable
           flutter-version: 3.47.2
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
       - run: make setup
       - run: make check
       - run: make build-web

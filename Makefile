@@ -1,6 +1,6 @@
 COVERAGE_DIR := coverage
 
-.PHONY: help setup format format-check analyze test test-coverage check \
+.PHONY: help setup format format-check analyze test test-coverage e2e check \
 	run-android run-web build-apk build-web build-ios clean
 
 help:
@@ -11,7 +11,8 @@ help:
 	@echo "  analyze        Run static analysis (flutter analyze + custom_lint)"
 	@echo "  test           Run tests"
 	@echo "  test-coverage  Run tests with a coverage report"
-	@echo "  check          format-check + analyze + test (run before pushing)"
+	@echo "  e2e            Run Playwright end-to-end tests against flutter web"
+	@echo "  check          format-check + analyze + test + e2e (run before pushing)"
 	@echo "  run-android    Run on an Android device/emulator"
 	@echo "  run-web        Run in Chrome"
 	@echo "  build-apk      Build a release APK"
@@ -22,6 +23,7 @@ help:
 setup:
 	flutter pub get
 	./scripts/install-hooks.sh
+	cd e2e && npm ci && npx playwright install --with-deps chromium
 
 format:
 	dart format .
@@ -44,7 +46,10 @@ test-coverage:
 		echo "genhtml not found; coverage/lcov.info generated, skipping HTML report"; \
 	fi
 
-check: format-check analyze test
+e2e:
+	cd e2e && npx playwright test
+
+check: format-check analyze test e2e
 
 run-android:
 	flutter run -d android
