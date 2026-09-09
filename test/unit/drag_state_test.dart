@@ -1,0 +1,55 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/models/drag_state.dart';
+import 'package:taskframe/features/day/models/time_object.dart';
+
+TimeObject _block() => TimeObject(
+  id: '1',
+  title: 'Work',
+  start: DateTime(2026, 9, 9, 9),
+  end: DateTime(2026, 9, 9, 9, 30),
+  kind: BlockKind.anchor,
+  locked: false,
+);
+
+void main() {
+  group('DragState', () {
+    test('copyWith overrides only the given fields', () {
+      final state = DragState(
+        block: _block(),
+        originalDate: DateTime(2026, 9, 9),
+        targetDate: DateTime(2026, 9, 9),
+        targetStart: DateTime(2026, 9, 9, 9),
+        pointerGlobalPosition: const Offset(10, 20),
+      );
+
+      final updated = state.copyWith(
+        targetDate: DateTime(2026, 9, 10),
+        targetStart: DateTime(2026, 9, 10, 11),
+        pointerGlobalPosition: const Offset(30, 40),
+      );
+
+      expect(updated.block, state.block);
+      expect(updated.originalDate, state.originalDate);
+      expect(updated.targetDate, DateTime(2026, 9, 10));
+      expect(updated.targetStart, DateTime(2026, 9, 10, 11));
+      expect(updated.pointerGlobalPosition, const Offset(30, 40));
+    });
+
+    test('copyWith with no arguments returns identical values', () {
+      final state = DragState(
+        block: _block(),
+        originalDate: DateTime(2026, 9, 9),
+        targetDate: DateTime(2026, 9, 9),
+        targetStart: DateTime(2026, 9, 9, 9),
+        pointerGlobalPosition: const Offset(10, 20),
+      );
+
+      final copy = state.copyWith();
+
+      expect(copy.targetDate, state.targetDate);
+      expect(copy.targetStart, state.targetStart);
+      expect(copy.pointerGlobalPosition, state.pointerGlobalPosition);
+    });
+  });
+}
