@@ -122,6 +122,7 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   /// when the viewport crosses [_weekBreakpoint] and the meaning of "one
   /// page" changes between a day and a week.
   void _resyncForDaysPerPage(int newDaysPerPage) {
+    if (!mounted) return;
     final selected = ref.read(selectedDateProvider);
     final newAnchor = newDaysPerPage == 7
         ? startOfWeek(
@@ -152,6 +153,7 @@ class _DayScreenState extends ConsumerState<DayScreen> {
             _resyncScheduled = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _resyncScheduled = false;
+              if (!mounted) return;
               _resyncForDaysPerPage(wantedDaysPerPage);
             });
           }
