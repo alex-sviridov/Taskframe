@@ -36,12 +36,15 @@ test('the previous-day arrow returns to today’s blocks', async ({
 });
 
 test('the date label updates when switching days', async ({ page }) => {
-  // Capture page content before
-  const contentBefore = await page.content();
+  const dateLabel = page.getByRole('group', {
+    name: /^\w+day, \d{2}\/\d{2}\/\d{4}$/,
+  });
+  const before = await dateLabel.getAttribute('aria-label');
 
   await page.getByRole('button', { name: 'Next day' }).click();
 
-  // Capture page content after and verify it changed
-  const contentAfter = await page.content();
-  expect(contentAfter).not.toEqual(contentBefore);
+  await expect(async () => {
+    const after = await dateLabel.getAttribute('aria-label');
+    expect(after).not.toEqual(before);
+  }).toPass();
 });
