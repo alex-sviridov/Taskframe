@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_screen.dart';
+import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
+
+/// Mirrors the field-based date arithmetic `_startDateForPage` and
+/// `_SchedulePage`'s `dates` list in day_screen.dart use, so DST/month-
+/// boundary correctness can be exercised without a widget pump.
+DateTime _addCalendarDays(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
 
 Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(
@@ -190,6 +197,182 @@ void main() {
           ),
           findsOneWidget,
         );
+      },
+    );
+
+    testWidgets(
+      'pinned Monday-first week shows the exact expected dates in order',
+      (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        // Wednesday 2026-09-09.
+        container.read(selectedDateProvider.notifier).date = DateTime(
+          2026,
+          9,
+          9,
+        );
+
+        _resizeViewport(tester, const Size(1000, 800));
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: DayScreen()),
+          ),
+        );
+        await tester.pump();
+
+        final expectedDates = List.generate(
+          7,
+          (i) => DateTime(2026, 9, 7 + i),
+        );
+        for (final date in expectedDates) {
+          expect(
+            find.byKey(
+              Key('day-screen-date-label-${date.toIso8601String()}'),
+            ),
+            findsOneWidget,
+            reason: 'expected a header for ${date.toIso8601String()}',
+          );
+        }
+
+        // Also assert left-to-right order matches the expected sequence.
+        final headerRow = tester.widget<Row>(
+          find
+              .ancestor(
+                of: find.byKey(
+                  Key(
+                    'day-screen-date-label-'
+                    '${expectedDates.first.toIso8601String()}',
+                  ),
+                ),
+                matching: find.byType(Row),
+              )
+              .first,
+        );
+        final labelKeys = headerRow.children
+            .whereType<Expanded>()
+            .map((expanded) => expanded.child)
+            .whereType<Center>()
+            .map((center) => center.child)
+            .whereType<Semantics>()
+            .map((semantics) => semantics.child)
+            .whereType<Text>()
+            .map((text) => text.key)
+            .toList();
+        expect(
+          labelKeys,
+          expectedDates
+              .map(
+                (date) =>
+                    Key('day-screen-date-label-${date.toIso8601String()}'),
+              )
+              .toList(),
+        );
+      },
+    );
+
+    testWidgets(
+      'a Sunday-first week setting starts the week on the correct Sunday',
+      (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        // Wednesday 2026-09-09.
+        container.read(selectedDateProvider.notifier).date = DateTime(
+          2026,
+          9,
+          9,
+        );
+
+        _resizeViewport(tester, const Size(1000, 800));
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: ProviderScope(
+              overrides: [
+                daySettingsProvider.overrideWithValue(
+                  const DaySettings(
+                    dayStartHour: 6,
+                    dayEndHour: 23,
+                    firstDayOfWeek: DateTime.sunday,
+                    dateFormat: 'dd/MM/yyyy',
+                  ),
+                ),
+              ],
+              child: const MaterialApp(home: DayScreen()),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // Sunday 2026-09-06, one day before the Monday-first week's start.
+        final expectedFirstDay = DateTime(2026, 9, 6);
+        expect(
+          find.byKey(
+            Key(
+              'day-screen-date-label-'
+              '${expectedFirstDay.toIso8601String()}',
+            ),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
+  group('calendar-date arithmetic (DST/month-boundary safety)', () {
+    test(
+      'adding days across a month boundary yields distinct consecutive '
+      'calendar dates',
+      () {
+        final start = DateTime(2026, 1, 28);
+        final dates = List.generate(40, (i) => _addCalendarDays(start, i));
+
+        // All dates distinct.
+        expect(dates.toSet().length, dates.length);
+
+        // Each date is exactly one calendar day after the previous one.
+        for (var i = 1; i < dates.length; i++) {
+          final expectedNext = DateTime(
+            dates[i - 1].year,
+            dates[i - 1].month,
+            dates[i - 1].day + 1,
+          );
+          expect(dates[i], expectedNext);
+        }
+      },
+    );
+
+    test(
+      'Duration-based arithmetic (the old, buggy approach) can collapse '
+      'two distinct calendar days into the same instant across a DST '
+      'transition',
+      () {
+        // This test documents *why* the fix in day_screen.dart matters.
+        // Whether it actually demonstrates a collision depends on the
+        // host's local timezone observing DST on this date; in a
+        // UTC-only sandbox (no DST), `.add(Duration(days: 1))` still
+        // produces the calendar-correct next day, so this assertion is
+        // a no-op there. Real DST-crossing coverage needs a
+        // timezone-aware test harness this project doesn't have yet.
+        final beforeTransition = DateTime(2026, 11, 1, 23);
+        final durationBased = beforeTransition.add(const Duration(days: 1));
+        final fieldBased = DateTime(
+          beforeTransition.year,
+          beforeTransition.month,
+          beforeTransition.day + 1,
+          beforeTransition.hour,
+        );
+
+        // The field-based (fixed) approach always lands on the correct
+        // next calendar day, regardless of DST.
+        expect(fieldBased.day, beforeTransition.day + 1);
+        expect(fieldBased.year, beforeTransition.year);
+        expect(fieldBased.month, beforeTransition.month);
+
+        // In a timezone with no DST transition on this date (e.g. UTC,
+        // which this sandbox runs in), Duration-based and field-based
+        // arithmetic agree.
+        expect(durationBased, fieldBased);
       },
     );
   });

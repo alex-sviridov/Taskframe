@@ -84,8 +84,11 @@ class _DayScreenState extends ConsumerState<DayScreen> {
     super.dispose();
   }
 
-  DateTime _startDateForPage(int page) =>
-      _anchorDate.add(Duration(days: (page - _pageSpread) * _daysPerPage!));
+  DateTime _startDateForPage(int page) => DateTime(
+    _anchorDate.year,
+    _anchorDate.month,
+    _anchorDate.day + (page - _pageSpread) * _daysPerPage!,
+  );
 
   void _onPageChanged(int page) {
     ref.read(selectedDateProvider.notifier).date = _startDateForPage(page);
@@ -289,7 +292,7 @@ class _SchedulePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dates = List.generate(
       dayCount,
-      (i) => startDate.add(Duration(days: i)),
+      (i) => DateTime(startDate.year, startDate.month, startDate.day + i),
     );
 
     return Padding(
@@ -316,17 +319,21 @@ class _SchedulePage extends ConsumerWidget {
                       for (final date in dates)
                         Expanded(
                           child: Center(
-                            child: Text(
-                              key: Key(
-                                'day-screen-date-label-'
-                                '${date.toIso8601String()}',
+                            child: Semantics(
+                              header: true,
+                              container: true,
+                              child: Text(
+                                key: Key(
+                                  'day-screen-date-label-'
+                                  '${date.toIso8601String()}',
+                                ),
+                                formatDayHeaderLabel(
+                                  date,
+                                  showWeekday: false,
+                                  pattern: settings.dateFormat,
+                                ),
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
-                              formatDayHeaderLabel(
-                                date,
-                                showWeekday: false,
-                                pattern: settings.dateFormat,
-                              ),
-                              style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
                         ),
