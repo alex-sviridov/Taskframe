@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_screen.dart';
+import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 
 Future<void> _pump(WidgetTester tester) async {
@@ -24,6 +25,7 @@ void main() {
     testWidgets("shows the app title and today's hardcoded blocks", (
       tester,
     ) async {
+      _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
       expect(find.widgetWithText(AppBar, 'Day Frame'), findsOneWidget);
@@ -34,6 +36,7 @@ void main() {
     testWidgets('the next-day arrow switches to a day with no blocks', (
       tester,
     ) async {
+      _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
       await tester.tap(find.byTooltip('Next day'));
@@ -45,6 +48,7 @@ void main() {
     testWidgets("the previous-day arrow returns to today's blocks", (
       tester,
     ) async {
+      _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
       await tester.tap(find.byTooltip('Next day'));
@@ -56,6 +60,7 @@ void main() {
     });
 
     testWidgets('the date label updates when switching days', (tester) async {
+      _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
       final before = tester
@@ -97,6 +102,7 @@ void main() {
     testWidgets('double-tapping free space and confirming adds a new block', (
       tester,
     ) async {
+      _resizeViewport(tester, const Size(800, 1000));
       final semantics = tester.ensureSemantics();
       await _pump(tester);
 
@@ -120,6 +126,7 @@ void main() {
     testWidgets('a horizontal fling on free grid space switches the day', (
       tester,
     ) async {
+      _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
       // A few pixels into the grid is always before Breakfast (7:00),
@@ -134,5 +141,56 @@ void main() {
 
       expect(find.text('Breakfast'), findsNothing);
     });
+
+    testWidgets('shows a full week of grids on a wide viewport', (
+      tester,
+    ) async {
+      _resizeViewport(tester, const Size(1000, 800));
+
+      await _pump(tester);
+
+      expect(find.byType(DayGrid), findsNWidgets(7));
+    });
+
+    testWidgets('omits the weekday name from headers in week view', (
+      tester,
+    ) async {
+      _resizeViewport(tester, const Size(1000, 800));
+
+      await _pump(tester);
+
+      expect(find.textContaining('day,'), findsNothing);
+    });
+
+    testWidgets(
+      'switching from day to week view keeps the selected date visible',
+      (tester) async {
+        _resizeViewport(tester, const Size(800, 1000));
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: DayScreen()),
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.byTooltip('Next day'));
+        await tester.pumpAndSettle();
+
+        final selected = container.read(selectedDateProvider);
+
+        _resizeViewport(tester, const Size(1000, 800));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(
+            Key('day-screen-date-label-${selected.toIso8601String()}'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
