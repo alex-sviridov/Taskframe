@@ -37,6 +37,11 @@ test('dragging a block into the right edge pages to the next day', async ({
   const breakfast = page.getByText('Breakfast');
   const box = (await breakfast.boundingBox())!;
 
+  const dateLabel = page.getByRole('group', {
+    name: /^\w+day, \d{2}\/\d{2}\/\d{4}$/,
+  });
+  const dateBeforeDrag = await dateLabel.getAttribute('aria-label');
+
   // Drag to the right edge and hold there past the dwell time before
   // releasing, so the screen pages to tomorrow. The dwell is 600ms and
   // the page-turn animation itself takes another 250ms; waiting 900ms
@@ -51,5 +56,23 @@ test('dragging a block into the right edge pages to the next day', async ({
   await page.waitForTimeout(100);
   await page.mouse.up();
 
+  // The edge dwell really turned the page.
+  await expect(async () => {
+    const after = await dateLabel.getAttribute('aria-label');
+    expect(after).not.toEqual(dateBeforeDrag);
+  }).toPass();
+
+  // And the block really *landed* on the day now on screen, rather than
+  // being stuck invisible behind a drag that never committed. Asserting
+  // only that Breakfast is gone from the original day (the previous
+  // version of this test) passes either way, which is exactly how a drag
+  // whose pointer route died at the page turn went unnoticed.
+  await expect(page.getByText('Breakfast')).toBeVisible();
+
+  // It is genuinely no longer on the day it came from.
+  await page.getByRole('button', { name: 'Previous day' }).click();
   await expect(page.getByText('Breakfast')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Next day' }).click();
+  await expect(page.getByText('Breakfast')).toBeVisible();
 });

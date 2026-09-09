@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -468,20 +469,95 @@ void main() {
   });
 
   group('resolveDragTarget through the real day_screen.dart week view', () {
+    testWidgets('finds a target in a second, non-origin column '
+        '(regression: column lookup must not depend on DateTime object '
+        'identity)', (tester) async {
+      _resizeViewport(tester, const Size(1000, 800));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      // Wednesday 2026-09-09.
+      container.read(selectedDateProvider.notifier).date = DateTime(2026, 9, 9);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: DayScreen()),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(DayGrid), findsNWidgets(7));
+
+      final firstGrid = tester.widget<DayGrid>(find.byType(DayGrid).first);
+      final settings = container.read(daySettingsProvider);
+      final slotHeight = firstGrid.slotHeight;
+
+      // Target a point inside the second column (index 1), which is not
+      // where any drag would "start" (the origin/first column).
+      //
+      // Two identity traps have to stay fixed for this to resolve. The
+      // original one: `_buildColumn` built a *fresh* date list for its
+      // `pageDates` argument whose `DateTime`s were `==`-equal but not
+      // `identical()` to the ones each column's `key: dayGridKeyFor(date)`
+      // was built from, and `GlobalObjectKey` compares by `identical()`,
+      // so every lookup failed. `dayGridKeyFor` now memoizes one
+      // `GlobalKey` per calendar day, so `==`-equal dates share a key and
+      // no caller has to preserve object identity at all — which is why
+      // this call passes no candidate list and simply lets the resolver
+      // search whichever columns are mounted right now.
+      final secondColumnCenter = tester.getCenter(find.byType(DayGrid).at(1));
+
+      final target = resolveDragTarget(
+        globalPosition: secondColumnCenter,
+        settings: settings,
+        slotHeight: slotHeight,
+      );
+
+      expect(
+        target,
+        isNotNull,
+        reason:
+            'resolveDragTarget should find the DayGrid column under the '
+            'pointer via its memoized GlobalKey',
+      );
+      // Monday-first week of Wednesday 2026-09-09 starts on 2026-09-07.
+      expect(target!.date, DateTime(2026, 9, 8));
+    });
+
     testWidgets(
-      'finds a target in a second, non-origin column '
-      '(regression: pageDates must share the same DateTime instances as '
-      "each column's GlobalObjectKey)",
+      'dayGridKeyFor memoizes one key per calendar day, so a rebuild with '
+      'fresh DateTime instances does not reinflate every DayGrid',
       (tester) async {
-        _resizeViewport(tester, const Size(1000, 800));
+        expect(
+          dayGridKeyFor(DateTime(2026, 9, 9)),
+          same(dayGridKeyFor(DateTime(2026, 9, 9))),
+        );
+        // Same calendar day, different instance and time of day.
+        expect(
+          dayGridKeyFor(DateTime(2026, 9, 9, 13, 45)),
+          same(dayGridKeyFor(DateTime(2026, 9, 9))),
+        );
+        expect(
+          dayGridKeyFor(DateTime(2026, 9, 10)),
+          isNot(same(dayGridKeyFor(DateTime(2026, 9, 9)))),
+        );
+      },
+    );
+  });
+
+  group('a drag that pages across a day boundary mid-gesture', () {
+    testWidgets(
+      'keeps tracking the pointer after the origin page unmounts, commits '
+      'the move onto the new day, and stops auto-paging on release',
+      (tester) async {
+        // Day view (one column per page), so crossing to another day
+        // requires a real page turn that unmounts the origin page — and
+        // with it the dragged block's own gesture recognizers.
+        _resizeViewport(tester, const Size(800, 1000));
         final container = ProviderContainer();
         addTearDown(container.dispose);
-        // Wednesday 2026-09-09.
-        container.read(selectedDateProvider.notifier).date = DateTime(
-          2026,
-          9,
-          9,
-        );
+        final today = container.read(selectedDateProvider);
+        final tomorrow = DateTime(today.year, today.month, today.day + 1);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -490,49 +566,126 @@ void main() {
           ),
         );
         await tester.pump();
+        expect(find.byType(DayGrid), findsOneWidget);
+        expect(find.text('Breakfast'), findsOneWidget);
 
-        expect(find.byType(DayGrid), findsNWidgets(7));
-
-        // The exact `List<DateTime>` instance day_screen.dart passed as
-        // every column's `pageDates:` argument. Deliberately read off the
-        // live widget tree rather than reconstructed here with fresh
-        // `DateTime(...)` values: `GlobalObjectKey` compares by
-        // `identical()`, so a freshly-built list of `==`-equal-but-distinct
-        // `DateTime` instances would defeat the very check this test
-        // exists to make (and did, in the pre-fix code, for the *opposite*
-        // reason: day_screen.dart itself built two non-identical lists).
-        final firstGrid = tester.widget<DayGrid>(find.byType(DayGrid).first);
-        final pageDates = firstGrid.pageDates!;
-        final settings = container.read(daySettingsProvider);
-        final slotHeight = firstGrid.slotHeight;
-
-        // Target a point inside the second column (index 1), which is not
-        // where any drag would "start" (the origin/first column). Before
-        // the fix, `_buildColumn` built a fresh `pageDates` list whose
-        // `DateTime` instances were `==`-equal but not `identical()` to
-        // the ones each column's `key: dayGridKeyFor(date)` was built
-        // with, so `GlobalObjectKey` lookups inside `resolveDragTarget`
-        // always failed and this returned null regardless of position.
-        final secondColumnCenter = tester.getCenter(
-          find.byType(DayGrid).at(1),
+        final grabPoint = tester.getCenter(find.text('Breakfast'));
+        final gesture = await tester.startGesture(
+          grabPoint,
+          kind: PointerDeviceKind.mouse,
         );
+        // Past the pan slop, so the drag actually starts.
+        await gesture.moveBy(const Offset(0, 12));
+        await tester.pump();
+        expect(container.read(dragStateProvider), isNotNull);
 
-        final target = resolveDragTarget(
-          globalPosition: secondColumnCenter,
-          pageDates: pageDates,
-          settings: settings,
-          slotHeight: slotHeight,
-        );
+        // Dwell in the right edge zone until it pages to tomorrow.
+        await gesture.moveTo(Offset(790, grabPoint.dy));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 650));
+        // Leave the edge zone so paging stops after exactly one turn, then
+        // let the page-turn animation settle — that settling is what
+        // unmounts the origin page's subtree and disposes the recognizers
+        // that used to own this gesture.
+        await gesture.moveTo(Offset(400, grabPoint.dy));
+        await tester.pumpAndSettle();
 
         expect(
-          target,
-          isNotNull,
-          reason:
-              'resolveDragTarget should find the DayGrid column under the '
-              'pointer via its GlobalObjectKey',
+          container.read(selectedDateProvider),
+          tomorrow,
+          reason: 'the edge dwell should have paged forward exactly one day',
         );
-        expect(target!.date, pageDates[1]);
+
+        // The drag must still be live and still tracking: before the fix,
+        // the origin page's unmount silently killed the pointer route, so
+        // no further move (and no pointer-up) could ever arrive again.
+        // This is the first move delivered *after* that unmount.
+        final dropPoint = tester.getCenter(find.byType(DayGrid));
+        await gesture.moveTo(dropPoint);
+        await tester.pump();
+
+        final duringDrag = container.read(dragStateProvider);
+        expect(duringDrag, isNotNull);
+        expect(
+          duringDrag!.targetDate,
+          tomorrow,
+          reason:
+              'pointer moves after the page turn must resolve against the '
+              'column visible now, not the page the drag started on',
+        );
+
+        // Release over the new day's column.
+        await gesture.up();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(
+          container.read(dragStateProvider),
+          isNull,
+          reason: 'releasing must resolve the drag rather than leak it',
+        );
+
+        // The move really landed: gone from today, present on tomorrow.
+        final originBlocks = await container.read(
+          dayBlocksProvider(today).future,
+        );
+        expect(originBlocks.where((b) => b.title == 'Breakfast'), isEmpty);
+        final targetBlocks = await container.read(
+          dayBlocksProvider(tomorrow).future,
+        );
+        expect(targetBlocks.where((b) => b.title == 'Breakfast'), hasLength(1));
+
+        // And auto-paging really stopped: several more dwell periods pass
+        // with no further page turns.
+        final pageAfterDrop = container.read(selectedDateProvider);
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 650));
+        }
+        await tester.pumpAndSettle();
+        expect(container.read(selectedDateProvider), pageAfterDrop);
       },
     );
+
+    testWidgets('releasing where no column is under the pointer cancels the '
+        'move, and the landzone is already gone there', (tester) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final today = container.read(selectedDateProvider);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: DayScreen()),
+        ),
+      );
+      await tester.pump();
+
+      final grabPoint = tester.getCenter(find.text('Breakfast'));
+      final gesture = await tester.startGesture(
+        grabPoint,
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(0, 12));
+      await tester.pump();
+      expect(container.read(dragStateProvider)!.hasTarget, isTrue);
+
+      // Up into the header, above every day column.
+      await gesture.moveTo(const Offset(400, 4));
+      await tester.pump();
+
+      // The landzone must already be gone here — the user should never see
+      // a shadow at a spot where releasing does nothing.
+      expect(container.read(dragStateProvider)!.hasTarget, isFalse);
+      expect(find.byKey(const Key('day-grid-landzone')), findsNothing);
+
+      await gesture.up();
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(container.read(dragStateProvider), isNull);
+      final blocks = await container.read(dayBlocksProvider(today).future);
+      expect(blocks.where((b) => b.title == 'Breakfast'), hasLength(1));
+    });
   });
 }

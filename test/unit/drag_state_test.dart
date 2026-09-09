@@ -51,5 +51,28 @@ void main() {
       expect(copy.targetStart, state.targetStart);
       expect(copy.pointerGlobalPosition, state.pointerGlobalPosition);
     });
+
+    test('copyWith(clearTarget: true) drops the landzone entirely', () {
+      final state = DragState(
+        block: _block(),
+        originalDate: DateTime(2026, 9, 9),
+        targetDate: DateTime(2026, 9, 9),
+        targetStart: DateTime(2026, 9, 9, 9),
+        pointerGlobalPosition: const Offset(10, 20),
+      );
+      expect(state.hasTarget, isTrue);
+
+      final cleared = state.copyWith(
+        clearTarget: true,
+        pointerGlobalPosition: const Offset(30, 40),
+      );
+
+      expect(cleared.targetDate, isNull);
+      expect(cleared.targetStart, isNull);
+      expect(cleared.hasTarget, isFalse);
+      expect(cleared.block, state.block);
+      expect(cleared.originalDate, state.originalDate);
+      expect(cleared.pointerGlobalPosition, const Offset(30, 40));
+    });
   });
 }

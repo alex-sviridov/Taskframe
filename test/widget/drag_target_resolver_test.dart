@@ -39,7 +39,7 @@ void main() {
       // the 6:00 day start.
       final target = resolveDragTarget(
         globalPosition: const Offset(310, 192),
-        pageDates: _dates,
+        candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
       );
@@ -55,7 +55,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(3000, 192),
-        pageDates: _dates,
+        candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
       );
@@ -70,7 +70,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(10, 5000),
-        pageDates: _dates,
+        candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
       );

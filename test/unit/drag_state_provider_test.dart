@@ -42,8 +42,8 @@ void main() {
       expect(state.pointerGlobalPosition, const Offset(10, 20));
     });
 
-    test('updatePointer moves the pointer without changing target when no '
-        'target is given', () {
+    test('updatePointer clears the landzone when the pointer is over no '
+        'column, so the shadow never contradicts drop-outside-cancels', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container.read(dragStateProvider.notifier).start(
@@ -51,6 +51,7 @@ void main() {
         originalDate: DateTime(2026, 9, 9),
         pointerGlobalPosition: const Offset(10, 20),
       );
+      expect(container.read(dragStateProvider)!.hasTarget, isTrue);
 
       container
           .read(dragStateProvider.notifier)
@@ -58,7 +59,43 @@ void main() {
 
       final state = container.read(dragStateProvider)!;
       expect(state.pointerGlobalPosition, const Offset(50, 60));
-      expect(state.targetDate, DateTime(2026, 9, 9));
+      expect(state.targetDate, isNull);
+      expect(state.targetStart, isNull);
+      expect(state.hasTarget, isFalse);
+    });
+
+    test('drop with no landzone cancels instead of moving the block', (
+    ) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final originalDate = DateTime(2026, 9, 9);
+      await container.read(dayBlocksProvider(originalDate).future);
+      await container
+          .read(dayBlocksProvider(originalDate).notifier)
+          .addBlock(
+            start: DateTime(2026, 9, 9, 10),
+            end: DateTime(2026, 9, 9, 10, 30),
+            kind: BlockKind.anchor,
+          );
+      final block = container
+          .read(dayBlocksProvider(originalDate))
+          .value!
+          .last;
+
+      container.read(dragStateProvider.notifier).start(
+        block: block,
+        originalDate: originalDate,
+        pointerGlobalPosition: const Offset(10, 20),
+      );
+      container
+          .read(dragStateProvider.notifier)
+          .updatePointer(const Offset(50, 60));
+
+      await container.read(dragStateProvider.notifier).drop();
+
+      expect(container.read(dragStateProvider), isNull);
+      final blocks = container.read(dayBlocksProvider(originalDate)).value!;
+      expect(blocks.singleWhere((b) => b.id == block.id).start, block.start);
     });
 
     test('updatePointer with a target updates targetDate and targetStart', (
