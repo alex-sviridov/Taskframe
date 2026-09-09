@@ -37,7 +37,7 @@ void main() {
       await _pump(tester);
 
       await tester.tap(find.byTooltip('Next day'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Breakfast'), findsNothing);
     });
@@ -48,9 +48,9 @@ void main() {
       await _pump(tester);
 
       await tester.tap(find.byTooltip('Next day'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Previous day'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Breakfast'), findsOneWidget);
     });
@@ -63,7 +63,7 @@ void main() {
           .data;
 
       await tester.tap(find.byTooltip('Next day'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       final after = tester
           .widget<Text>(find.byKey(const Key('day-screen-date-label')))
@@ -130,7 +130,7 @@ void main() {
         const Offset(-300, 0),
         1000,
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Breakfast'), findsNothing);
     });

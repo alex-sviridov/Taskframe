@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
-import 'package:taskframe/features/day/day_swipe.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 
@@ -20,7 +19,10 @@ class DayGrid extends StatefulWidget {
     required this.settings,
     required this.slotHeight,
     required this.onCreateBlock,
-    this.onSwipeDay,
+    this.onSwipeStart,
+    this.onSwipeUpdate,
+    this.onSwipeEnd,
+    this.onSwipeCancel,
     super.key,
   });
 
@@ -44,9 +46,19 @@ class DayGrid extends StatefulWidget {
   })
   onCreateBlock;
 
-  /// Called with `1`/`-1` when the user swipes on free grid space (not on a
-  /// block) fast enough to switch to the next/previous day.
-  final void Function(int direction)? onSwipeDay;
+  /// Forwarded from a horizontal drag that starts on free grid space (not
+  /// on a block), so the caller can drive its own day-switching animation
+  /// finger-tracked. `null` disables day-switching entirely.
+  final GestureDragStartCallback? onSwipeStart;
+
+  /// See [onSwipeStart].
+  final GestureDragUpdateCallback? onSwipeUpdate;
+
+  /// See [onSwipeStart].
+  final GestureDragEndCallback? onSwipeEnd;
+
+  /// See [onSwipeStart].
+  final VoidCallback? onSwipeCancel;
 
   @override
   State<DayGrid> createState() => _DayGridState();
@@ -115,14 +127,10 @@ class _DayGridState extends State<DayGrid> {
                   _openDraftAt(details.localPosition.dy),
               onLongPressStart: (details) =>
                   _openDraftAt(details.localPosition.dy),
-              onHorizontalDragEnd: (details) {
-                final direction = resolveSwipeDirection(
-                  details.primaryVelocity,
-                );
-                if (direction != null) {
-                  widget.onSwipeDay?.call(direction);
-                }
-              },
+              onHorizontalDragStart: widget.onSwipeStart,
+              onHorizontalDragUpdate: widget.onSwipeUpdate,
+              onHorizontalDragEnd: widget.onSwipeEnd,
+              onHorizontalDragCancel: widget.onSwipeCancel,
               child: CustomPaint(
                 painter: _DayGridPainter(
                   settings: widget.settings,

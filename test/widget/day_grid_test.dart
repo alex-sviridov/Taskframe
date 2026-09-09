@@ -13,7 +13,9 @@ typedef _CreatedBlock = ({DateTime start, DateTime end, BlockKind kind});
 Future<void> _pump(
   WidgetTester tester,
   List<TimeObject> blocks, {
-  void Function(int direction)? onSwipeDay,
+  GestureDragStartCallback? onSwipeStart,
+  GestureDragUpdateCallback? onSwipeUpdate,
+  GestureDragEndCallback? onSwipeEnd,
   void Function({
     required DateTime start,
     required DateTime end,
@@ -28,7 +30,9 @@ Future<void> _pump(
         blocks: blocks,
         settings: _settings,
         slotHeight: _slotHeight,
-        onSwipeDay: onSwipeDay,
+        onSwipeStart: onSwipeStart,
+        onSwipeUpdate: onSwipeUpdate,
+        onSwipeEnd: onSwipeEnd,
         onCreateBlock:
             onCreateBlock ?? ({required start, required end, required kind}) {},
       ),
@@ -135,11 +139,17 @@ void main() {
       expect(sizedBox.height, 68 * 8.0);
     });
 
-    testWidgets('a fast horizontal fling on free space switches the day', (
+    testWidgets('a horizontal drag on free space is forwarded to the caller', (
       tester,
     ) async {
-      var direction = 0;
-      await _pump(tester, [_workBlock], onSwipeDay: (d) => direction = d);
+      var started = false;
+      var ended = false;
+      await _pump(
+        tester,
+        [_workBlock],
+        onSwipeStart: (_) => started = true,
+        onSwipeEnd: (_) => ended = true,
+      );
 
       // Work spans y 192-448; 500 is free space below it.
       await tester.flingFrom(
@@ -148,14 +158,15 @@ void main() {
         1000,
       );
 
-      expect(direction, 1);
+      expect(started, isTrue);
+      expect(ended, isTrue);
     });
 
-    testWidgets('a fling starting on a block does not switch the day', (
+    testWidgets('a fling starting on a block is not forwarded', (
       tester,
     ) async {
       var called = false;
-      await _pump(tester, [_workBlock], onSwipeDay: (_) => called = true);
+      await _pump(tester, [_workBlock], onSwipeStart: (_) => called = true);
 
       // 300 is inside Work's y range (192-448).
       await tester.flingFrom(

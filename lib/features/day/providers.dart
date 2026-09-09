@@ -8,13 +8,15 @@ DateTime _today() {
 }
 
 /// Holds the date currently shown on the day screen, normalized to
-/// midnight, and lets the day screen shift it a day at a time.
+/// midnight.
 class SelectedDateNotifier extends Notifier<DateTime> {
   @override
   DateTime build() => _today();
 
-  /// Shifts the selected date by [days] (negative moves backward).
-  void shiftBy(int days) => state = state.add(Duration(days: days));
+  /// The selected date. Settable directly so the day view can follow its
+  /// own swipe/page navigation.
+  DateTime get date => state;
+  set date(DateTime value) => state = value;
 }
 
 /// The date currently shown on the day screen.
