@@ -8,9 +8,9 @@ import 'package:taskframe/features/day/widgets/block_view.dart';
 /// The 15-minute-aligned timeline: an hour grid with [blocks] drawn on top.
 ///
 /// Double-tapping (desktop) or long-pressing (touch) free grid space opens a
-/// draft for a new block there; tapping one of [_DraftOverlay]'s two halves
-/// creates it via [onCreateBlock], and tapping elsewhere dismisses the
-/// draft.
+/// draft for a new block there; tapping one of [_DraftOverlay]'s two icon
+/// buttons creates it via [onCreateBlock], and tapping elsewhere dismisses
+/// the draft.
 class DayGrid extends StatefulWidget {
   /// Creates a [DayGrid] showing [blocks] between [settings]'s day start
   /// and day end, with each 15-minute slot [slotHeight] pixels tall.
@@ -158,8 +158,14 @@ class _DayGridState extends State<DayGrid> {
   }
 }
 
-/// The draft box shown while placing a new block: two tappable halves,
-/// each identifying the kind of block it creates by color and icon.
+/// The draft prompt shown while placing a new block: a plain gray,
+/// dashed-outline box sized to the block's real duration, with two
+/// fixed-size icon buttons centered on it, one per kind of block it can
+/// create.
+///
+/// The buttons stay full-size even when the box itself (a 15-minute slot,
+/// say) is too short to contain them — they overflow past its edges rather
+/// than shrinking or being clipped.
 class _DraftOverlay extends StatelessWidget {
   const new({required this.onCreateEvent, required this.onCreateFrame});
 
@@ -168,40 +174,54 @@ class _DraftOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _DraftHalf(
-              color: Colors.blue,
-              icon: Icons.crop_free,
-              label: 'Create Frame',
-              onTap: onCreateFrame,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: const _DashedBorderPainter(color: Colors.grey),
+            child: ColoredBox(color: Colors.grey.withValues(alpha: 0.2)),
+          ),
+        ),
+        Center(
+          child: OverflowBox(
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DraftButton(
+                  color: Colors.blue,
+                  icon: Icons.crop_free,
+                  label: 'Create Frame',
+                  onTap: onCreateFrame,
+                ),
+                const SizedBox(width: 8),
+                _DraftButton(
+                  color: Colors.red,
+                  icon: Icons.event,
+                  label: 'Create Event',
+                  onTap: onCreateEvent,
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: _DraftHalf(
-              color: Colors.red,
-              icon: Icons.event,
-              label: 'Create Event',
-              onTap: onCreateEvent,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// One colored, icon-labeled half of the [_DraftOverlay].
-class _DraftHalf extends StatelessWidget {
+/// One fixed-size, colored icon button on the [_DraftOverlay].
+class _DraftButton extends StatelessWidget {
   const new({
     required this.color,
     required this.icon,
     required this.label,
     required this.onTap,
   });
+
+  static const double _size = 28;
 
   final Color color;
   final IconData icon;
@@ -213,15 +233,56 @@ class _DraftHalf extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: Material(
-        color: color,
-        child: InkWell(
-          onTap: onTap,
-          child: Center(child: Icon(icon, color: Colors.white, size: 16)),
+      child: SizedBox.square(
+        dimension: _size,
+        child: Material(
+          color: color,
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: onTap,
+            child: Center(child: Icon(icon, color: Colors.white, size: 16)),
+          ),
         ),
       ),
     );
   }
+}
+
+/// Paints a dashed rectangle outline around its bounds.
+class _DashedBorderPainter extends CustomPainter {
+  const new({required this.color});
+
+  final Color color;
+
+  static const double _dashWidth = 4;
+  static const double _dashGap = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    final outline = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    for (final metric in outline.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + _dashWidth;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
+        distance = next + _dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _DayGridPainter extends CustomPainter {
