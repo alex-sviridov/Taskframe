@@ -214,7 +214,11 @@ class _DayPage extends ConsumerWidget {
           child: Center(
             child: Text(
               key: const Key('day-screen-date-label'),
-              formatDayLabel(date),
+              formatDayHeaderLabel(
+                date,
+                showWeekday: true,
+                pattern: settings.dateFormat,
+              ),
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
