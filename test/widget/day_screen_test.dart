@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_screen.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 
@@ -25,6 +26,20 @@ void _resizeViewport(WidgetTester tester, Size size) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+/// The current time rounded down to the 15-minute grid `TimeObject`
+/// requires, so ad-hoc test blocks satisfy its on-grid assertion
+/// regardless of when the test runs.
+DateTime _nowOnGrid() {
+  final now = DateTime.now();
+  return DateTime(
+    now.year,
+    now.month,
+    now.day,
+    now.hour,
+    now.minute ~/ 15 * 15,
+  );
 }
 
 void main() {
@@ -221,15 +236,10 @@ void main() {
         );
         await tester.pump();
 
-        final expectedDates = List.generate(
-          7,
-          (i) => DateTime(2026, 9, 7 + i),
-        );
+        final expectedDates = List.generate(7, (i) => DateTime(2026, 9, 7 + i));
         for (final date in expectedDates) {
           expect(
-            find.byKey(
-              Key('day-screen-date-label-${date.toIso8601String()}'),
-            ),
+            find.byKey(Key('day-screen-date-label-${date.toIso8601String()}')),
             findsOneWidget,
             reason: 'expected a header for ${date.toIso8601String()}',
           );
@@ -320,60 +330,139 @@ void main() {
   });
 
   group('calendar-date arithmetic (DST/month-boundary safety)', () {
-    test(
-      'adding days across a month boundary yields distinct consecutive '
-      'calendar dates',
-      () {
-        final start = DateTime(2026, 1, 28);
-        final dates = List.generate(40, (i) => _addCalendarDays(start, i));
+    test('adding days across a month boundary yields distinct consecutive '
+        'calendar dates', () {
+      final start = DateTime(2026, 1, 28);
+      final dates = List.generate(40, (i) => _addCalendarDays(start, i));
 
-        // All dates distinct.
-        expect(dates.toSet().length, dates.length);
+      // All dates distinct.
+      expect(dates.toSet().length, dates.length);
 
-        // Each date is exactly one calendar day after the previous one.
-        for (var i = 1; i < dates.length; i++) {
-          final expectedNext = DateTime(
-            dates[i - 1].year,
-            dates[i - 1].month,
-            dates[i - 1].day + 1,
-          );
-          expect(dates[i], expectedNext);
-        }
-      },
-    );
-
-    test(
-      'Duration-based arithmetic (the old, buggy approach) can collapse '
-      'two distinct calendar days into the same instant across a DST '
-      'transition',
-      () {
-        // This test documents *why* the fix in day_screen.dart matters.
-        // Whether it actually demonstrates a collision depends on the
-        // host's local timezone observing DST on this date; in a
-        // UTC-only sandbox (no DST), `.add(Duration(days: 1))` still
-        // produces the calendar-correct next day, so this assertion is
-        // a no-op there. Real DST-crossing coverage needs a
-        // timezone-aware test harness this project doesn't have yet.
-        final beforeTransition = DateTime(2026, 11, 1, 23);
-        final durationBased = beforeTransition.add(const Duration(days: 1));
-        final fieldBased = DateTime(
-          beforeTransition.year,
-          beforeTransition.month,
-          beforeTransition.day + 1,
-          beforeTransition.hour,
+      // Each date is exactly one calendar day after the previous one.
+      for (var i = 1; i < dates.length; i++) {
+        final expectedNext = DateTime(
+          dates[i - 1].year,
+          dates[i - 1].month,
+          dates[i - 1].day + 1,
         );
+        expect(dates[i], expectedNext);
+      }
+    });
 
-        // The field-based (fixed) approach always lands on the correct
-        // next calendar day, regardless of DST.
-        expect(fieldBased.day, beforeTransition.day + 1);
-        expect(fieldBased.year, beforeTransition.year);
-        expect(fieldBased.month, beforeTransition.month);
+    test('Duration-based arithmetic (the old, buggy approach) can collapse '
+        'two distinct calendar days into the same instant across a DST '
+        'transition', () {
+      // This test documents *why* the fix in day_screen.dart matters.
+      // Whether it actually demonstrates a collision depends on the
+      // host's local timezone observing DST on this date; in a
+      // UTC-only sandbox (no DST), `.add(Duration(days: 1))` still
+      // produces the calendar-correct next day, so this assertion is
+      // a no-op there. Real DST-crossing coverage needs a
+      // timezone-aware test harness this project doesn't have yet.
+      final beforeTransition = DateTime(2026, 11, 1, 23);
+      final durationBased = beforeTransition.add(const Duration(days: 1));
+      final fieldBased = DateTime(
+        beforeTransition.year,
+        beforeTransition.month,
+        beforeTransition.day + 1,
+        beforeTransition.hour,
+      );
 
-        // In a timezone with no DST transition on this date (e.g. UTC,
-        // which this sandbox runs in), Duration-based and field-based
-        // arithmetic agree.
-        expect(durationBased, fieldBased);
-      },
-    );
+      // The field-based (fixed) approach always lands on the correct
+      // next calendar day, regardless of DST.
+      expect(fieldBased.day, beforeTransition.day + 1);
+      expect(fieldBased.year, beforeTransition.year);
+      expect(fieldBased.month, beforeTransition.month);
+
+      // In a timezone with no DST transition on this date (e.g. UTC,
+      // which this sandbox runs in), Duration-based and field-based
+      // arithmetic agree.
+      expect(durationBased, fieldBased);
+    });
+  });
+
+  group('edge-triggered paging during a drag', () {
+    testWidgets('dwelling in the left edge zone pages to the previous day', (
+      tester,
+    ) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: DayScreen()),
+        ),
+      );
+      await tester.pump();
+
+      final start = _nowOnGrid();
+      final block = TimeObject(
+        id: 'dragged',
+        title: 'Breakfast',
+        start: start,
+        end: start.add(const Duration(minutes: 30)),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+      container
+          .read(dragStateProvider.notifier)
+          .start(
+            block: block,
+            originalDate: container.read(selectedDateProvider),
+            pointerGlobalPosition: const Offset(500, 500),
+          );
+
+      container
+          .read(dragStateProvider.notifier)
+          .updatePointer(const Offset(10, 500));
+      await tester.pump(const Duration(milliseconds: 650));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Breakfast'), findsNothing);
+    });
+
+    testWidgets('leaving the edge zone before the dwell time cancels the '
+        'page turn', (tester) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: DayScreen()),
+        ),
+      );
+      await tester.pump();
+
+      final start = _nowOnGrid();
+      final block = TimeObject(
+        id: 'dragged',
+        title: 'Breakfast',
+        start: start,
+        end: start.add(const Duration(minutes: 30)),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+      container
+          .read(dragStateProvider.notifier)
+          .start(
+            block: block,
+            originalDate: container.read(selectedDateProvider),
+            pointerGlobalPosition: const Offset(500, 500),
+          );
+
+      container
+          .read(dragStateProvider.notifier)
+          .updatePointer(const Offset(10, 500));
+      await tester.pump(const Duration(milliseconds: 300));
+      container
+          .read(dragStateProvider.notifier)
+          .updatePointer(const Offset(400, 500));
+      await tester.pump(const Duration(milliseconds: 650));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Breakfast'), findsOneWidget);
+    });
   });
 }

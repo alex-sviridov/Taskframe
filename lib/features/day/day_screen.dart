@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
@@ -31,6 +32,10 @@ const _headerHeight = 56.0;
 /// Width of the fade strip behind each switch arrow, wide enough to fully
 /// obscure the sliding date label before it reaches the arrow.
 const _edgeFadeWidth = 72.0;
+
+/// How long the drag pointer must stay in an edge zone before it pages to
+/// the adjacent day/week.
+const _edgeDwellDuration = Duration(milliseconds: 600);
 
 /// Viewport width at/above which the schedule shows a full week (7 days)
 /// per page instead of a single day.
@@ -61,6 +66,8 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   int? _daysPerPage;
   Drag? _drag;
   bool _resyncScheduled = false;
+  Timer? _edgeDwellTimer;
+  int? _edgeDwellDirection;
 
   @override
   void initState() {
@@ -85,6 +92,7 @@ class _DayScreenState extends ConsumerState<DayScreen> {
 
   @override
   void dispose() {
+    _cancelEdgeDwell();
     _pageController.dispose();
     super.dispose();
   }
@@ -100,8 +108,7 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   }
 
   Future<void> _animateBy(int units) async {
-    final page = (_pageController.page ?? _pageController.initialPage)
-        .round();
+    final page = (_pageController.page ?? _pageController.initialPage).round();
     await _pageController.animateToPage(
       page + units,
       duration: _pageAnimationDuration,
@@ -123,6 +130,44 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   void _onSwipeCancel() {
     _drag?.cancel();
     _drag = null;
+  }
+
+  void _handleDragPointer(DragState? drag) {
+    if (drag == null) {
+      _cancelEdgeDwell();
+      return;
+    }
+
+    final width = MediaQuery.sizeOf(context).width;
+    final dx = drag.pointerGlobalPosition.dx;
+    int? direction;
+    if (dx <= _edgeFadeWidth) {
+      direction = -1;
+    } else if (dx >= width - _edgeFadeWidth) {
+      direction = 1;
+    }
+
+    if (direction == null) {
+      _cancelEdgeDwell();
+      return;
+    }
+    if (_edgeDwellDirection == direction) return;
+
+    _cancelEdgeDwell();
+    _edgeDwellDirection = direction;
+    _edgeDwellTimer = Timer(_edgeDwellDuration, () {
+      final pagedDirection = direction!;
+      _edgeDwellTimer = null;
+      _edgeDwellDirection = null;
+      unawaited(_animateBy(pagedDirection));
+      _handleDragPointer(ref.read(dragStateProvider));
+    });
+  }
+
+  void _cancelEdgeDwell() {
+    _edgeDwellTimer?.cancel();
+    _edgeDwellTimer = null;
+    _edgeDwellDirection = null;
   }
 
   /// Rebuilds [_pageController] anchored to a fresh start date matching
@@ -151,6 +196,10 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(daySettingsProvider);
     final daysPerPage = _daysPerPage!;
+
+    ref.listen<DragState?>(dragStateProvider, (_, next) {
+      _handleDragPointer(next);
+    });
 
     return Scaffold(
       appBar: AppBar(title: const Text('Day Frame')),
