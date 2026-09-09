@@ -3,7 +3,12 @@ import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
-const _settings = DaySettings(dayStartHour: 6, dayEndHour: 23);
+const _settings = DaySettings(
+  dayStartHour: 6,
+  dayEndHour: 23,
+  firstDayOfWeek: DateTime.monday,
+  dateFormat: 'dd/MM/yyyy',
+);
 const _slotHeight = 16.0;
 
 void main() {

@@ -4,7 +4,12 @@ import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 
-const _settings = DaySettings(dayStartHour: 6, dayEndHour: 23);
+const _settings = DaySettings(
+  dayStartHour: 6,
+  dayEndHour: 23,
+  firstDayOfWeek: DateTime.monday,
+  dateFormat: 'dd/MM/yyyy',
+);
 const _slotHeight = 16.0;
 final _date = DateTime(2026, 9, 9);
 
