@@ -2,10 +2,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
+import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
 const _settings = DaySettings(
   dayStartHour: 6,
@@ -37,6 +39,7 @@ Future<void> _pump(
     child: MaterialApp(
       home: Scaffold(
         body: DayGrid(
+          key: dayGridKeyFor(_date),
           date: _date,
           blocks: blocks,
           settings: _settings,
@@ -505,17 +508,39 @@ void main() {
         addTearDown(container.dispose);
         await _pump(tester, [_workBlock], container: container);
 
-        final gesture = await _startTouchDrag(
-          tester,
-          const Offset(200, 300),
-        );
-        // Move down by 32px = 2 slots = 30 minutes.
-        await gesture.moveBy(const Offset(0, 32));
+        const startPosition = Offset(200, 300);
+        const dropPosition = Offset(200, 332); // +32px = 2 slots down.
+
+        final gesture = await _startTouchDrag(tester, startPosition);
+        await gesture.moveBy(dropPosition - startPosition);
         await tester.pump();
         await gesture.up();
         await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(container.read(dragStateProvider), isNull);
+
+        // The exact target the drop should have landed on, computed the
+        // same way `resolveDragTarget` does, from the grid's real render
+        // box rather than an assumed pixel-to-time mapping.
+        final gridTopLeft = tester.getTopLeft(find.byType(DayGrid));
+        final expectedStart = slotStartForOffset(
+          day: _date,
+          dy: dropPosition.dy - gridTopLeft.dy,
+          settings: _settings,
+          slotHeight: _slotHeight,
+        );
+        expect(expectedStart, isNotNull);
+
+        // A successful `drop()` actually moves the block's start time; a
+        // silent `cancel()` (e.g. because `resolveDragTarget` couldn't find
+        // the keyed `DayGrid`) would leave it unchanged. Reading the block
+        // back through the provider distinguishes the two.
+        final blocks = await container.read(dayBlocksProvider(_date).future);
+        final moved = blocks.singleWhere((b) => b.id == _workBlock.id);
+        final duration = _workBlock.end.difference(_workBlock.start);
+        expect(moved.start, expectedStart);
+        expect(moved.end, expectedStart!.add(duration));
       });
 
       testWidgets('a locked block ignores drag gestures', (tester) async {

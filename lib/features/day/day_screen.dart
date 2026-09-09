@@ -447,7 +447,7 @@ class _SchedulePage extends ConsumerWidget {
                         HourGutter(settings: settings, slotHeight: slotHeight),
                       for (var i = 0; i < dates.length; i++) ...[
                         if (i > 0) const SizedBox(width: _columnGap),
-                        _buildColumn(ref, dates[i], slotHeight),
+                        _buildColumn(ref, dates[i], dates, slotHeight),
                       ],
                       if (!_showHourLabels)
                         HourGutter(settings: settings, slotHeight: slotHeight),
@@ -462,7 +462,12 @@ class _SchedulePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildColumn(WidgetRef ref, DateTime date, double slotHeight) {
+  Widget _buildColumn(
+    WidgetRef ref,
+    DateTime date,
+    List<DateTime> pageDates,
+    double slotHeight,
+  ) {
     final blocksAsync = ref.watch(dayBlocksProvider(date));
 
     return Expanded(
@@ -476,10 +481,7 @@ class _SchedulePage extends ConsumerWidget {
           settings: settings,
           slotHeight: slotHeight,
           showHourLabels: _showHourLabels,
-          pageDates: List.generate(
-            dayCount,
-            (i) => DateTime(startDate.year, startDate.month, startDate.day + i),
-          ),
+          pageDates: pageDates,
           onSwipeStart: onSwipeStart,
           onSwipeUpdate: onSwipeUpdate,
           onSwipeEnd: onSwipeEnd,

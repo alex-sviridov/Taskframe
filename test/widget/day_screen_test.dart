@@ -6,6 +6,7 @@ import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
+import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
 /// Mirrors the field-based date arithmetic `_startDateForPage` and
 /// `_SchedulePage`'s `dates` list in day_screen.dart use, so DST/month-
@@ -464,5 +465,74 @@ void main() {
 
       expect(find.text('Breakfast'), findsOneWidget);
     });
+  });
+
+  group('resolveDragTarget through the real day_screen.dart week view', () {
+    testWidgets(
+      'finds a target in a second, non-origin column '
+      '(regression: pageDates must share the same DateTime instances as '
+      "each column's GlobalObjectKey)",
+      (tester) async {
+        _resizeViewport(tester, const Size(1000, 800));
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        // Wednesday 2026-09-09.
+        container.read(selectedDateProvider.notifier).date = DateTime(
+          2026,
+          9,
+          9,
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: DayScreen()),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(DayGrid), findsNWidgets(7));
+
+        // The exact `List<DateTime>` instance day_screen.dart passed as
+        // every column's `pageDates:` argument. Deliberately read off the
+        // live widget tree rather than reconstructed here with fresh
+        // `DateTime(...)` values: `GlobalObjectKey` compares by
+        // `identical()`, so a freshly-built list of `==`-equal-but-distinct
+        // `DateTime` instances would defeat the very check this test
+        // exists to make (and did, in the pre-fix code, for the *opposite*
+        // reason: day_screen.dart itself built two non-identical lists).
+        final firstGrid = tester.widget<DayGrid>(find.byType(DayGrid).first);
+        final pageDates = firstGrid.pageDates!;
+        final settings = container.read(daySettingsProvider);
+        final slotHeight = firstGrid.slotHeight;
+
+        // Target a point inside the second column (index 1), which is not
+        // where any drag would "start" (the origin/first column). Before
+        // the fix, `_buildColumn` built a fresh `pageDates` list whose
+        // `DateTime` instances were `==`-equal but not `identical()` to
+        // the ones each column's `key: dayGridKeyFor(date)` was built
+        // with, so `GlobalObjectKey` lookups inside `resolveDragTarget`
+        // always failed and this returned null regardless of position.
+        final secondColumnCenter = tester.getCenter(
+          find.byType(DayGrid).at(1),
+        );
+
+        final target = resolveDragTarget(
+          globalPosition: secondColumnCenter,
+          pageDates: pageDates,
+          settings: settings,
+          slotHeight: slotHeight,
+        );
+
+        expect(
+          target,
+          isNotNull,
+          reason:
+              'resolveDragTarget should find the DayGrid column under the '
+              'pointer via its GlobalObjectKey',
+        );
+        expect(target!.date, pageDates[1]);
+      },
+    );
   });
 }
