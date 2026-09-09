@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import { doubleClickFreeSpace } from './support/gestures';
 
+test.use({ viewport: { width: 800, height: 900 } });
+
 // (300, 650) lands in the evening, after the hardcoded Cleaning block
 // (19:00-20:00) and before the 23:00 day end, so it's always free space
 // regardless of which day the suite runs on.
