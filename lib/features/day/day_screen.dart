@@ -35,6 +35,10 @@ const _edgeFadeWidth = 72.0;
 /// per page instead of a single day.
 const _weekBreakpoint = 900.0;
 
+/// Horizontal gap between adjacent day columns in week view, both in the
+/// grid and (as the divider's total width) in the header.
+const _columnGap = 8.0;
+
 int _daysPerPageFor(double width) => width >= _weekBreakpoint ? 7 : 1;
 
 /// The schedule screen: a date header above a 15-minute grid of the day's
@@ -217,6 +221,10 @@ class _DayScreenState extends ConsumerState<DayScreen> {
                 child: IconButton(
                   tooltip: daysPerPage == 7 ? 'Previous week' : 'Previous day',
                   icon: const Icon(Icons.chevron_left),
+                  style: IconButton.styleFrom(
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                  ),
                   onPressed: () => unawaited(_animateBy(-1)),
                 ),
               ),
@@ -227,6 +235,10 @@ class _DayScreenState extends ConsumerState<DayScreen> {
                 child: IconButton(
                   tooltip: daysPerPage == 7 ? 'Next week' : 'Next day',
                   icon: const Icon(Icons.chevron_right),
+                  style: IconButton.styleFrom(
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                  ),
                   onPressed: () => unawaited(_animateBy(1)),
                 ),
               ),
@@ -288,6 +300,22 @@ class _SchedulePage extends ConsumerWidget {
 
   bool get _showHourLabels => dayCount == 1;
 
+  static bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
+  }
+
+  TextStyle? _headerStyle(BuildContext context, DateTime date) {
+    final base = Theme.of(context).textTheme.titleMedium;
+    if (!_isToday(date)) return base;
+    return base?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: Theme.of(context).colorScheme.primary,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dates = List.generate(
@@ -310,13 +338,21 @@ class _SchedulePage extends ConsumerWidget {
                         showWeekday: true,
                         pattern: settings.dateFormat,
                       ),
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: _headerStyle(context, dates.first),
                     ),
                   )
                 : Row(
                     children: [
                       const SizedBox(width: HourGutter.width),
-                      for (final date in dates)
+                      for (var i = 0; i < dates.length; i++) ...[
+                        if (i > 0)
+                          VerticalDivider(
+                            width: _columnGap,
+                            thickness: 1,
+                            indent: _headerHeight / 4,
+                            endIndent: _headerHeight / 4,
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
                         Expanded(
                           child: Center(
                             child: Semantics(
@@ -325,18 +361,20 @@ class _SchedulePage extends ConsumerWidget {
                               child: Text(
                                 key: Key(
                                   'day-screen-date-label-'
-                                  '${date.toIso8601String()}',
+                                  '${dates[i].toIso8601String()}',
                                 ),
                                 formatDayHeaderLabel(
-                                  date,
+                                  dates[i],
                                   showWeekday: false,
                                   pattern: settings.dateFormat,
                                 ),
-                                style: Theme.of(context).textTheme.titleMedium,
+                                style: _headerStyle(context, dates[i]),
                               ),
                             ),
                           ),
                         ),
+                      ],
+                      const SizedBox(width: HourGutter.width),
                     ],
                   ),
           ),
@@ -357,8 +395,12 @@ class _SchedulePage extends ConsumerWidget {
                     children: [
                       if (!_showHourLabels)
                         HourGutter(settings: settings, slotHeight: slotHeight),
-                      for (final date in dates)
-                        _buildColumn(ref, date, slotHeight),
+                      for (var i = 0; i < dates.length; i++) ...[
+                        if (i > 0) const SizedBox(width: _columnGap),
+                        _buildColumn(ref, dates[i], slotHeight),
+                      ],
+                      if (!_showHourLabels)
+                        HourGutter(settings: settings, slotHeight: slotHeight),
                     ],
                   ),
                 );

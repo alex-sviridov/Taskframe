@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
@@ -74,13 +76,50 @@ class DayGrid extends StatefulWidget {
 
 class _DayGridState extends State<DayGrid> {
   ({DateTime start, DateTime end})? _draft;
+  Timer? _nowTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleNowTimer();
+  }
+
+  @override
+  void didUpdateWidget(DayGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.date != widget.date) {
+      _scheduleNowTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _nowTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Redraws once a minute while [widget.date] is today, so the
+  /// current-time marker line keeps moving; does nothing otherwise.
+  void _scheduleNowTimer() {
+    _nowTimer?.cancel();
+    _nowTimer = _isToday
+        ? Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}))
+        : null;
+  }
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return widget.date.year == now.year &&
+        widget.date.month == now.month &&
+        widget.date.day == now.day;
+  }
 
   int get _slotCount =>
       (widget.settings.dayEndHour - widget.settings.dayStartHour) * 4;
 
   double get _dayStartInMinutes => widget.settings.dayStartHour * 60;
 
-  double get _gridLeft => widget.showHourLabels ? 48 : 4;
+  double get _gridLeft => widget.showHourLabels ? 44 : 4;
 
   double _offsetFor(DateTime time) {
     final minutesFromStart = time.hour * 60 + time.minute - _dayStartInMinutes;
@@ -120,6 +159,10 @@ class _DayGridState extends State<DayGrid> {
     final scheme = Theme.of(context).colorScheme;
     final height = _slotCount * widget.slotHeight;
     final draft = _draft;
+    final nowOffset = _isToday ? _offsetFor(DateTime.now()) : null;
+    final nowLineY = nowOffset != null && nowOffset >= 0 && nowOffset <= height
+        ? nowOffset
+        : null;
 
     return SizedBox(
       height: height,
@@ -149,6 +192,7 @@ class _DayGridState extends State<DayGrid> {
                   labelStyle: Theme.of(context).textTheme.labelSmall,
                   gridLeft: _gridLeft,
                   showLabels: widget.showHourLabels,
+                  nowLineY: nowLineY,
                 ),
               ),
             ),
@@ -157,7 +201,7 @@ class _DayGridState extends State<DayGrid> {
             Positioned(
               top: _offsetFor(block.start),
               left: _gridLeft,
-              right: 8,
+              right: 0,
               height: _offsetFor(block.end) - _offsetFor(block.start),
               child: BlockView(block: block),
             ),
@@ -165,7 +209,7 @@ class _DayGridState extends State<DayGrid> {
             Positioned(
               top: _offsetFor(draft.start),
               left: _gridLeft,
-              right: 8,
+              right: 0,
               height: _offsetFor(draft.end) - _offsetFor(draft.start),
               child: _DraftOverlay(
                 onCreateEvent: () => _create(BlockKind.anchor),
@@ -313,6 +357,7 @@ class _DayGridPainter extends CustomPainter {
     required this.labelStyle,
     required this.gridLeft,
     required this.showLabels,
+    required this.nowLineY,
   });
 
   final DaySettings settings;
@@ -322,7 +367,12 @@ class _DayGridPainter extends CustomPainter {
   final double gridLeft;
   final bool showLabels;
 
+  /// Pixel y-offset of the current-time marker line, or `null` to hide it
+  /// (not today, or the current time falls outside the visible hours).
+  final double? nowLineY;
+
   static const double _labelLeft = 4;
+  static const Color _nowLineColor = Color(0xFF8B0000);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -354,11 +404,28 @@ class _DayGridPainter extends CustomPainter {
       final labelHour = settings.dayStartHour + hour;
       if (labelHour.isEven) {
         final painter = TextPainter(
-          text: TextSpan(text: '$labelHour:00', style: labelStyle),
+          text: TextSpan(
+            text: '${labelHour.toString().padLeft(2, '0')}:00',
+            style: labelStyle,
+          ),
           textDirection: TextDirection.ltr,
         )..layout();
-        painter.paint(canvas, Offset(_labelLeft, y - painter.height / 2));
+        final labelY = (y - painter.height / 2).clamp(
+          0.0,
+          size.height - painter.height,
+        );
+        painter.paint(canvas, Offset(_labelLeft, labelY));
       }
+    }
+
+    final markerY = nowLineY;
+    if (markerY != null) {
+      final nowPaint = Paint()
+        ..color = _nowLineColor
+        ..strokeWidth = 2;
+      canvas
+        ..drawLine(Offset(0, markerY), Offset(size.width, markerY), nowPaint)
+        ..drawCircle(Offset(0, markerY), 3, nowPaint);
     }
   }
 
@@ -369,5 +436,6 @@ class _DayGridPainter extends CustomPainter {
       oldDelegate.lineColor != lineColor ||
       oldDelegate.labelStyle != labelStyle ||
       oldDelegate.gridLeft != gridLeft ||
-      oldDelegate.showLabels != showLabels;
+      oldDelegate.showLabels != showLabels ||
+      oldDelegate.nowLineY != nowLineY;
 }

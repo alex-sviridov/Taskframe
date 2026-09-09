@@ -10,7 +10,7 @@ class HourGutter extends StatelessWidget {
   /// Matches `DayGrid`'s own label-gutter width, so day columns' grid
   /// lines still start at the same x whether or not they draw their own
   /// labels.
-  static const double width = 48.0;
+  static const double width = 34.0;
 
   final DaySettings settings;
   final double slotHeight;
@@ -54,10 +54,17 @@ class _HourGutterPainter extends CustomPainter {
 
       final y = hour * 4 * slotHeight;
       final painter = TextPainter(
-        text: TextSpan(text: '$labelHour:00', style: labelStyle),
+        text: TextSpan(
+          text: '${labelHour.toString().padLeft(2, '0')}:00',
+          style: labelStyle,
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
-      painter.paint(canvas, Offset(_labelLeft, y - painter.height / 2));
+      final labelY = (y - painter.height / 2).clamp(
+        0.0,
+        size.height - painter.height,
+      );
+      painter.paint(canvas, Offset(_labelLeft, labelY));
     }
   }
 
