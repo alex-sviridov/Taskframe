@@ -9,6 +9,7 @@ import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
+import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 import 'package:taskframe/features/day/widgets/hour_gutter.dart';
 
 /// Below this, a 15-minute slot stops being visually distinct, so the grid
@@ -420,11 +421,16 @@ class _SchedulePage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Failed to load: $error')),
         data: (blocks) => DayGrid(
+          key: dayGridKeyFor(date),
           date: date,
           blocks: blocks,
           settings: settings,
           slotHeight: slotHeight,
           showHourLabels: _showHourLabels,
+          pageDates: List.generate(
+            dayCount,
+            (i) => DateTime(startDate.year, startDate.month, startDate.day + i),
+          ),
           onSwipeStart: onSwipeStart,
           onSwipeUpdate: onSwipeUpdate,
           onSwipeEnd: onSwipeEnd,

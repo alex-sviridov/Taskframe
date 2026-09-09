@@ -24,6 +24,7 @@ class DayGrid extends ConsumerStatefulWidget {
     required this.slotHeight,
     required this.onCreateBlock,
     this.showHourLabels = true,
+    this.pageDates,
     this.onSwipeStart,
     this.onSwipeUpdate,
     this.onSwipeEnd,
@@ -49,6 +50,12 @@ class DayGrid extends ConsumerStatefulWidget {
   /// once for all day columns; this grid still draws its own horizontal
   /// gridlines regardless.
   final bool showHourLabels;
+
+  /// Every date visible on the current page (the single [date] outside
+  /// week view, or all 7 dates in week view), used to resolve which
+  /// column a drag's pointer currently falls over. Defaults to `[date]`
+  /// when not given.
+  final List<DateTime>? pageDates;
 
   /// Called when the user confirms a new block from the draft.
   final void Function({
@@ -122,6 +129,8 @@ class _DayGridState extends ConsumerState<DayGrid> {
   double get _dayStartInMinutes => widget.settings.dayStartHour * 60;
 
   double get _gridLeft => widget.showHourLabels ? 44 : 4;
+
+  List<DateTime> get _pageDates => widget.pageDates ?? [widget.date];
 
   double _offsetFor(DateTime time) {
     final minutesFromStart = time.hour * 60 + time.minute - _dayStartInMinutes;
