@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
+import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 
 const _settings = DaySettings(
@@ -27,19 +29,24 @@ Future<void> _pump(
     required BlockKind kind,
   })?
   onCreateBlock,
+  ProviderContainer? container,
 }) => tester.pumpWidget(
-  MaterialApp(
-    home: Scaffold(
-      body: DayGrid(
-        date: _date,
-        blocks: blocks,
-        settings: _settings,
-        slotHeight: _slotHeight,
-        onSwipeStart: onSwipeStart,
-        onSwipeUpdate: onSwipeUpdate,
-        onSwipeEnd: onSwipeEnd,
-        onCreateBlock:
-            onCreateBlock ?? ({required start, required end, required kind}) {},
+  UncontrolledProviderScope(
+    container: container ?? ProviderContainer(),
+    child: MaterialApp(
+      home: Scaffold(
+        body: DayGrid(
+          date: _date,
+          blocks: blocks,
+          settings: _settings,
+          slotHeight: _slotHeight,
+          onSwipeStart: onSwipeStart,
+          onSwipeUpdate: onSwipeUpdate,
+          onSwipeEnd: onSwipeEnd,
+          onCreateBlock:
+              onCreateBlock ??
+              ({required start, required end, required kind}) {},
+        ),
       ),
     ),
   ),
@@ -126,14 +133,18 @@ void main() {
 
     testWidgets('uses whatever slotHeight it is given', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DayGrid(
-              date: _date,
-              blocks: const [],
-              settings: _settings,
-              slotHeight: 8,
-              onCreateBlock: ({required start, required end, required kind}) {},
+        UncontrolledProviderScope(
+          container: ProviderContainer(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: DayGrid(
+                date: _date,
+                blocks: const [],
+                settings: _settings,
+                slotHeight: 8,
+                onCreateBlock:
+                    ({required start, required end, required kind}) {},
+              ),
             ),
           ),
         ),
@@ -148,15 +159,19 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DayGrid(
-              date: _date,
-              blocks: [_workBlock],
-              settings: _settings,
-              slotHeight: _slotHeight,
-              showHourLabels: false,
-              onCreateBlock: ({required start, required end, required kind}) {},
+        UncontrolledProviderScope(
+          container: ProviderContainer(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: DayGrid(
+                date: _date,
+                blocks: [_workBlock],
+                settings: _settings,
+                slotHeight: _slotHeight,
+                showHourLabels: false,
+                onCreateBlock:
+                    ({required start, required end, required kind}) {},
+              ),
             ),
           ),
         ),
@@ -333,6 +348,81 @@ void main() {
         expect(find.bySemanticsLabel('Create Event'), findsNothing);
         expect(called, isFalse);
         semantics.dispose();
+      });
+    });
+
+    group('landzone', () {
+      testWidgets('does not show when no drag is in progress', (
+        tester,
+      ) async {
+        await _pump(tester, [_workBlock]);
+
+        expect(find.byKey(const Key('day-grid-landzone')), findsNothing);
+      });
+
+      testWidgets('shows at the drag target time when this grid is the '
+          'target', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        container.read(dragStateProvider.notifier).start(
+          block: _workBlock,
+          originalDate: _date,
+          pointerGlobalPosition: const Offset(0, 0),
+        );
+        container.read(dragStateProvider.notifier).updatePointer(
+          const Offset(0, 0),
+          targetDate: _date,
+          targetStart: DateTime(2026, 9, 9, 11),
+        );
+
+        await _pump(tester, [_workBlock], container: container);
+
+        // The key is on the landzone's own Positioned, so it's found
+        // directly rather than via find.ancestor (which would look for a
+        // strict ancestor of type Positioned, and there isn't one).
+        final landzone = tester.widget<Positioned>(
+          find.byKey(const Key('day-grid-landzone')),
+        );
+        // 11:00 is 5 hours (20 slots) after the 6:00 day start.
+        expect(landzone.top, 20 * _slotHeight);
+        // Work is a 4-hour block, unchanged by the move.
+        expect(landzone.height, 16 * _slotHeight);
+      });
+
+      testWidgets('does not show when this grid is not the drag target', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        container.read(dragStateProvider.notifier).start(
+          block: _workBlock,
+          originalDate: _date,
+          pointerGlobalPosition: const Offset(0, 0),
+        );
+        container.read(dragStateProvider.notifier).updatePointer(
+          const Offset(0, 0),
+          targetDate: DateTime(2026, 9, 10),
+          targetStart: DateTime(2026, 9, 10, 11),
+        );
+
+        await _pump(tester, [_workBlock], container: container);
+
+        expect(find.byKey(const Key('day-grid-landzone')), findsNothing);
+      });
+
+      testWidgets('hides the real block in its origin column while '
+          'dragging', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        container.read(dragStateProvider.notifier).start(
+          block: _workBlock,
+          originalDate: _date,
+          pointerGlobalPosition: const Offset(0, 0),
+        );
+
+        await _pump(tester, [_workBlock], container: container);
+
+        expect(find.text('Work'), findsNothing);
       });
     });
   });

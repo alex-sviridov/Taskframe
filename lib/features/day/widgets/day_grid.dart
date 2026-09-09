@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
+import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 
 /// The 15-minute-aligned timeline: an hour grid with [blocks] drawn on top.
@@ -12,7 +14,7 @@ import 'package:taskframe/features/day/widgets/block_view.dart';
 /// draft for a new block there; tapping one of [_DraftOverlay]'s two icon
 /// buttons creates it via [onCreateBlock], and tapping elsewhere dismisses
 /// the draft.
-class DayGrid extends StatefulWidget {
+class DayGrid extends ConsumerStatefulWidget {
   /// Creates a [DayGrid] showing [blocks] between [settings]'s day start
   /// and day end, with each 15-minute slot [slotHeight] pixels tall.
   const new({
@@ -71,10 +73,10 @@ class DayGrid extends StatefulWidget {
   final VoidCallback? onSwipeCancel;
 
   @override
-  State<DayGrid> createState() => _DayGridState();
+  ConsumerState<DayGrid> createState() => _DayGridState();
 }
 
-class _DayGridState extends State<DayGrid> {
+class _DayGridState extends ConsumerState<DayGrid> {
   ({DateTime start, DateTime end})? _draft;
   Timer? _nowTimer;
 
@@ -159,6 +161,14 @@ class _DayGridState extends State<DayGrid> {
     final scheme = Theme.of(context).colorScheme;
     final height = _slotCount * widget.slotHeight;
     final draft = _draft;
+    final dragState = ref.watch(dragStateProvider);
+    final hiddenBlockId =
+        dragState != null && dragState.originalDate == widget.date
+        ? dragState.block.id
+        : null;
+    final landzone = dragState != null && dragState.targetDate == widget.date
+        ? dragState
+        : null;
     final nowOffset = _isToday ? _offsetFor(DateTime.now()) : null;
     final nowLineY = nowOffset != null && nowOffset >= 0 && nowOffset <= height
         ? nowOffset
@@ -197,17 +207,18 @@ class _DayGridState extends State<DayGrid> {
             ),
           ),
           for (final block in widget.blocks)
-            Positioned(
-              top: _offsetFor(block.start),
-              left: _gridLeft,
-              right: 0,
-              height: _offsetFor(block.end) - _offsetFor(block.start),
-              child: Container(
-                color: scheme.surface,
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: BlockView(block: block),
+            if (block.id != hiddenBlockId)
+              Positioned(
+                top: _offsetFor(block.start),
+                left: _gridLeft,
+                right: 0,
+                height: _offsetFor(block.end) - _offsetFor(block.start),
+                child: Container(
+                  color: scheme.surface,
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: BlockView(block: block),
+                ),
               ),
-            ),
           if (draft != null)
             Positioned(
               top: _offsetFor(draft.start),
@@ -220,6 +231,29 @@ class _DayGridState extends State<DayGrid> {
                 child: _DraftOverlay(
                   onCreateEvent: () => _create(BlockKind.anchor),
                   onCreateFrame: () => _create(BlockKind.frame),
+                ),
+              ),
+            ),
+          if (landzone != null)
+            Positioned(
+              key: const Key('day-grid-landzone'),
+              top: _offsetFor(landzone.targetStart),
+              left: _gridLeft,
+              right: 0,
+              height:
+                  _offsetFor(
+                    landzone.targetStart.add(
+                      landzone.block.end.difference(landzone.block.start),
+                    ),
+                  ) -
+                  _offsetFor(landzone.targetStart),
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.15),
+                    border: Border.all(color: scheme.primary),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               ),
             ),
