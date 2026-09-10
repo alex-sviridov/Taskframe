@@ -143,7 +143,32 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Create Event'));
       await tester.pump();
 
-      expect(find.text('title'), findsOneWidget);
+      // findsWidgets, not findsOneWidget: creating a block now also opens
+      // its edit modal (see the next test), whose title field echoes the
+      // same default "title" text alongside the block's own label on the
+      // grid.
+      expect(find.text('title'), findsWidgets);
+      semantics.dispose();
+    });
+
+    testWidgets('creating a block immediately opens its edit modal', (
+      tester,
+    ) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      final semantics = tester.ensureSemantics();
+      await _pump(tester);
+
+      final gridTop = tester.getTopLeft(find.byType(DayGrid));
+      final freeSpace = gridTop + const Offset(50, 5);
+
+      await tester.tapAt(freeSpace);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tapAt(freeSpace);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.bySemanticsLabel('Create Event'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.close), findsOneWidget);
       semantics.dispose();
     });
 

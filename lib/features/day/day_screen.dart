@@ -7,8 +7,10 @@ import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
+import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
+import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 import 'package:taskframe/features/day/widgets/hour_gutter.dart';
@@ -440,7 +442,7 @@ class _SchedulePage extends ConsumerWidget {
                         HourGutter(settings: settings, slotHeight: slotHeight),
                       for (var i = 0; i < dates.length; i++) ...[
                         if (i > 0) const SizedBox(width: _columnGap),
-                        _buildColumn(ref, dates[i], slotHeight),
+                        _buildColumn(context, ref, dates[i], slotHeight),
                       ],
                       if (!_showHourLabels)
                         HourGutter(settings: settings, slotHeight: slotHeight),
@@ -455,7 +457,12 @@ class _SchedulePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildColumn(WidgetRef ref, DateTime date, double slotHeight) {
+  Widget _buildColumn(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime date,
+    double slotHeight,
+  ) {
     final blocksAsync = ref.watch(dayBlocksProvider(date));
 
     return Expanded(
@@ -475,13 +482,33 @@ class _SchedulePage extends ConsumerWidget {
           onSwipeCancel: onSwipeCancel,
           onCreateBlock: ({required start, required end, required kind}) {
             unawaited(
-              ref
-                  .read(dayBlocksProvider(date).notifier)
-                  .addBlock(start: start, end: end, kind: kind),
+              _createAndOpen(
+                context,
+                ref,
+                date,
+                start: start,
+                end: end,
+                kind: kind,
+              ),
             );
           },
         ),
       ),
     );
+  }
+
+  Future<void> _createAndOpen(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime date, {
+    required DateTime start,
+    required DateTime end,
+    required BlockKind kind,
+  }) async {
+    final created = await ref
+        .read(dayBlocksProvider(date).notifier)
+        .addBlock(start: start, end: end, kind: kind);
+    if (!context.mounted) return;
+    await showBlockEditModal(context: context, date: date, block: created);
   }
 }
