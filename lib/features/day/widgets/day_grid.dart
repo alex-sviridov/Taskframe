@@ -9,6 +9,7 @@ import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
+import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
@@ -214,6 +215,12 @@ class _DayGridState extends ConsumerState<DayGrid> {
     }
   }
 
+  void _openEditModal(TimeObject block) {
+    unawaited(
+      showBlockEditModal(context: context, date: widget.date, block: block),
+    );
+  }
+
   void _create(BlockKind kind) {
     final draft = _draft!;
     widget.onCreateBlock(start: draft.start, end: draft.end, kind: kind);
@@ -338,6 +345,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
                 topBleed: resizeBleed[block.id]?.top ?? 0,
                 bottomBleed: resizeBleed[block.id]?.bottom ?? 0,
                 onDismissDraft: _dismissDraft,
+                onOpenEdit: _openEditModal,
                 child: block.id == hiddenBlockId
                     ? const SizedBox.shrink()
                     : Container(
@@ -523,6 +531,7 @@ class _DraggableBlock extends ConsumerStatefulWidget {
     required this.topBleed,
     required this.bottomBleed,
     required this.onDismissDraft,
+    required this.onOpenEdit,
     required this.child,
   });
 
@@ -549,6 +558,7 @@ class _DraggableBlock extends ConsumerStatefulWidget {
   final double bottomBleed;
 
   final VoidCallback onDismissDraft;
+  final void Function(TimeObject block) onOpenEdit;
   final Widget child;
 
   /// The maximum either of [topBleed]/[bottomBleed] may ever be, used by
@@ -663,8 +673,10 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
                           TapGestureRecognizer
                         >(
                           TapGestureRecognizer.new,
-                          (recognizer) =>
-                              recognizer.onTap = widget.onDismissDraft,
+                          (recognizer) => recognizer.onTap = () {
+                            widget.onDismissDraft();
+                            widget.onOpenEdit(widget.block);
+                          },
                         ),
                     PanGestureRecognizer:
                         GestureRecognizerFactoryWithHandlers<

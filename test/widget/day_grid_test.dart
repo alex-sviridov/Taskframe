@@ -984,6 +984,35 @@ void main() {
         expect(find.bySemanticsLabel('Create Event'), findsNothing);
         semantics.dispose();
       });
+
+      testWidgets('a plain tap on a non-locked block opens the edit modal', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        // `BlockEditModal` looks up the live block from `dayBlocksProvider`
+        // by id every rebuild, so the tapped block must actually be seeded
+        // into that provider (with its real, repository-assigned id) rather
+        // than only passed via `DayGrid`'s own `blocks` parameter — otherwise
+        // the modal finds no matching block and immediately closes itself.
+        await container.read(dayBlocksProvider(_date).future);
+        final seeded = await container
+            .read(dayBlocksProvider(_date).notifier)
+            .addBlock(
+              start: _workBlock.start,
+              end: _workBlock.end,
+              kind: _workBlock.kind,
+              title: _workBlock.title,
+            );
+        await _pump(tester, [seeded], container: container);
+
+        await tester.tapAt(const Offset(200, 300));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Work'), findsWidgets);
+        expect(find.byIcon(Icons.close), findsOneWidget);
+      });
     });
 
     group('block resize', () {
