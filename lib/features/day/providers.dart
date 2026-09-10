@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
+import 'package:taskframe/features/day/day_new_block.dart';
+import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
@@ -54,11 +56,13 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
   Future<List<TimeObject>> build() =>
       ref.watch(dayBlocksRepositoryProvider).load(date);
 
-  /// Creates a new block on [date] and adds it to the current state.
-  Future<void> addBlock({
+  /// Creates a new block on [date], adds it to the current state, and
+  /// returns it.
+  Future<TimeObject> addBlock({
     required DateTime start,
     required DateTime end,
     required BlockKind kind,
+    String? title,
   }) async {
     final repository = ref.read(dayBlocksRepositoryProvider);
     final added = await repository.add(
@@ -66,8 +70,82 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
       start: start,
       end: end,
       kind: kind,
+      title: title,
     );
     state = AsyncData([...?state.value, added]);
+    return added;
+  }
+
+  /// Updates [block]'s title/start/end, persisting via the repository and
+  /// refreshing state. Silently does nothing if the resulting start/end
+  /// would be invalid (see [isValidBlockEdit]) — title-only edits are
+  /// always valid since they don't touch start/end.
+  Future<void> updateBlock(
+    TimeObject block, {
+    String? title,
+    DateTime? start,
+    DateTime? end,
+  }) async {
+    final newStart = start ?? block.start;
+    final newEnd = end ?? block.end;
+    final others = (state.value ?? [])
+        .where((b) => b.id != block.id)
+        .toList();
+    final settings = ref.read(daySettingsProvider);
+    if (!isValidBlockEdit(
+      start: newStart,
+      end: newEnd,
+      settings: settings,
+      day: date,
+      others: others,
+    )) {
+      return;
+    }
+
+    final repository = ref.read(dayBlocksRepositoryProvider);
+    final updated = await repository.update(
+      block,
+      date: date,
+      title: title,
+      start: start,
+      end: end,
+    );
+    state = AsyncData([
+      for (final b in state.value ?? <TimeObject>[])
+        if (b.id == block.id) updated else b,
+    ]);
+  }
+
+  /// Removes [block], persisting via the repository and refreshing state.
+  Future<void> deleteBlock(TimeObject block) async {
+    final repository = ref.read(dayBlocksRepositoryProvider);
+    await repository.delete(block, date: date);
+    state = AsyncData([
+      for (final b in state.value ?? <TimeObject>[])
+        if (b.id != block.id) b,
+    ]);
+  }
+
+  /// Adds a copy of [block] (same title/kind/duration, same time of day) to
+  /// the following date's blocks.
+  Future<void> copyToNextDay(TimeObject block) async {
+    final nextDate = DateTime(date.year, date.month, date.day + 1);
+    final duration = block.end.difference(block.start);
+    final nextStart = DateTime(
+      nextDate.year,
+      nextDate.month,
+      nextDate.day,
+      block.start.hour,
+      block.start.minute,
+    );
+    await ref
+        .read(dayBlocksProvider(nextDate).notifier)
+        .addBlock(
+          start: nextStart,
+          end: nextStart.add(duration),
+          kind: block.kind,
+          title: block.title,
+        );
   }
 }
 

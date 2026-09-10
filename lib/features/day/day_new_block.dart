@@ -96,3 +96,45 @@ Duration durationForNewBlock({
   final remaining = dayEndFor(slotStart, settings).difference(slotStart);
   return duration < remaining ? duration : remaining;
 }
+
+/// Whether editing a block to span `[start, end)` on [day] is allowed: the
+/// range must be ordered, fall within [settings]'s day bounds, and not
+/// overlap any of [others]. Used to silently reject an invalid title/start/
+/// end edit rather than showing an error.
+bool isValidBlockEdit({
+  required DateTime start,
+  required DateTime end,
+  required DaySettings settings,
+  required DateTime day,
+  required List<TimeObject> others,
+}) {
+  if (!end.isAfter(start)) return false;
+  final dayStart = DateTime(
+    day.year,
+    day.month,
+    day.day,
+    settings.dayStartHour,
+  );
+  if (start.isBefore(dayStart)) return false;
+  if (end.isAfter(dayEndFor(day, settings))) return false;
+  return others.every((block) => !block.overlaps(start, end));
+}
+
+/// Whether copying [block] to [nextDate] (same time of day, same duration)
+/// would overlap any of [nextDayBlocks].
+bool copyToNextDayWouldOverlap({
+  required TimeObject block,
+  required DateTime nextDate,
+  required List<TimeObject> nextDayBlocks,
+}) {
+  final duration = block.end.difference(block.start);
+  final start = DateTime(
+    nextDate.year,
+    nextDate.month,
+    nextDate.day,
+    block.start.hour,
+    block.start.minute,
+  );
+  final end = start.add(duration);
+  return nextDayBlocks.any((b) => b.overlaps(start, end));
+}

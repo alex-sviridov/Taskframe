@@ -172,4 +172,115 @@ void main() {
       );
     });
   });
+
+  group('isValidBlockEdit', () {
+    test('accepts an ordered range within the day bounds with no overlap', () {
+      final valid = isValidBlockEdit(
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 30),
+        settings: _settings,
+        day: DateTime(2026, 9, 9),
+        others: const [],
+      );
+
+      expect(valid, isTrue);
+    });
+
+    test('rejects end at or before start', () {
+      final valid = isValidBlockEdit(
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9),
+        settings: _settings,
+        day: DateTime(2026, 9, 9),
+        others: const [],
+      );
+
+      expect(valid, isFalse);
+    });
+
+    test('rejects a start before the day\'s own start hour', () {
+      final valid = isValidBlockEdit(
+        start: DateTime(2026, 9, 9, 5, 45),
+        end: DateTime(2026, 9, 9, 6, 15),
+        settings: _settings,
+        day: DateTime(2026, 9, 9),
+        others: const [],
+      );
+
+      expect(valid, isFalse);
+    });
+
+    test('rejects an end after the day\'s own end hour', () {
+      final valid = isValidBlockEdit(
+        start: DateTime(2026, 9, 9, 22, 45),
+        end: DateTime(2026, 9, 9, 23, 15),
+        settings: _settings,
+        day: DateTime(2026, 9, 9),
+        others: const [],
+      );
+
+      expect(valid, isFalse);
+    });
+
+    test('rejects a range overlapping another block', () {
+      final valid = isValidBlockEdit(
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 30),
+        settings: _settings,
+        day: DateTime(2026, 9, 9),
+        others: [
+          TimeObject(
+            id: 'x',
+            title: 'X',
+            start: DateTime(2026, 9, 9, 9, 15),
+            end: DateTime(2026, 9, 9, 9, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(valid, isFalse);
+    });
+  });
+
+  group('copyToNextDayWouldOverlap', () {
+    final block = TimeObject(
+      id: '1',
+      title: 'Work',
+      start: DateTime(2026, 9, 9, 9),
+      end: DateTime(2026, 9, 9, 9, 30),
+      kind: BlockKind.anchor,
+      locked: false,
+    );
+
+    test('is false when the next day has no conflicting block', () {
+      final overlaps = copyToNextDayWouldOverlap(
+        block: block,
+        nextDate: DateTime(2026, 9, 10),
+        nextDayBlocks: const [],
+      );
+
+      expect(overlaps, isFalse);
+    });
+
+    test('is true when the same time slot is occupied on the next day', () {
+      final overlaps = copyToNextDayWouldOverlap(
+        block: block,
+        nextDate: DateTime(2026, 9, 10),
+        nextDayBlocks: [
+          TimeObject(
+            id: 'y',
+            title: 'Y',
+            start: DateTime(2026, 9, 10, 9, 15),
+            end: DateTime(2026, 9, 10, 9, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(overlaps, isTrue);
+    });
+  });
 }
