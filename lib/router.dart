@@ -1,7 +1,14 @@
 import 'package:go_router/go_router.dart';
+import 'package:taskframe/features/category/widgets/categories_screen.dart';
 import 'package:taskframe/features/day/day_screen.dart';
 
 /// Application router with the single smoke-test route.
 final GoRouter appRouter = GoRouter(
-  routes: [GoRoute(path: '/', builder: (context, state) => const DayScreen())],
+  routes: [
+    GoRoute(path: '/', builder: (context, state) => const DayScreen()),
+    GoRoute(
+      path: '/categories',
+      builder: (context, state) => const CategoriesScreen(),
+    ),
+  ],
 );
