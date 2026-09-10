@@ -52,30 +52,35 @@ class CategoriesScreen extends ConsumerWidget {
         ],
       ),
       body: switch (categoriesAsync) {
-        AsyncData(:final value) => ListView(
-          children: [
-            for (final category in value)
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Color(category.colorValue),
-                  child: category.emoji != null
-                      ? Text(category.emoji!)
-                      : null,
-                ),
-                title: Text(category.name),
-                onTap: () => showCategoryEditSheet(
-                  context: context,
-                  category: category,
-                ),
-                trailing: category.isDefault
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () =>
-                            _confirmDelete(context, ref, category),
-                      ),
-              ),
-          ],
+        AsyncData(:final value) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: ListView(
+              children: [
+                for (final category in value)
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Color(category.colorValue),
+                      child: category.emoji != null
+                          ? Text(category.emoji!)
+                          : null,
+                    ),
+                    title: Text(category.name),
+                    onTap: () => showCategoryEditSheet(
+                      context: context,
+                      category: category,
+                    ),
+                    trailing: category.isDefault
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () =>
+                                _confirmDelete(context, ref, category),
+                          ),
+                  ),
+              ],
+            ),
+          ),
         ),
         AsyncError() => const Center(child: Text('Failed to load categories')),
         _ => const Center(child: CircularProgressIndicator()),

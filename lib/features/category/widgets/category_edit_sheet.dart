@@ -5,16 +5,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 
+/// Below this viewport width, [showCategoryEditSheet] shows a
+/// near-fullscreen bottom sheet; at or above it, a centered fixed-width
+/// dialog. Matches the day feature's block edit modal breakpoint.
+const _narrowBreakpoint = 700.0;
+
 /// Opens the edit sheet for [category] (edit mode) or, when [category] is
-/// `null`, for creating a new category (create mode).
+/// `null`, for creating a new category (create mode). Near-fullscreen on a
+/// narrow (mobile) width, a centered fixed-width dialog on a wide one.
 Future<void> showCategoryEditSheet({
   required BuildContext context,
   Category? category,
 }) {
-  return showModalBottomSheet<void>(
+  final isNarrow = MediaQuery.sizeOf(context).width < _narrowBreakpoint;
+  if (isNarrow) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CategoryEditSheetContent(category: category),
+    );
+  }
+  return showDialog<void>(
     context: context,
-    isScrollControlled: true,
-    builder: (context) => _CategoryEditSheetContent(category: category),
+    builder: (context) => Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
+        child: _CategoryEditSheetContent(category: category),
+      ),
+    ),
   );
 }
 
