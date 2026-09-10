@@ -122,7 +122,11 @@ void main() {
         kind: BlockKind.anchor,
       );
 
-      await notifier.updateBlock(first, start: DateTime(2026, 9, 9, 11, 15));
+      await notifier.updateBlock(
+        first,
+        start: DateTime(2026, 9, 9, 10, 45),
+        end: DateTime(2026, 9, 9, 11, 15),
+      );
 
       final blocks = container.read(dayBlocksProvider(date)).value!;
       expect(blocks.singleWhere((b) => b.id == first.id).start, first.start);
