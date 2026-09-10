@@ -50,6 +50,58 @@ void main() {
     });
   });
 
+  group('resizeCandidateForOffset', () {
+    test('matches slotStartForOffset within the grid', () {
+      final candidate = resizeCandidateForOffset(
+        day: DateTime(2026, 9, 9),
+        dy: 12 * _slotHeight + 5,
+        settings: _settings,
+        slotHeight: _slotHeight,
+      );
+
+      // 12 slots after a 6:00 start is 9:00.
+      expect(candidate, DateTime(2026, 9, 9, 9));
+    });
+
+    test('clamps to the day start instead of returning null above the '
+        'grid', () {
+      final candidate = resizeCandidateForOffset(
+        day: DateTime(2026, 9, 9),
+        dy: -1,
+        settings: _settings,
+        slotHeight: _slotHeight,
+      );
+
+      expect(candidate, DateTime(2026, 9, 9, 6));
+    });
+
+    test('reaches the exact day end instead of stopping one slot short', () {
+      final slotCount = (_settings.dayEndHour - _settings.dayStartHour) * 4;
+
+      final candidate = resizeCandidateForOffset(
+        day: DateTime(2026, 9, 9),
+        dy: slotCount * _slotHeight,
+        settings: _settings,
+        slotHeight: _slotHeight,
+      );
+
+      expect(candidate, DateTime(2026, 9, 9, _settings.dayEndHour));
+    });
+
+    test('clamps to the day end for any offset past the grid', () {
+      final slotCount = (_settings.dayEndHour - _settings.dayStartHour) * 4;
+
+      final candidate = resizeCandidateForOffset(
+        day: DateTime(2026, 9, 9),
+        dy: (slotCount + 5) * _slotHeight,
+        settings: _settings,
+        slotHeight: _slotHeight,
+      );
+
+      expect(candidate, DateTime(2026, 9, 9, _settings.dayEndHour));
+    });
+  });
+
   group('durationForNewBlock', () {
     test('defaults to 30 minutes when both slots are free', () {
       final duration = durationForNewBlock(

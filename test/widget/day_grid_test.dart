@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
@@ -90,6 +91,111 @@ Future<TestGesture> _startTouchDrag(
 }
 
 void main() {
+  group('resizeEdgeForLocalY', () {
+    test('picks the start edge above the block\'s vertical midpoint', () {
+      expect(resizeEdgeForLocalY(localY: 0, blockHeight: 40), ResizeEdge.start);
+      expect(
+        resizeEdgeForLocalY(localY: 19, blockHeight: 40),
+        ResizeEdge.start,
+      );
+    });
+
+    test('picks the end edge at or below the block\'s vertical midpoint', () {
+      expect(resizeEdgeForLocalY(localY: 20, blockHeight: 40), ResizeEdge.end);
+      expect(resizeEdgeForLocalY(localY: 40, blockHeight: 40), ResizeEdge.end);
+    });
+  });
+
+  group('resizeBleedForBlocks', () {
+    TimeObject block(String id, int startHour, int endHour) => TimeObject(
+      id: id,
+      title: id,
+      start: DateTime(2026, 9, 9, startHour),
+      end: DateTime(2026, 9, 9, endHour),
+      kind: BlockKind.anchor,
+      locked: false,
+    );
+
+    double offsetFor(DateTime time) =>
+        (time.hour * 60 + time.minute).toDouble();
+
+    test('a block with no neighbors gets the full bleed on both sides', () {
+      final bleed = resizeBleedForBlocks(
+        blocks: [block('a', 9, 10)],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+
+      expect(bleed['a'], (top: 9.0, bottom: 9.0));
+    });
+
+    test('a block with a wide gap to its neighbors gets the full bleed', () {
+      final bleed = resizeBleedForBlocks(
+        blocks: [block('a', 8, 9), block('b', 10, 11), block('c', 12, 13)],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+
+      expect(bleed['b'], (top: 9.0, bottom: 9.0));
+    });
+
+    test('a block with a narrow gap gets clamped to half the gap', () {
+      // 'a' ends at 9:15, 'b' starts at 9:30: a 15min (15px) gap, half of
+      // which (7.5) is less than maxBleed (9).
+      final bleed = resizeBleedForBlocks(
+        blocks: [
+          TimeObject(
+            id: 'a',
+            title: 'a',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 15),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+          TimeObject(
+            id: 'b',
+            title: 'b',
+            start: DateTime(2026, 9, 9, 9, 30),
+            end: DateTime(2026, 9, 9, 9, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+
+      expect(bleed['a']!.bottom, 7.5);
+      expect(bleed['b']!.top, 7.5);
+    });
+
+    test('back-to-back blocks (zero gap) get zero bleed on that side', () {
+      final bleed = resizeBleedForBlocks(
+        blocks: [block('a', 9, 10), block('b', 10, 11)],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+
+      expect(bleed['a'], (top: 9.0, bottom: 0.0));
+      expect(bleed['b'], (top: 0.0, bottom: 9.0));
+    });
+
+    test('is unaffected by the order blocks are passed in', () {
+      final forward = resizeBleedForBlocks(
+        blocks: [block('a', 9, 10), block('b', 10, 11)],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+      final reversed = resizeBleedForBlocks(
+        blocks: [block('b', 10, 11), block('a', 9, 10)],
+        offsetFor: offsetFor,
+        maxBleed: 9,
+      );
+
+      expect(reversed, forward);
+    });
+  });
+
   group('DayGrid', () {
     testWidgets('renders every block title', (tester) async {
       await _pump(tester, [
@@ -130,13 +236,17 @@ void main() {
       ]);
 
       final positioned = tester.widget<Positioned>(
-        find.ancestor(of: find.text('Work'), matching: find.byType(Positioned)),
+        find.byKey(const ValueKey('day-grid-block-position-1')),
       );
 
+      // This Positioned is enlarged by `_DraggableBlock.hitBleed` (9px) on
+      // each side so the block's resize zones have room to bleed past its
+      // true edges; the block itself insets its visual content back in.
+      const hitBleed = 9.0;
       // 9:00 is 3 hours (12 slots) after the 6:00 day start.
-      expect(positioned.top, 12 * _slotHeight);
+      expect(positioned.top, 12 * _slotHeight - hitBleed);
       // A 4-hour block spans 16 slots.
-      expect(positioned.height, 16 * _slotHeight);
+      expect(positioned.height, 16 * _slotHeight + hitBleed * 2);
     });
 
     testWidgets('sizes the grid to span day-start through day-end', (
@@ -161,8 +271,11 @@ void main() {
                 blocks: const [],
                 settings: _settings,
                 slotHeight: 8,
-                onCreateBlock:
-                    ({required start, required end, required kind}) {},
+                onCreateBlock: ({
+                  required start,
+                  required end,
+                  required kind,
+                }) {},
               ),
             ),
           ),
@@ -188,8 +301,11 @@ void main() {
                 settings: _settings,
                 slotHeight: _slotHeight,
                 showHourLabels: false,
-                onCreateBlock:
-                    ({required start, required end, required kind}) {},
+                onCreateBlock: ({
+                  required start,
+                  required end,
+                  required kind,
+                }) {},
               ),
             ),
           ),
@@ -197,7 +313,7 @@ void main() {
       );
 
       final positioned = tester.widget<Positioned>(
-        find.ancestor(of: find.text('Work'), matching: find.byType(Positioned)),
+        find.byKey(const ValueKey('day-grid-block-position-1')),
       );
 
       expect(positioned.left, 4);
@@ -226,9 +342,7 @@ void main() {
       expect(ended, isTrue);
     });
 
-    testWidgets('a fling starting on a block is not forwarded', (
-      tester,
-    ) async {
+    testWidgets('a fling starting on a block is not forwarded', (tester) async {
       var called = false;
       await _pump(tester, [_workBlock], onSwipeStart: (_) => called = true);
 
@@ -371,9 +485,7 @@ void main() {
     });
 
     group('landzone', () {
-      testWidgets('does not show when no drag is in progress', (
-        tester,
-      ) async {
+      testWidgets('does not show when no drag is in progress', (tester) async {
         await _pump(tester, [_workBlock]);
 
         expect(find.byKey(const Key('day-grid-landzone')), findsNothing);
@@ -383,16 +495,20 @@ void main() {
           'target', (tester) async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
-        container.read(dragStateProvider.notifier).start(
-          block: _workBlock,
-          originalDate: _date,
-          pointerGlobalPosition: const Offset(0, 0),
-        );
-        container.read(dragStateProvider.notifier).updatePointer(
-          const Offset(0, 0),
-          targetDate: _date,
-          targetStart: DateTime(2026, 9, 9, 11),
-        );
+        container
+            .read(dragStateProvider.notifier)
+            .start(
+              block: _workBlock,
+              originalDate: _date,
+              pointerGlobalPosition: const Offset(0, 0),
+            );
+        container
+            .read(dragStateProvider.notifier)
+            .updatePointer(
+              const Offset(0, 0),
+              targetDate: _date,
+              targetStart: DateTime(2026, 9, 9, 11),
+            );
 
         await _pump(tester, [_workBlock], container: container);
 
@@ -430,16 +546,20 @@ void main() {
       ) async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
-        container.read(dragStateProvider.notifier).start(
-          block: _workBlock,
-          originalDate: _date,
-          pointerGlobalPosition: const Offset(0, 0),
-        );
-        container.read(dragStateProvider.notifier).updatePointer(
-          const Offset(0, 0),
-          targetDate: DateTime(2026, 9, 10),
-          targetStart: DateTime(2026, 9, 10, 11),
-        );
+        container
+            .read(dragStateProvider.notifier)
+            .start(
+              block: _workBlock,
+              originalDate: _date,
+              pointerGlobalPosition: const Offset(0, 0),
+            );
+        container
+            .read(dragStateProvider.notifier)
+            .updatePointer(
+              const Offset(0, 0),
+              targetDate: DateTime(2026, 9, 10),
+              targetStart: DateTime(2026, 9, 10, 11),
+            );
 
         await _pump(tester, [_workBlock], container: container);
 
@@ -450,11 +570,13 @@ void main() {
           'dragging, replacing it with the landzone preview', (tester) async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
-        container.read(dragStateProvider.notifier).start(
-          block: _workBlock,
-          originalDate: _date,
-          pointerGlobalPosition: const Offset(0, 0),
-        );
+        container
+            .read(dragStateProvider.notifier)
+            .start(
+              block: _workBlock,
+              originalDate: _date,
+              pointerGlobalPosition: const Offset(0, 0),
+            );
 
         await _pump(tester, [_workBlock], container: container);
 
@@ -511,10 +633,7 @@ void main() {
         addTearDown(container.dispose);
         await _pump(tester, [_workBlock], container: container);
 
-        final gesture = await _startTouchDrag(
-          tester,
-          const Offset(200, 300),
-        );
+        final gesture = await _startTouchDrag(tester, const Offset(200, 300));
         await gesture.moveBy(const Offset(0, 32));
         await tester.pump();
 
@@ -602,6 +721,359 @@ void main() {
         expect(find.bySemanticsLabel('Create Event'), findsNothing);
         semantics.dispose();
       });
+    });
+
+    group('block resize', () {
+      testWidgets('dragging the bottom edge handle starts a resize on the '
+          'end edge', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        // Work spans y 192-448; the bottom resize handle straddles y=448.
+        final gesture = await tester.startGesture(const Offset(200, 445));
+        await gesture.moveBy(const Offset(0, 32));
+        await tester.pump();
+
+        final state = container.read(resizeStateProvider);
+        expect(state, isNotNull);
+        expect(state!.edge, ResizeEdge.end);
+        await gesture.up();
+      });
+
+      testWidgets('dragging the top edge handle starts a resize on the '
+          'start edge', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        // Work spans y 192-448; the top resize handle straddles y=192.
+        final gesture = await tester.startGesture(const Offset(200, 195));
+        await gesture.moveBy(const Offset(0, -32));
+        await tester.pump();
+
+        final state = container.read(resizeStateProvider);
+        expect(state, isNotNull);
+        expect(state!.edge, ResizeEdge.start);
+        await gesture.up();
+      });
+
+      testWidgets('shows the resize draft shadow while resizing', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        final gesture = await tester.startGesture(const Offset(200, 445));
+        await gesture.moveBy(const Offset(0, 32));
+        await tester.pump();
+
+        expect(find.byKey(const Key('day-grid-resize-draft')), findsOneWidget);
+        await gesture.up();
+      });
+
+      testWidgets('releasing a bottom-edge resize commits the new end '
+          'time', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        const startPosition = Offset(200, 445);
+        const dropPosition = Offset(200, 477);
+        final gesture = await tester.startGesture(startPosition);
+        await gesture.moveBy(dropPosition - startPosition);
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(container.read(resizeStateProvider), isNull);
+
+        // Computed the same way `slotStartForOffset` resolves it in
+        // production, from the grid's real render box, rather than an
+        // assumed pixel-to-time mapping.
+        final gridTopLeft = tester.getTopLeft(find.byType(DayGrid));
+        final expectedEnd = slotStartForOffset(
+          day: _date,
+          dy: dropPosition.dy - gridTopLeft.dy,
+          settings: _settings,
+          slotHeight: _slotHeight,
+        );
+        expect(expectedEnd, isNotNull);
+
+        final blocks = await container.read(dayBlocksProvider(_date).future);
+        final resized = blocks.singleWhere((b) => b.id == _workBlock.id);
+        expect(resized.start, _workBlock.start);
+        expect(resized.end, expectedEnd);
+      });
+
+      testWidgets('a locked block ignores resize gestures', (tester) async {
+        final locked = TimeObject(
+          id: '1',
+          title: 'Locked',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 13),
+          kind: BlockKind.frame,
+          locked: true,
+        );
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [locked], container: container);
+
+        final gesture = await tester.startGesture(const Offset(200, 445));
+        await gesture.moveBy(const Offset(0, 32));
+        await tester.pump();
+
+        expect(container.read(resizeStateProvider), isNull);
+        await gesture.up();
+      });
+    });
+
+    group('block resize — device racing', () {
+      testWidgets(
+        'a quick touch drag near a block edge starts a resize without a '
+        'long-press',
+        (tester) async {
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          await _pump(tester, [_workBlock], container: container);
+
+          // Work's bottom edge is at y=448.
+          final gesture = await tester.startGesture(
+            const Offset(200, 445),
+            kind: PointerDeviceKind.touch,
+          );
+          await gesture.moveBy(const Offset(0, 20));
+          await tester.pump();
+
+          expect(container.read(resizeStateProvider), isNotNull);
+          expect(container.read(dragStateProvider), isNull);
+          await gesture.up();
+        },
+      );
+
+      testWidgets(
+        'holding (long-press) near a block edge on touch starts a move, '
+        'not a resize',
+        (tester) async {
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          await _pump(tester, [_workBlock], container: container);
+
+          final gesture = await _startTouchDrag(tester, const Offset(200, 445));
+          await gesture.moveBy(const Offset(0, 20));
+          await tester.pump();
+
+          expect(container.read(dragStateProvider), isNotNull);
+          expect(container.read(resizeStateProvider), isNull);
+          await gesture.up();
+        },
+      );
+
+      testWidgets(
+        'mouse dragging from the block body (away from the edge) starts a '
+        'move',
+        (tester) async {
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          await _pump(tester, [_workBlock], container: container);
+
+          final gesture = await tester.startGesture(
+            const Offset(200, 300),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, 20));
+          await tester.pump();
+
+          expect(container.read(dragStateProvider), isNotNull);
+          expect(container.read(resizeStateProvider), isNull);
+          await gesture.up();
+        },
+      );
+
+      testWidgets('mouse dragging from the thin edge strip starts a resize', (
+        tester,
+      ) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await _pump(tester, [_workBlock], container: container);
+
+        // Work's bottom edge is at y=448; the classic mouse strip sits
+        // right on it, unlike touch's much larger bleed.
+        final gesture = await tester.startGesture(
+          const Offset(200, 449),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+
+        expect(container.read(resizeStateProvider), isNotNull);
+        expect(container.read(dragStateProvider), isNull);
+        await gesture.up();
+      });
+
+      testWidgets('mouse can still move an extra-small block from its body', (
+        tester,
+      ) async {
+        final tiny = TimeObject(
+          id: '1',
+          title: 'Tiny',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 15),
+          kind: BlockKind.anchor,
+          locked: false,
+        );
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: Scaffold(
+                body: DayGrid(
+                  key: dayGridKeyFor(_date),
+                  date: _date,
+                  blocks: [tiny],
+                  settings: _settings,
+                  slotHeight: 8,
+                  onCreateBlock: ({
+                    required start,
+                    required end,
+                    required kind,
+                  }) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // 9:00 is 3 hours after the 6:00 day start = 12 slots * 8px = 96.
+        // The block is one 15-minute slot tall (8px): it spans y 96-104,
+        // so its exact vertical center is y=100.
+        final gesture = await tester.startGesture(
+          const Offset(200, 100),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump();
+
+        expect(container.read(dragStateProvider), isNotNull);
+        expect(container.read(resizeStateProvider), isNull);
+        await gesture.up();
+      });
+
+      testWidgets(
+        'a short block sandwiched between two back-to-back neighbors is '
+        'still movable from its own body',
+        (tester) async {
+          // Three touching 15-minute blocks: a busy, back-to-back part of
+          // the day like a packed evening. Without per-block bleed
+          // clamping, a neighbor's bled hit region could swallow 'b'
+          // entirely, since its true body (one slot) is shorter than the
+          // combined bleed of the strips around it.
+          final a = TimeObject(
+            id: 'a',
+            title: 'A',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 15),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          final b = TimeObject(
+            id: 'b',
+            title: 'B',
+            start: DateTime(2026, 9, 9, 9, 15),
+            end: DateTime(2026, 9, 9, 9, 30),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          final c = TimeObject(
+            id: 'c',
+            title: 'C',
+            start: DateTime(2026, 9, 9, 9, 30),
+            end: DateTime(2026, 9, 9, 9, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          await _pump(tester, [a, b, c], container: container);
+
+          // 9:15 is 3h15m after the 6:00 day start = 13 slots * 16px =
+          // 208. 'b' spans y 208-224 (one 15-minute slot); its exact
+          // vertical center is y=216.
+          final gesture = await tester.startGesture(
+            const Offset(200, 216),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, 20));
+          await tester.pump();
+
+          final state = container.read(dragStateProvider);
+          expect(state, isNotNull);
+          expect(state!.block.id, 'b');
+          await gesture.up();
+        },
+      );
+
+      testWidgets('a mouse hovering near a block edge shows a resize '
+          'cursor', (tester) async {
+        await _pump(tester, [_workBlock]);
+
+        final region = tester.widget<MouseRegion>(
+          find.descendant(
+            of: find.byKey(const Key('day-grid-resize-end-handle')),
+            matching: find.byType(MouseRegion),
+          ),
+        );
+
+        expect(region.cursor, SystemMouseCursors.resizeRow);
+      });
+
+      testWidgets(
+        'resizing a block\'s end all the way down reaches the exact day '
+        'end, not one slot short',
+        (tester) async {
+          // 22:30 is 16h30m after the 6:00 day start = 66 slots * 16px =
+          // 1056; the block (22:30-22:45) spans y 1056-1072.
+          final lastBlock = TimeObject(
+            id: '1',
+            title: 'Late',
+            start: DateTime(2026, 9, 9, 22, 30),
+            end: DateTime(2026, 9, 9, 22, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          // The default test surface (800x600) is shorter than the day
+          // grid's full height (1088px here); widen it so the block near
+          // day end, and the gesture dragged past it, are actually on
+          // screen and hit-testable.
+          tester.view.physicalSize = const Size(800, 1200);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          await _pump(tester, [lastBlock], container: container);
+
+          // Start within the true bottom edge strip (not relying on any
+          // bleed past it) and drag well past the grid's own bottom.
+          final gesture = await tester.startGesture(
+            const Offset(200, 1069),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, 200));
+          await tester.pump();
+          await gesture.up();
+          await tester.pump();
+          await tester.pumpAndSettle();
+
+          final blocks = await container.read(dayBlocksProvider(_date).future);
+          final resized = blocks.singleWhere((b) => b.id == lastBlock.id);
+          expect(resized.end, DateTime(2026, 9, 9, _settings.dayEndHour));
+        },
+      );
     });
   });
 }

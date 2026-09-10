@@ -4,7 +4,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
+import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
+
+/// The shortest duration a block can be resized down to.
+const _minBlockDuration = Duration(minutes: 15);
 
 DateTime _today() {
   final now = DateTime.now();
@@ -307,4 +311,97 @@ class DragNotifier extends Notifier<DragState?> {
 /// The block currently being dragged to a new time/date, if any.
 final dragStateProvider = NotifierProvider<DragNotifier, DragState?>(
   DragNotifier.new,
+);
+
+/// Tracks the block currently being resized by dragging one of its edges,
+/// if any.
+///
+/// `null` when no resize is in progress. A resize never changes a block's
+/// date, so unlike [DragNotifier] this needs no pointer-ownership dance —
+/// the widget driving the drag stays mounted for its whole lifetime.
+class ResizeNotifier extends Notifier<ResizeState?> {
+  @override
+  ResizeState? build() => null;
+
+  /// Begins resizing [block] on [date] from [edge]. The draft starts out
+  /// equal to the block's own current start/end.
+  void start({
+    required TimeObject block,
+    required DateTime date,
+    required ResizeEdge edge,
+  }) {
+    state = ResizeState(
+      block: block,
+      date: date,
+      edge: edge,
+      draftStart: block.start,
+      draftEnd: block.end,
+    );
+  }
+
+  /// Updates the dragged edge's draft time to [candidate] (already snapped
+  /// to the 15-minute grid), clamped so the block never shrinks below
+  /// [_minBlockDuration] and never overlaps another block on [ResizeState.
+  /// date].
+  void update(DateTime candidate) {
+    final current = state;
+    if (current == null) return;
+    final others = (ref.read(dayBlocksProvider(current.date)).value ?? [])
+        .where((block) => block.id != current.block.id);
+
+    if (current.edge == ResizeEdge.end) {
+      var newEnd = candidate;
+      final minEnd = current.draftStart.add(_minBlockDuration);
+      if (newEnd.isBefore(minEnd)) newEnd = minEnd;
+      for (final block in others) {
+        if (block.start.isAfter(current.draftStart) &&
+            block.start.isBefore(newEnd)) {
+          newEnd = block.start;
+        }
+      }
+      state = current.copyWith(draftEnd: newEnd);
+    } else {
+      var newStart = candidate;
+      final maxStart = current.draftEnd.subtract(_minBlockDuration);
+      if (newStart.isAfter(maxStart)) newStart = maxStart;
+      for (final block in others) {
+        if (block.end.isBefore(current.draftEnd) &&
+            block.end.isAfter(newStart)) {
+          newStart = block.end;
+        }
+      }
+      state = current.copyWith(draftStart: newStart);
+    }
+  }
+
+  /// Commits the current resize: persists the draft start/end via the
+  /// repository, refreshes the date's blocks, then clears the resize. Does
+  /// nothing if no resize is in progress.
+  Future<void> commit() async {
+    final current = state;
+    if (current == null) return;
+    state = null;
+
+    final repository = ref.read(dayBlocksRepositoryProvider);
+    await repository.move(
+      current.block,
+      fromDate: current.date,
+      toDate: current.date,
+      newStart: current.draftStart,
+      newEnd: current.draftEnd,
+    );
+
+    ref.invalidate(dayBlocksProvider(current.date));
+    await ref.read(dayBlocksProvider(current.date).future);
+  }
+
+  /// Abandons the current resize without changing the block.
+  void cancel() {
+    state = null;
+  }
+}
+
+/// The block currently being resized, if any.
+final resizeStateProvider = NotifierProvider<ResizeNotifier, ResizeState?>(
+  ResizeNotifier.new,
 );

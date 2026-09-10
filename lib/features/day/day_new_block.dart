@@ -36,6 +36,35 @@ DateTime? slotStartForOffset({
   );
 }
 
+/// Resolves a resize drag's candidate time from [dy] pixels down the grid,
+/// like [slotStartForOffset] but clamped to the day's own start/end instead
+/// of returning `null` there.
+///
+/// A new block's start must fall strictly within the grid — [slotStartForOffset]
+/// rejects the day's exact end because nothing could start there. A resize's
+/// dragged edge has no such restriction: the block's end (or start) should be
+/// able to reach the day's exact boundary, not stop one 15-minute slot short
+/// of it.
+DateTime resizeCandidateForOffset({
+  required DateTime day,
+  required double dy,
+  required DaySettings settings,
+  required double slotHeight,
+}) {
+  final slotCount = (settings.dayEndHour - settings.dayStartHour) * 4;
+  final totalHeight = slotCount * slotHeight;
+  final clampedDy = dy.clamp(0, totalHeight).toDouble();
+  if (clampedDy >= totalHeight) {
+    return DateTime(day.year, day.month, day.day, settings.dayEndHour);
+  }
+  return slotStartForOffset(
+    day: day,
+    dy: clampedDy,
+    settings: settings,
+    slotHeight: slotHeight,
+  )!;
+}
+
 /// The duration a new block starting at [slotStart] should get: 30 minutes
 /// by default, or 15 minutes if the following 15-minute slot is already
 /// occupied by one of [existingBlocks].
