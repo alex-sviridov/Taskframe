@@ -208,5 +208,111 @@ void main() {
       expect(blocks, hasLength(1));
       expect(blocks.single.start, DateTime(date.year, date.month, date.day, 15));
     });
+
+    test('add uses the given title when provided', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+        title: 'Gym',
+      );
+
+      expect(added.title, 'Gym');
+    });
+
+    test('update changes an added block\'s title, start and end', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      final updated = await repository.update(
+        added,
+        date: date,
+        title: 'Renamed',
+        start: DateTime(date.year, date.month, date.day, 11),
+        end: DateTime(date.year, date.month, date.day, 11, 30),
+      );
+
+      expect(updated.id, added.id);
+      expect(updated.title, 'Renamed');
+      expect(updated.start, DateTime(date.year, date.month, date.day, 11));
+      expect(updated.end, DateTime(date.year, date.month, date.day, 11, 30));
+    });
+
+    test('update leaves fields unspecified as null unchanged', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      final updated = await repository.update(added, date: date, title: 'Renamed');
+
+      expect(updated.start, added.start);
+      expect(updated.end, added.end);
+    });
+
+    test('update replaces the block in a later load for that date', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      await repository.update(added, date: date, title: 'Renamed');
+
+      final blocks = await repository.load(date);
+      expect(blocks, hasLength(1));
+      expect(blocks.single.title, 'Renamed');
+    });
+
+    test('updating a seeded block promotes it and keeps its new title on '
+        'later loads', () async {
+      final today = DateTime.now();
+      final seeded = (await repository.load(today))
+          .firstWhere((b) => b.id == 'breakfast');
+
+      await repository.update(seeded, date: today, title: 'Brunch');
+
+      final blocks = await repository.load(today);
+      expect(blocks.where((b) => b.id == 'breakfast'), hasLength(1));
+      expect(blocks.firstWhere((b) => b.id == 'breakfast').title, 'Brunch');
+    });
+
+    test('delete removes an added block from a later load', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      await repository.delete(added, date: date);
+
+      expect(await repository.load(date), isEmpty);
+    });
+
+    test('delete removes a seeded block from a later load', () async {
+      final today = DateTime.now();
+      final seeded = (await repository.load(today))
+          .firstWhere((b) => b.id == 'breakfast');
+
+      await repository.delete(seeded, date: today);
+
+      final blocks = await repository.load(today);
+      expect(blocks.where((b) => b.id == 'breakfast'), isEmpty);
+    });
   });
 }

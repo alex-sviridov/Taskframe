@@ -8,12 +8,14 @@ abstract class DayBlocksRepository {
   /// Returns the blocks for [date].
   Future<List<TimeObject>> load(DateTime date);
 
-  /// Creates a new block on [date] and returns it.
+  /// Creates a new block on [date] and returns it. [title] defaults to a
+  /// placeholder when omitted.
   Future<TimeObject> add(
     DateTime date, {
     required DateTime start,
     required DateTime end,
     required BlockKind kind,
+    String? title,
   });
 
   /// Moves [block] from [fromDate] to [toDate], updating its start/end to
@@ -26,6 +28,20 @@ abstract class DayBlocksRepository {
     required DateTime newStart,
     required DateTime newEnd,
   });
+
+  /// Updates [block] (which belongs to [date]) in place, replacing any of
+  /// [title]/[start]/[end] that are given and leaving the rest unchanged.
+  /// Returns the updated block.
+  Future<TimeObject> update(
+    TimeObject block, {
+    required DateTime date,
+    String? title,
+    DateTime? start,
+    DateTime? end,
+  });
+
+  /// Removes [block] (which belongs to [date]).
+  Future<void> delete(TimeObject block, {required DateTime date});
 }
 
 /// A [DayBlocksRepository] that keeps added blocks in memory for the life
@@ -46,10 +62,11 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
     required DateTime start,
     required DateTime end,
     required BlockKind kind,
+    String? title,
   }) async {
     final block = TimeObject(
       id: 'block-${_nextId++}',
-      title: 'title',
+      title: title ?? 'title',
       start: start,
       end: end,
       kind: kind,
@@ -90,6 +107,49 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
 
     _added[toKey] = [...?_added[toKey], moved];
     return moved;
+  }
+
+  @override
+  Future<TimeObject> update(
+    TimeObject block, {
+    required DateTime date,
+    String? title,
+    DateTime? start,
+    DateTime? end,
+  }) async {
+    final key = _dateKey(date);
+    final updated = TimeObject(
+      id: block.id,
+      title: title ?? block.title,
+      start: start ?? block.start,
+      end: end ?? block.end,
+      kind: block.kind,
+      locked: block.locked,
+    );
+
+    final list = _added[key];
+    if (list != null && list.any((b) => b.id == block.id)) {
+      _added[key] = [
+        for (final b in list) if (b.id == block.id) updated else b,
+      ];
+    } else {
+      // A seeded block being edited for the first time: promote it into
+      // `_added` and suppress the stale seed, the same way `move` does.
+      _movedSeedIds.add(block.id);
+      _added[key] = [...?_added[key], updated];
+    }
+    return updated;
+  }
+
+  @override
+  Future<void> delete(TimeObject block, {required DateTime date}) async {
+    final key = _dateKey(date);
+    final list = _added[key];
+    if (list != null && list.any((b) => b.id == block.id)) {
+      _added[key] = list.where((b) => b.id != block.id).toList();
+    } else {
+      _movedSeedIds.add(block.id);
+    }
   }
 
   static DateTime _dateKey(DateTime date) =>
