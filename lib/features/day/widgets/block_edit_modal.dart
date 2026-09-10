@@ -369,6 +369,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   Future<void> _copyToNextDay(TimeObject block) async {
     await _commitTitle(block);
+    if (!mounted) return;
     // copyToNextDay reads block.title directly, so a just-committed rename
     // must be picked up here — re-fetch by id rather than reusing the
     // pre-commit `block`, whose title field is now stale.
