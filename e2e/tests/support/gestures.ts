@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /**
  * Double-clicks at [x, y] by sending two clicks far enough apart to clear
@@ -20,6 +20,21 @@ export async function doubleClickFreeSpace(
   await page.mouse.click(x, y);
   await page.waitForTimeout(60);
   await page.mouse.click(x, y);
+}
+
+/**
+ * Clicks the center of [locator]'s bounding box via a raw mouse click,
+ * rather than {@link Locator.click}. Flutter web's semantics DOM nests a
+ * static text node (what {@link Page.getByText} resolves to) inside its
+ * tappable ancestor element, and that ancestor intercepts pointer events —
+ * so a direct `locator.click()` on the text node itself fails with
+ * "intercepts pointer events". Clicking by raw coordinates instead lands on
+ * whatever's topmost there, which is the tappable ancestor, same as a real
+ * tap would hit.
+ */
+export async function clickCenter(page: Page, locator: Locator): Promise<void> {
+  const box = (await locator.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 /**

@@ -30,7 +30,7 @@ test('double-clicking free space shows both create buttons', async ({
   ).toBeVisible();
 });
 
-test('clicking Create Event adds a block titled "title"', async ({
+test('clicking Create Event adds a block titled "title" and opens its edit modal', async ({
   page,
 }) => {
   await doubleClickFreeSpace(page, freeSpace.x, freeSpace.y);
@@ -38,6 +38,13 @@ test('clicking Create Event adds a block titled "title"', async ({
 
   await page.getByRole('button', { name: 'Create Event' }).click();
 
+  // The edit modal opens immediately after creation, without a separate
+  // tap — and while it's open, Flutter excludes the background grid from
+  // the accessibility tree, so the block's own title isn't queryable
+  // until the modal closes.
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText('title')).toBeVisible();
 });
 
