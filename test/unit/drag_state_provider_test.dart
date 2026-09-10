@@ -185,14 +185,18 @@ void main() {
     ) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final originalDate = DateTime(2026, 9, 9);
-      final targetDate = DateTime(2026, 9, 10);
+      // Fixed, far-past dates: InMemoryDayBlocksRepository seeds hardcoded
+      // blocks for whatever date happens to be "today", so a target date
+      // must never risk coinciding with the real calendar date the test
+      // suite runs on.
+      final originalDate = DateTime(2000, 1, 1);
+      final targetDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(originalDate).future);
       final added = await container
           .read(dayBlocksProvider(originalDate).notifier)
           .addBlock(
-            start: DateTime(2026, 9, 9, 10),
-            end: DateTime(2026, 9, 9, 10, 30),
+            start: DateTime(2000, 1, 1, 10),
+            end: DateTime(2000, 1, 1, 10, 30),
             kind: BlockKind.anchor,
           );
       final block = container
@@ -208,7 +212,7 @@ void main() {
       container.read(dragStateProvider.notifier).updatePointer(
         const Offset(50, 60),
         targetDate: targetDate,
-        targetStart: DateTime(2026, 9, 10, 14),
+        targetStart: DateTime(2000, 1, 2, 14),
       );
 
       await container.read(dragStateProvider.notifier).drop();
@@ -222,7 +226,7 @@ void main() {
           .read(dayBlocksProvider(targetDate))
           .value!;
       expect(targetBlocks.single.id, block.id);
-      expect(targetBlocks.single.start, DateTime(2026, 9, 10, 14));
+      expect(targetBlocks.single.start, DateTime(2000, 1, 2, 14));
     });
   });
 }
