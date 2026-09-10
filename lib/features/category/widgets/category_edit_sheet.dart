@@ -1,7 +1,7 @@
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' hide Category;
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' hide Category;
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 
@@ -9,7 +9,6 @@ import 'package:taskframe/features/category/providers.dart';
 /// `null`, for creating a new category (create mode).
 Future<void> showCategoryEditSheet({
   required BuildContext context,
-  required WidgetRef ref,
   Category? category,
 }) {
   return showModalBottomSheet<void>(
@@ -20,7 +19,7 @@ Future<void> showCategoryEditSheet({
 }
 
 class _CategoryEditSheetContent extends ConsumerStatefulWidget {
-  const _CategoryEditSheetContent({this.category});
+  const new({this.category});
 
   final Category? category;
 

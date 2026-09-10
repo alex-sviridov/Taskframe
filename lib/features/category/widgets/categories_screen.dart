@@ -31,6 +31,7 @@ class CategoriesScreen extends ConsumerWidget {
         ],
       ),
     );
+    if (!context.mounted) return;
     if (confirmed ?? false) {
       await ref.read(categoryListProvider.notifier).deleteCategory(category);
     }
@@ -46,8 +47,7 @@ class CategoriesScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () =>
-                showCategoryEditSheet(context: context, ref: ref),
+            onPressed: () => showCategoryEditSheet(context: context),
           ),
         ],
       ),
@@ -65,7 +65,6 @@ class CategoriesScreen extends ConsumerWidget {
                 title: Text(category.name),
                 onTap: () => showCategoryEditSheet(
                   context: context,
-                  ref: ref,
                   category: category,
                 ),
                 trailing: category.isDefault

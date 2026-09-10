@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/data/category_repository.dart';
-import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 
 void main() {

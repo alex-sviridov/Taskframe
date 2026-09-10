@@ -3,7 +3,7 @@
 /// view).
 class Category {
   /// Creates a [Category].
-  const Category({
+  const new({
     required this.id,
     required this.name,
     required this.colorValue,

@@ -5,6 +5,11 @@ import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_edit_sheet.dart';
 
+bool _isRedSwatch(Widget widget) =>
+    widget is Container &&
+    widget.decoration is BoxDecoration &&
+    (widget.decoration! as BoxDecoration).color == Colors.red;
+
 Future<ProviderContainer> _seededContainer() async {
   final container = ProviderContainer();
   await container.read(categoryListProvider.future);
@@ -20,11 +25,10 @@ Future<void> _pumpOpenButton(
     container: container,
     child: MaterialApp(
       home: Scaffold(
-        body: Consumer(
-          builder: (context, ref, _) => ElevatedButton(
+        body: Builder(
+          builder: (context) => ElevatedButton(
             onPressed: () => showCategoryEditSheet(
               context: context,
-              ref: ref,
               category: category,
             ),
             child: const Text('Open'),
@@ -183,5 +187,37 @@ void main() {
       final categories = container.read(categoryListProvider).value!;
       expect(categories.where((c) => c.name == 'Work'), isEmpty);
     });
+
+    testWidgets(
+      'color picker: picking a new color and saving persists it',
+      (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+        await _pumpOpenButton(tester, container, category: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('categoryEditSheet.colorSwatch')),
+        );
+        await tester.pumpAndSettle();
+
+        final redSwatch = find.byWidgetPredicate(_isRedSwatch);
+        expect(redSwatch, findsOneWidget);
+        await tester.tap(redSwatch);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        final categories = container.read(categoryListProvider).value!;
+        final updated = categories.singleWhere((c) => c.id == created.id);
+        expect(updated.colorValue, Colors.red.toARGB32());
+      },
+    );
   });
 }
