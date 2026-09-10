@@ -168,8 +168,11 @@ class _DayGridState extends ConsumerState<DayGrid> {
         dragState != null && dragState.originalDate == widget.date
         ? dragState.block.id
         : null;
-    // `null` whenever the pointer is over no column at all, so the shadow
-    // disappears exactly where releasing would cancel the move.
+    // `dragState.targetDate`/`targetStart` fall back to the block's own
+    // original date/time whenever the pointer is over no valid column (see
+    // DragNotifier._handlePointerEvent), so the shadow previews the
+    // snap-back on the origin column instead of vanishing — releasing there
+    // still cancels the move, this just shows where the block would land.
     final landzoneStart =
         dragState != null && dragState.targetDate == widget.date
         ? dragState.targetStart
@@ -274,11 +277,12 @@ class _DayGridState extends ConsumerState<DayGrid> {
                   ) -
                   _offsetFor(landzoneStart),
               child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.15),
-                    border: Border.all(color: scheme.primary),
-                    borderRadius: BorderRadius.circular(4),
+                child: CustomPaint(
+                  painter: _DashedBorderPainter(color: scheme.primary),
+                  child: Container(
+                    color: scheme.surface,
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: BlockView(block: dragState.block),
                   ),
                 ),
               ),

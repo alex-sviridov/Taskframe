@@ -244,7 +244,8 @@ class DragNotifier extends Notifier<DragState?> {
   /// of whether the block's own widget is still mounted.
   void _handlePointerEvent(PointerEvent event) {
     if (event.pointer != _pointer) return;
-    if (state == null) {
+    final current = state;
+    if (current == null) {
       _releasePointer();
       return;
     }
@@ -253,10 +254,15 @@ class DragNotifier extends Notifier<DragState?> {
     // global (screen) coordinates.
     if (event is PointerMoveEvent) {
       final target = _resolveTarget?.call(event.position);
+      // No valid column under the pointer right now: fall back to the
+      // block's own original date/time so the landzone previews the
+      // snap-back instead of disappearing. This only changes what's
+      // *displayed* — release still re-resolves fresh and cancels for
+      // real if the pointer is still outside every column then (below).
       updatePointer(
         event.position,
-        targetDate: target?.date,
-        targetStart: target?.start,
+        targetDate: target?.date ?? current.originalDate,
+        targetStart: target?.start ?? current.block.start,
       );
     } else if (event is PointerUpEvent) {
       final target = _resolveTarget?.call(event.position);

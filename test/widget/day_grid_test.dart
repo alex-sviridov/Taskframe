@@ -406,6 +406,23 @@ void main() {
         expect(landzone.top, 20 * _slotHeight);
         // Work is a 4-hour block, unchanged by the move.
         expect(landzone.height, 16 * _slotHeight);
+
+        // Shows the real block's title and style, framed with a dashed
+        // border rather than a plain shaded box.
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('day-grid-landzone')),
+            matching: find.text('Work'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('day-grid-landzone')),
+            matching: find.byType(CustomPaint),
+          ),
+          findsWidgets,
+        );
       });
 
       testWidgets('does not show when this grid is not the drag target', (
@@ -430,7 +447,7 @@ void main() {
       });
 
       testWidgets('hides the real block in its origin column while '
-          'dragging', (tester) async {
+          'dragging, replacing it with the landzone preview', (tester) async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
         container.read(dragStateProvider.notifier).start(
@@ -441,7 +458,11 @@ void main() {
 
         await _pump(tester, [_workBlock], container: container);
 
-        expect(find.text('Work'), findsNothing);
+        // "Work" still appears exactly once, via the landzone preview
+        // (which starts at the block's own original slot) — not via the
+        // real block, which is hidden for the duration of the drag.
+        expect(find.text('Work'), findsOneWidget);
+        expect(find.byKey(const Key('day-grid-landzone')), findsOneWidget);
       });
     });
 

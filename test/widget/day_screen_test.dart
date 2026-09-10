@@ -647,7 +647,8 @@ void main() {
     );
 
     testWidgets('releasing where no column is under the pointer cancels the '
-        'move, and the landzone is already gone there', (tester) async {
+        'move, after the landzone previews the snap-back to its original '
+        'slot', (tester) async {
       _resizeViewport(tester, const Size(800, 1000));
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -674,10 +675,17 @@ void main() {
       await gesture.moveTo(const Offset(400, 4));
       await tester.pump();
 
-      // The landzone must already be gone here — the user should never see
-      // a shadow at a spot where releasing does nothing.
-      expect(container.read(dragStateProvider)!.hasTarget, isFalse);
-      expect(find.byKey(const Key('day-grid-landzone')), findsNothing);
+      // No valid column is under the pointer here, so the landzone falls
+      // back to previewing Breakfast's own original slot — releasing here
+      // still cancels the move, this just shows where it would land.
+      final dragStateOverHeader = container.read(dragStateProvider)!;
+      expect(dragStateOverHeader.hasTarget, isTrue);
+      expect(dragStateOverHeader.targetDate, dragStateOverHeader.originalDate);
+      expect(
+        dragStateOverHeader.targetStart,
+        dragStateOverHeader.block.start,
+      );
+      expect(find.byKey(const Key('day-grid-landzone')), findsOneWidget);
 
       await gesture.up();
       await tester.pump();
