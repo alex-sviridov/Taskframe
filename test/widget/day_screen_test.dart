@@ -449,6 +449,68 @@ void main() {
       expect(find.text('Breakfast'), findsNothing);
     });
 
+    testWidgets(
+      'dwelling near the left edge of a rail-inset DayScreen (not the '
+      "window's left edge) still pages to the previous day",
+      (tester) async {
+        // Simulates a NavigationRail (72px + a 1px VerticalDivider,
+        // rounded up to 100px here) eating the left side of the window,
+        // so DayScreen's own local left edge sits well inside the window
+        // rather than at its left edge.
+        const railWidth = 100.0;
+        _resizeViewport(tester, const Size(800, 1000));
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(
+              home: Scaffold(
+                body: Row(
+                  children: [
+                    SizedBox(width: railWidth),
+                    Expanded(child: DayScreen()),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final start = _nowOnGrid();
+        final block = TimeObject(
+          id: 'dragged',
+          title: 'Breakfast',
+          start: start,
+          end: start.add(const Duration(minutes: 30)),
+          kind: BlockKind.anchor,
+          locked: false,
+        );
+        container
+            .read(dragStateProvider.notifier)
+            .start(
+              block: block,
+              originalDate: container.read(selectedDateProvider),
+              pointerGlobalPosition: const Offset(500, 500),
+            );
+
+        // Global x=150 is 50px inside DayScreen's own local left edge
+        // (which starts at global x=100, past the simulated rail) — within
+        // `_edgeFadeWidth` (72) of DayScreen's local edge, but nowhere near
+        // the *window's* left edge or right edge. Only a fix that measures
+        // the drag in DayScreen-local coordinates should treat this as an
+        // edge dwell.
+        container
+            .read(dragStateProvider.notifier)
+            .updatePointer(const Offset(150, 500));
+        await tester.pump(const Duration(milliseconds: 650));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Breakfast'), findsNothing);
+      },
+    );
+
     testWidgets('leaving the edge zone before the dwell time cancels the '
         'page turn', (tester) async {
       _resizeViewport(tester, const Size(800, 1000));

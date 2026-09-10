@@ -140,12 +140,13 @@ class _DayScreenState extends ConsumerState<DayScreen> {
       return;
     }
 
-    final width = MediaQuery.sizeOf(context).width;
-    final dx = drag.pointerGlobalPosition.dx;
+    final box = context.findRenderObject()! as RenderBox;
+    final localWidth = box.size.width;
+    final localDx = box.globalToLocal(drag.pointerGlobalPosition).dx;
     int? direction;
-    if (dx <= _edgeFadeWidth) {
+    if (localDx <= _edgeFadeWidth) {
       direction = -1;
-    } else if (dx >= width - _edgeFadeWidth) {
+    } else if (localDx >= localWidth - _edgeFadeWidth) {
       direction = 1;
     }
 

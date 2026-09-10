@@ -6,6 +6,8 @@ import 'package:taskframe/router.dart';
 
 void main() {
   group('appRouter', () {
+    setUp(() => appRouter.go('/'));
+
     testWidgets('/ shows DayScreen inside the shell with Day selected', (
       tester,
     ) async {
@@ -40,5 +42,39 @@ void main() {
       final shell = tester.widget<AppShell>(find.byType(AppShell));
       expect(shell.navigationShell.currentIndex, 1);
     });
+
+    testWidgets(
+      "DayScreen's paged-forward state survives switching branches and back",
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp.router(routerConfig: appRouter),
+          ),
+        );
+        await tester.pump();
+
+        final initialLabel = tester
+            .widget<Text>(find.byKey(const Key('day-screen-date-label')))
+            .data;
+
+        await tester.tap(find.byIcon(Icons.chevron_right));
+        await tester.pumpAndSettle();
+
+        final pagedLabel = tester
+            .widget<Text>(find.byKey(const Key('day-screen-date-label')))
+            .data;
+        expect(pagedLabel, isNot(equals(initialLabel)));
+
+        await tester.tap(find.text('Categories'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Day'));
+        await tester.pumpAndSettle();
+
+        final labelAfterReturn = tester
+            .widget<Text>(find.byKey(const Key('day-screen-date-label')))
+            .data;
+        expect(labelAfterReturn, equals(pagedLabel));
+      },
+    );
   });
 }
