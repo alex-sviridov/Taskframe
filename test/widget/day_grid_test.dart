@@ -221,6 +221,274 @@ void main() {
       expect(find.text('Work'), findsOneWidget);
     });
 
+    testWidgets(
+      'shows every title for a run of adjacent (zero-gap) short blocks, '
+      'even at the minimum slot height '
+      "(regression: a short block's title could be painted over by the "
+      "next block's own box)",
+      (tester) async {
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: ProviderContainer(),
+            child: MaterialApp(
+              home: Scaffold(
+                body: DayGrid(
+                  date: _date,
+                  blocks: [
+                    TimeObject(
+                      id: 'a',
+                      title: 'Fifteen',
+                      start: DateTime(2026, 9, 9, 9),
+                      end: DateTime(2026, 9, 9, 9, 15),
+                      kind: BlockKind.anchor,
+                      locked: false,
+                    ),
+                    TimeObject(
+                      id: 'b',
+                      title: 'Thirty',
+                      start: DateTime(2026, 9, 9, 9, 15),
+                      end: DateTime(2026, 9, 9, 9, 45),
+                      kind: BlockKind.frame,
+                      locked: false,
+                    ),
+                  ],
+                  settings: _settings,
+                  // The real app's minimum slot height, where a 15-minute
+                  // block is only 8px tall — far shorter than one text
+                  // line.
+                  slotHeight: 8,
+                  onCreateBlock: ({
+                    required start,
+                    required end,
+                    required kind,
+                  }) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(find.text('Fifteen'), findsOneWidget);
+        expect(find.text('Thirty'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      "gives a block's title overlay a fixed, one-line-tall box regardless "
+      "of the block's own true (possibly tiny) duration "
+      "(regression: Flutter web clips a Positioned child's paint to its "
+      "own box, so a box sized to the block's true 8px height clipped the "
+      'title to nothing rather than letting it overflow)',
+      (tester) async {
+        final tiny = TimeObject(
+          id: '1',
+          title: 'Tiny',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 15),
+          kind: BlockKind.anchor,
+          locked: false,
+        );
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: ProviderContainer(),
+            child: MaterialApp(
+              home: Scaffold(
+                body: DayGrid(
+                  date: _date,
+                  blocks: [tiny],
+                  settings: _settings,
+                  slotHeight: 8,
+                  onCreateBlock: ({
+                    required start,
+                    required end,
+                    required kind,
+                  }) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final titleBox = tester.widget<Positioned>(
+          find.byKey(const ValueKey('day-grid-block-title-1')),
+        );
+        // 15 minutes at slotHeight 8 is only 8px — the title box must be
+        // taller than the block's own true height.
+        expect(titleBox.height, greaterThan(8));
+      },
+    );
+
+    testWidgets(
+      "centers a too-short block's title box on the block's own true "
+      'vertical midpoint, rather than pinning it to the top',
+      (tester) async {
+        final tiny = TimeObject(
+          id: '1',
+          title: 'Tiny',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 15),
+          kind: BlockKind.anchor,
+          locked: false,
+        );
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: ProviderContainer(),
+            child: MaterialApp(
+              home: Scaffold(
+                body: DayGrid(
+                  date: _date,
+                  blocks: [tiny],
+                  settings: _settings,
+                  slotHeight: 8,
+                  onCreateBlock: ({
+                    required start,
+                    required end,
+                    required kind,
+                  }) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final titleBox = tester.widget<Positioned>(
+          find.byKey(const ValueKey('day-grid-block-title-1')),
+        );
+        // 9:00 is 3 hours (12 slots) after the 6:00 day start = 96px; the
+        // block spans 96-104 (one 15-min slot at slotHeight 8), so its
+        // true vertical center is 100.
+        expect(titleBox.top! + titleBox.height! / 2, 100);
+      },
+    );
+
+    testWidgets(
+      "does not shift a tall block's title box away from its top edge",
+      (tester) async {
+        await _pump(tester, [_workBlock]);
+
+        final titleBox = tester.widget<Positioned>(
+          find.byKey(const ValueKey('day-grid-block-title-1')),
+        );
+        expect(titleBox.top, 12 * _slotHeight);
+      },
+    );
+
+    group('drag/resize preview titles', () {
+      testWidgets(
+        "shows a too-short dragged block's title during the drag, styled "
+        'the same way as the static grid',
+        (tester) async {
+          final tiny = TimeObject(
+            id: '1',
+            title: 'Tiny',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 15),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          container
+              .read(dragStateProvider.notifier)
+              .start(
+                block: tiny,
+                originalDate: _date,
+                pointerGlobalPosition: Offset.zero,
+              );
+
+          await _pump(tester, [tiny], container: container);
+
+          // The real block's own title is suppressed for the duration of
+          // the drag (see `hiddenBlockId`), so this can only be the
+          // landzone preview's title.
+          expect(find.text('Tiny'), findsOneWidget);
+
+          // Regression: the landzone preview used to draw its title
+          // inline in a box sized to the dragged block's own true (here
+          // 8px) height, which Flutter web clips to nothing — same bug
+          // as the static grid, just never fixed here too.
+          final titleBox = tester.widget<Positioned>(
+            find.byKey(const Key('day-grid-landzone-title')),
+          );
+          expect(titleBox.height, greaterThan(8));
+        },
+      );
+
+      testWidgets(
+        "shows a too-short resized block's title during the resize, "
+        'styled the same way as the static grid',
+        (tester) async {
+          final tiny = TimeObject(
+            id: '1',
+            title: 'Tiny',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 15),
+            kind: BlockKind.anchor,
+            locked: false,
+          );
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          container
+              .read(resizeStateProvider.notifier)
+              .start(block: tiny, date: _date, edge: ResizeEdge.end);
+
+          await _pump(tester, [tiny], container: container);
+
+          // The real block's own title is suppressed for the duration of
+          // the resize (see `hiddenBlockId`), so this can only be the
+          // resize-draft preview's title.
+          expect(find.text('Tiny'), findsOneWidget);
+
+          final titleBox = tester.widget<Positioned>(
+            find.byKey(const Key('day-grid-resize-draft-title')),
+          );
+          expect(titleBox.height, greaterThan(8));
+        },
+      );
+    });
+
+    testWidgets(
+      'paints every block title after (on top of) every block box, so a '
+      'title is never covered by a sibling box',
+      (tester) async {
+        await _pump(tester, [
+          TimeObject(
+            id: 'a',
+            title: 'A',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 15),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+          TimeObject(
+            id: 'b',
+            title: 'B',
+            start: DateTime(2026, 9, 9, 9, 15),
+            end: DateTime(2026, 9, 9, 9, 30),
+            kind: BlockKind.frame,
+            locked: false,
+          ),
+        ]);
+
+        final stack = tester.widget<Stack>(find.byType(Stack).first);
+        int indexOfKey(String key) => stack.children.indexWhere(
+          (w) => w.key == ValueKey(key),
+        );
+
+        final lastBoxIndex = [
+          indexOfKey('day-grid-block-position-a'),
+          indexOfKey('day-grid-block-position-b'),
+        ].reduce((a, b) => a > b ? a : b);
+        final firstTitleIndex = [
+          indexOfKey('day-grid-block-title-a'),
+          indexOfKey('day-grid-block-title-b'),
+        ].reduce((a, b) => a < b ? a : b);
+
+        expect(lastBoxIndex, greaterThanOrEqualTo(0));
+        expect(firstTitleIndex, greaterThan(lastBoxIndex));
+      },
+    );
+
     testWidgets('positions a block using its offset from day start', (
       tester,
     ) async {
@@ -523,15 +791,10 @@ void main() {
         // Work is a 4-hour block, unchanged by the move.
         expect(landzone.height, 16 * _slotHeight);
 
-        // Shows the real block's title and style, framed with a dashed
+        // Shows the real block's title (via the separate title-overlay
+        // layer — see `_titleOverlay`) and style, framed with a dashed
         // border rather than a plain shaded box.
-        expect(
-          find.descendant(
-            of: find.byKey(const Key('day-grid-landzone')),
-            matching: find.text('Work'),
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('Work'), findsOneWidget);
         expect(
           find.descendant(
             of: find.byKey(const Key('day-grid-landzone')),

@@ -36,6 +36,12 @@ DateTime? slotStartForOffset({
   );
 }
 
+/// The day's exact end-of-grid boundary for [day] under [settings] — e.g.
+/// `2026-09-09 23:00` when `dayEndHour: 23`. Nothing on [day]'s grid may
+/// ever end after this instant.
+DateTime dayEndFor(DateTime day, DaySettings settings) =>
+    DateTime(day.year, day.month, day.day, settings.dayEndHour);
+
 /// Resolves a resize drag's candidate time from [dy] pixels down the grid,
 /// like [slotStartForOffset] but clamped to the day's own start/end instead
 /// of returning `null` there.
@@ -55,7 +61,7 @@ DateTime resizeCandidateForOffset({
   final totalHeight = slotCount * slotHeight;
   final clampedDy = dy.clamp(0, totalHeight).toDouble();
   if (clampedDy >= totalHeight) {
-    return DateTime(day.year, day.month, day.day, settings.dayEndHour);
+    return dayEndFor(day, settings);
   }
   return slotStartForOffset(
     day: day,
@@ -67,10 +73,17 @@ DateTime resizeCandidateForOffset({
 
 /// The duration a new block starting at [slotStart] should get: 30 minutes
 /// by default, or 15 minutes if the following 15-minute slot is already
-/// occupied by one of [existingBlocks].
+/// occupied by one of [existingBlocks] — further shrunk so the block never
+/// ends after [settings]'s day boundary, for a [slotStart] close enough to
+/// it that even 15 minutes would overshoot.
+///
+/// [slotStart] is assumed to already be a valid grid slot (see
+/// [slotStartForOffset]), which guarantees at least 15 minutes remain before
+/// the day end, so the result is never shorter than that.
 Duration durationForNewBlock({
   required DateTime slotStart,
   required List<TimeObject> existingBlocks,
+  required DaySettings settings,
 }) {
   final nextSlotStart = slotStart.add(const Duration(minutes: 15));
   final nextSlotEnd = slotStart.add(_defaultDuration);
@@ -80,5 +93,7 @@ Duration durationForNewBlock({
         block.start.isBefore(nextSlotEnd) && block.end.isAfter(nextSlotStart),
   );
 
-  return nextSlotTaken ? _shrunkDuration : _defaultDuration;
+  final duration = nextSlotTaken ? _shrunkDuration : _defaultDuration;
+  final remaining = dayEndFor(slotStart, settings).difference(slotStart);
+  return duration < remaining ? duration : remaining;
 }

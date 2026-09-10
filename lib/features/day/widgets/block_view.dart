@@ -7,10 +7,16 @@ import 'package:taskframe/features/day/models/time_object.dart';
 /// since it marks where attention goes rather than a concrete activity.
 class BlockView extends StatelessWidget {
   /// Creates a [BlockView] for [block].
-  const new({required this.block, super.key});
+  const new({required this.block, this.showTitle = true, super.key});
 
   /// The block to render.
   final TimeObject block;
+
+  /// Whether to draw the title inside this box. `false` for the main day
+  /// grid, whose own title-overlay layer draws every title on top of all
+  /// blocks instead (see `DayGrid`), so a short block's title is never
+  /// covered by a neighbor's box painted after it.
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +31,13 @@ class BlockView extends StatelessWidget {
         border: isAnchor ? null : Border.all(color: scheme.primary),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        block.title,
-        style: Theme.of(context).textTheme.bodySmall,
-        overflow: TextOverflow.ellipsis,
-      ),
+      child: showTitle
+          ? Text(
+              block.title,
+              style: Theme.of(context).textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            )
+          : null,
     );
   }
 }

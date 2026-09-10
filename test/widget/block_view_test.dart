@@ -12,9 +12,13 @@ TimeObject _block(BlockKind kind) => TimeObject(
   locked: false,
 );
 
-Future<void> _pump(WidgetTester tester, TimeObject block) => tester.pumpWidget(
+Future<void> _pump(
+  WidgetTester tester,
+  TimeObject block, {
+  bool showTitle = true,
+}) => tester.pumpWidget(
   MaterialApp(
-    home: Scaffold(body: BlockView(block: block)),
+    home: Scaffold(body: BlockView(block: block, showTitle: showTitle)),
   ),
 );
 
@@ -24,6 +28,17 @@ void main() {
       await _pump(tester, _block(BlockKind.anchor));
 
       expect(find.text('Work'), findsOneWidget);
+    });
+
+    testWidgets('hides the title when showTitle is false, keeping the box', (
+      tester,
+    ) async {
+      await _pump(tester, _block(BlockKind.anchor), showTitle: false);
+
+      expect(find.text('Work'), findsNothing);
+      final container = tester.widget<Container>(find.byType(Container));
+      final decoration = container.decoration! as BoxDecoration;
+      expect(decoration.color, isNotNull);
     });
 
     testWidgets('fills the container for an anchor block', (tester) async {

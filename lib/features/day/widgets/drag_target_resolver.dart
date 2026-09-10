@@ -40,11 +40,20 @@ GlobalKey dayGridKeyFor(DateTime date) =>
 /// visible when a drag started. Pass [candidateDates] explicitly only to
 /// restrict the search (tests do).
 ///
-/// Returns `null` if [globalPosition] isn't over any mounted column.
+/// Returns `null` if [globalPosition] isn't over any mounted column, or if
+/// it's over a column but a block of [blockDuration] dropped at the snapped
+/// slot there would end after that day's boundary — [slotStartForOffset]
+/// only keeps a *start* within the grid, so without this a long block
+/// dragged near the day's end could land with its end past midnight (see
+/// [dayEndFor]), which the grid then renders with a corrupted, negative
+/// height because it reads a wrapped-around time as if it belonged to the
+/// same day. Either way, the caller's existing "no valid column" fallback
+/// (previewing the snap-back at the block's own original position) applies.
 ({DateTime date, DateTime start})? resolveDragTarget({
   required Offset globalPosition,
   required DaySettings settings,
   required double slotHeight,
+  required Duration blockDuration,
   List<DateTime>? candidateDates,
 }) {
   final dates = candidateDates ?? _dayGridKeys.keys.toList(growable: false);
@@ -63,6 +72,7 @@ GlobalKey dayGridKeyFor(DateTime date) =>
       slotHeight: slotHeight,
     );
     if (start == null) continue;
+    if (start.add(blockDuration).isAfter(dayEndFor(date, settings))) continue;
 
     return (date: date, start: start);
   }

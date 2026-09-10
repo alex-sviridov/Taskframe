@@ -12,6 +12,18 @@ const _settings = DaySettings(
 const _slotHeight = 16.0;
 final _dates = [DateTime(2026, 9, 9), DateTime(2026, 9, 10)];
 
+/// Grows the test surface so a full day's 1088px-tall column (68 slots *
+/// 16) actually fits without being constrained down to the default 600px
+/// test viewport — otherwise `SizedBox`'s own height never reaches the
+/// grid's later slots and a `globalPosition` down there fails `rect.
+/// contains` for reasons unrelated to whatever the test means to check.
+void _growViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(600, 1200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 Future<void> _pumpTwoColumns(WidgetTester tester) => tester.pumpWidget(
   MaterialApp(
     home: Scaffold(
@@ -42,6 +54,7 @@ void main() {
         candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
+        blockDuration: const Duration(minutes: 30),
       );
 
       expect(target?.date, _dates[1]);
@@ -58,6 +71,7 @@ void main() {
         candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
+        blockDuration: const Duration(minutes: 30),
       );
 
       expect(target, isNull);
@@ -73,9 +87,51 @@ void main() {
         candidateDates: _dates,
         settings: _settings,
         slotHeight: _slotHeight,
+        blockDuration: const Duration(minutes: 30),
       );
 
       expect(target, isNull);
     });
+
+    testWidgets(
+      'returns null when the snapped slot is valid but the block would end '
+      'after the day boundary (regression: a long block dragged near day '
+      'end must not land with an end wrapped into the next calendar day)',
+      (tester) async {
+        _growViewport(tester);
+        await _pumpTwoColumns(tester);
+        // y=1072 is the last valid slot's top (22:45): 67 slots * 16 past
+        // the 6:00 day start.
+        final target = resolveDragTarget(
+          globalPosition: const Offset(10, 1072),
+          candidateDates: _dates,
+          settings: _settings,
+          slotHeight: _slotHeight,
+          blockDuration: const Duration(hours: 2),
+        );
+
+        expect(target, isNull);
+      },
+    );
+
+    testWidgets(
+      'still finds the snapped slot when the block exactly fits before day '
+      'end',
+      (tester) async {
+        _growViewport(tester);
+        await _pumpTwoColumns(tester);
+
+        final target = resolveDragTarget(
+          globalPosition: const Offset(10, 1072),
+          candidateDates: _dates,
+          settings: _settings,
+          slotHeight: _slotHeight,
+          blockDuration: const Duration(minutes: 15),
+        );
+
+        expect(target?.date, _dates[0]);
+        expect(target?.start, DateTime(2026, 9, 9, 22, 45));
+      },
+    );
   });
 }

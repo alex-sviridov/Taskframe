@@ -131,6 +131,70 @@ class _DayGridState extends ConsumerState<DayGrid> {
     return minutesFromStart / 15 * widget.slotHeight;
   }
 
+  /// True height of the landzone drag preview: [block]'s own duration,
+  /// measured from [start].
+  double _landzoneHeightFor(DateTime start, TimeObject block) =>
+      _offsetFor(start.add(block.end.difference(block.start))) -
+      _offsetFor(start);
+
+  List<TimeObject> get _blocksSortedByStart =>
+      [...widget.blocks]..sort((a, b) => a.start.compareTo(b.start));
+
+  /// Height of a block's title-overlay box — enough for one `bodySmall`
+  /// line plus its padding, regardless of the block's own true duration.
+  /// See [_titleOverlay] for why this can't just be the block's own
+  /// height.
+  static const double _titleOverlayHeight = 20;
+
+  /// One block's title, drawn in a box [_titleOverlayHeight] tall — taller
+  /// than [trueHeight] whenever the block itself is short — so Flutter
+  /// web, which clips a `Positioned` child's paint to its own box (unlike
+  /// native Flutter, there is no free overflow past a too-short box),
+  /// never clips the title to nothing. A block tall enough to contain that
+  /// box keeps the title pinned to its own top-left corner, matching every
+  /// other block; a too-short block instead gets the box centered on its
+  /// own true vertical midpoint, so the title reads as centered on the
+  /// block rather than hanging off its top edge. Used for the static grid
+  /// blocks, the landzone drag preview, and the resize-draft preview
+  /// alike, so a too-short block's title survives being dragged or
+  /// resized exactly as it survives sitting still.
+  Widget _titleOverlay({
+    required Key key,
+    required TimeObject block,
+    required double trueTop,
+    required double trueHeight,
+  }) {
+    final isShort = trueHeight < _titleOverlayHeight;
+    final boxTop = isShort
+        ? trueTop + trueHeight / 2 - _titleOverlayHeight / 2
+        : trueTop;
+
+    return Positioned(
+      key: key,
+      top: boxTop,
+      left: _gridLeft,
+      right: 0,
+      height: _titleOverlayHeight,
+      child: IgnorePointer(
+        child: Padding(
+          // A tall block keeps its title hugging the top-left corner
+          // (minimal top inset); a too-short block's box is already
+          // centered on the block above, so its text is centered within
+          // that box too rather than hugging its own top.
+          padding: EdgeInsets.only(left: 6, right: 6, top: isShort ? 0 : 1),
+          child: Align(
+            alignment: isShort ? Alignment.centerLeft : Alignment.topLeft,
+            child: Text(
+              block.title,
+              style: Theme.of(context).textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openDraftAt(double dy) {
     final start = slotStartForOffset(
       day: widget.date,
@@ -143,6 +207,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
     final duration = durationForNewBlock(
       slotStart: start,
       existingBlocks: widget.blocks,
+      settings: widget.settings,
     );
     setState(() => _draft = (start: start, end: start.add(duration)));
   }
@@ -270,10 +335,24 @@ class _DayGridState extends ConsumerState<DayGrid> {
                     : Container(
                         color: scheme.surface,
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: BlockView(block: block),
+                        child: BlockView(block: block, showTitle: false),
                       ),
               ),
             ),
+          // Every block's title, drawn in its own layer *after* every
+          // block's own box above — so a short block's title always paints
+          // on top of a neighbor's box, never underneath it. Sorted by
+          // start so that when two adjacent short blocks' title boxes
+          // overlap, the later one wins rather than an arbitrary list
+          // order.
+          for (final block in _blocksSortedByStart)
+            if (block.id != hiddenBlockId)
+              _titleOverlay(
+                key: ValueKey('day-grid-block-title-${block.id}'),
+                block: block,
+                trueTop: _offsetFor(block.start),
+                trueHeight: _offsetFor(block.end) - _offsetFor(block.start),
+              ),
           if (draft != null)
             Positioned(
               top: _offsetFor(draft.start),
@@ -289,31 +368,32 @@ class _DayGridState extends ConsumerState<DayGrid> {
                 ),
               ),
             ),
-          if (landzoneStart != null)
+          if (dragState != null && landzoneStart != null) ...[
             Positioned(
               key: const Key('day-grid-landzone'),
               top: _offsetFor(landzoneStart),
               left: _gridLeft,
               right: 0,
-              height:
-                  _offsetFor(
-                    landzoneStart.add(
-                      dragState!.block.end.difference(dragState.block.start),
-                    ),
-                  ) -
-                  _offsetFor(landzoneStart),
+              height: _landzoneHeightFor(landzoneStart, dragState.block),
               child: IgnorePointer(
                 child: CustomPaint(
                   painter: _DashedBorderPainter(color: scheme.primary),
                   child: Container(
                     color: scheme.surface,
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: BlockView(block: dragState.block),
+                    child: BlockView(block: dragState.block, showTitle: false),
                   ),
                 ),
               ),
             ),
-          if (resizeState != null && resizeState.date == widget.date)
+            _titleOverlay(
+              key: const Key('day-grid-landzone-title'),
+              block: dragState.block,
+              trueTop: _offsetFor(landzoneStart),
+              trueHeight: _landzoneHeightFor(landzoneStart, dragState.block),
+            ),
+          ],
+          if (resizeState != null && resizeState.date == widget.date) ...[
             Positioned(
               key: const Key('day-grid-resize-draft'),
               top: _offsetFor(resizeState.draftStart),
@@ -328,11 +408,23 @@ class _DayGridState extends ConsumerState<DayGrid> {
                   child: Container(
                     color: scheme.surface,
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: BlockView(block: resizeState.block),
+                    child: BlockView(
+                      block: resizeState.block,
+                      showTitle: false,
+                    ),
                   ),
                 ),
               ),
             ),
+            _titleOverlay(
+              key: const Key('day-grid-resize-draft-title'),
+              block: resizeState.block,
+              trueTop: _offsetFor(resizeState.draftStart),
+              trueHeight:
+                  _offsetFor(resizeState.draftEnd) -
+                  _offsetFor(resizeState.draftStart),
+            ),
+          ],
           if (nowLineY != null)
             Positioned.fill(
               child: IgnorePointer(
@@ -477,6 +569,7 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     // it keeps being called after a page turn unmounts this widget.
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
+    final blockDuration = widget.block.end.difference(widget.block.start);
 
     ref
         .read(dragStateProvider.notifier)
@@ -489,6 +582,7 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
             globalPosition: position,
             settings: settings,
             slotHeight: slotHeight,
+            blockDuration: blockDuration,
           ),
         );
   }

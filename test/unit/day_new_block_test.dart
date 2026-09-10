@@ -107,6 +107,7 @@ void main() {
       final duration = durationForNewBlock(
         slotStart: DateTime(2026, 9, 9, 9),
         existingBlocks: const [],
+        settings: _settings,
       );
 
       expect(duration, const Duration(minutes: 30));
@@ -125,9 +126,50 @@ void main() {
             locked: false,
           ),
         ],
+        settings: _settings,
       );
 
       expect(duration, const Duration(minutes: 15));
+    });
+
+    test('shrinks below 15 minutes when starting one slot before day end '
+        'would otherwise overshoot it', () {
+      // Day ends at 23:00; the last valid slot start is 22:45, only 15
+      // minutes before it — less than the 30-minute default.
+      final duration = durationForNewBlock(
+        slotStart: DateTime(2026, 9, 9, 22, 45),
+        existingBlocks: const [],
+        settings: _settings,
+      );
+
+      expect(duration, const Duration(minutes: 15));
+    });
+
+    test('never produces an end after the day boundary, even with the '
+        'overlap shrink also in play', () {
+      // Same near-day-end start, but with a same-length occupied next slot
+      // too — the day-end clamp and the overlap shrink should agree on 15
+      // minutes rather than compounding to something shorter or invalid.
+      final duration = durationForNewBlock(
+        slotStart: DateTime(2026, 9, 9, 22, 45),
+        existingBlocks: [
+          TimeObject(
+            id: '1',
+            title: 'Work',
+            start: DateTime(2026, 9, 9, 23),
+            end: DateTime(2026, 9, 10, 1),
+            kind: BlockKind.frame,
+            locked: false,
+          ),
+        ],
+        settings: _settings,
+      );
+
+      expect(duration, const Duration(minutes: 15));
+      expect(
+        DateTime(2026, 9, 9, 22, 45).add(duration),
+        DateTime(2026, 9, 9, 23),
+      );
     });
   });
 }

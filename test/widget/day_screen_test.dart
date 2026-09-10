@@ -511,6 +511,7 @@ void main() {
         globalPosition: secondColumnCenter,
         settings: settings,
         slotHeight: slotHeight,
+        blockDuration: const Duration(minutes: 30),
       );
 
       expect(
