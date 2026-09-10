@@ -164,11 +164,33 @@ class DragNotifier extends Notifier<DragState?> {
   }) {
     final current = state;
     if (current == null) return;
+    var resolvedDate = targetDate;
+    var resolvedStart = targetStart;
+    if (resolvedDate != null &&
+        resolvedStart != null &&
+        _overlapsExisting(current.block, resolvedDate, resolvedStart)) {
+      resolvedDate = current.originalDate;
+      resolvedStart = current.block.start;
+    }
     state = current.copyWith(
-      targetDate: targetDate,
-      targetStart: targetStart,
+      targetDate: resolvedDate,
+      targetStart: resolvedStart,
       pointerGlobalPosition: globalPosition,
-      clearTarget: targetDate == null || targetStart == null,
+      clearTarget: resolvedDate == null || resolvedStart == null,
+    );
+  }
+
+  /// Whether placing [dragged] at [date]/[start] would overlap another
+  /// block already on [date].
+  bool _overlapsExisting(TimeObject dragged, DateTime date, DateTime start) {
+    final blocks = ref.read(dayBlocksProvider(date)).value;
+    if (blocks == null) return false;
+    final end = start.add(dragged.end.difference(dragged.start));
+    return blocks.any(
+      (block) =>
+          block.id != dragged.id &&
+          start.isBefore(block.end) &&
+          end.isAfter(block.start),
     );
   }
 

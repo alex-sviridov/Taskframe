@@ -119,6 +119,41 @@ void main() {
       expect(state.targetStart, DateTime(2026, 9, 10, 14));
     });
 
+    test(
+      'updatePointer falls back to the original position when the target '
+      'overlaps an existing block',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final targetDate = DateTime(2026, 9, 10);
+        await container.read(dayBlocksProvider(targetDate).future);
+        await container
+            .read(dayBlocksProvider(targetDate).notifier)
+            .addBlock(
+              start: DateTime(2026, 9, 10, 14),
+              end: DateTime(2026, 9, 10, 14, 30),
+              kind: BlockKind.anchor,
+            );
+        final dragged = _block();
+        container.read(dragStateProvider.notifier).start(
+          block: dragged,
+          originalDate: DateTime(2026, 9, 9),
+          pointerGlobalPosition: const Offset(10, 20),
+        );
+
+        container.read(dragStateProvider.notifier).updatePointer(
+          const Offset(50, 60),
+          targetDate: targetDate,
+          // overlaps the existing 14:00-14:30 block
+          targetStart: DateTime(2026, 9, 10, 14, 15),
+        );
+
+        final state = container.read(dragStateProvider)!;
+        expect(state.targetDate, DateTime(2026, 9, 9));
+        expect(state.targetStart, dragged.start);
+      },
+    );
+
     test('updatePointer does nothing when no drag is in progress', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
