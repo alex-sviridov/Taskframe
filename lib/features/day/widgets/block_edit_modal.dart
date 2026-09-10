@@ -101,6 +101,8 @@ class _TimeWheelPicker extends StatefulWidget {
 class _TimeWheelPickerState extends State<_TimeWheelPicker> {
   late int _hour;
   late int _quarterIndex;
+  late final FixedExtentScrollController _hourController;
+  late final FixedExtentScrollController _minuteController;
 
   List<int> get _hours => [
     for (var h = widget.settings.dayStartHour; h <= widget.settings.dayEndHour; h++) h,
@@ -111,6 +113,19 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
     super.initState();
     _hour = widget.initial.hour;
     _quarterIndex = widget.initial.minute ~/ 15;
+    _hourController = FixedExtentScrollController(
+      initialItem: _hours.indexOf(_hour),
+    );
+    _minuteController = FixedExtentScrollController(
+      initialItem: _quarterIndex,
+    );
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
   }
 
   @override
@@ -127,9 +142,7 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
                   Expanded(
                     child: ListWheelScrollView(
                       itemExtent: 40,
-                      controller: FixedExtentScrollController(
-                        initialItem: hours.indexOf(_hour),
-                      ),
+                      controller: _hourController,
                       onSelectedItemChanged: (index) =>
                           setState(() => _hour = hours[index]),
                       children: [
@@ -141,9 +154,7 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
                   Expanded(
                     child: ListWheelScrollView(
                       itemExtent: 40,
-                      controller: FixedExtentScrollController(
-                        initialItem: _quarterIndex,
-                      ),
+                      controller: _minuteController,
                       onSelectedItemChanged: (index) =>
                           setState(() => _quarterIndex = index),
                       children: const [
@@ -247,6 +258,7 @@ Future<void> showBlockEditModal({
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      isDismissible: false,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.95,
         child: BlockEditModal(date: date, initialBlock: block),
@@ -255,6 +267,7 @@ Future<void> showBlockEditModal({
   }
   return showDialog<void>(
     context: context,
+    barrierDismissible: false,
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
@@ -309,26 +322,26 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   void _handleFocusChange() {
     final block = _currentBlock;
     if (!_titleFocus.hasFocus && block != null) {
-      _commitTitle(block);
+      unawaited(_commitTitle(block));
     }
   }
 
-  void _commitTitle(TimeObject block) {
+  Future<void> _commitTitle(TimeObject block) async {
     final value = _titleController.text.trim();
     if (value.isEmpty) {
       _titleController.text = block.title;
       return;
     }
     if (value != block.title) {
-      unawaited(
-        ref
-            .read(dayBlocksProvider(widget.date).notifier)
-            .updateBlock(block, title: value),
-      );
+      await ref
+          .read(dayBlocksProvider(widget.date).notifier)
+          .updateBlock(block, title: value);
     }
   }
 
   Future<void> _editStart(TimeObject block, DaySettings settings) async {
+    await _commitTitle(block);
+    if (!mounted) return;
     final picked = await showTimeWheelPicker(
       context: context,
       initial: block.start,
@@ -341,6 +354,8 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   Future<void> _editEnd(TimeObject block, DaySettings settings) async {
+    await _commitTitle(block);
+    if (!mounted) return;
     final picked = await showTimeWheelPicker(
       context: context,
       initial: block.end,
@@ -353,9 +368,17 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   Future<void> _copyToNextDay(TimeObject block) async {
+    await _commitTitle(block);
+    // copyToNextDay reads block.title directly, so a just-committed rename
+    // must be picked up here — re-fetch by id rather than reusing the
+    // pre-commit `block`, whose title field is now stale.
+    final blocks = ref.read(dayBlocksProvider(widget.date)).value;
+    final toCopy = blocks == null
+        ? block
+        : (_findById(blocks, block.id) ?? block);
     await ref
         .read(dayBlocksProvider(widget.date).notifier)
-        .copyToNextDay(block);
+        .copyToNextDay(toCopy);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,

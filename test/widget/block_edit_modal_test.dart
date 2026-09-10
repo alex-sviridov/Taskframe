@@ -455,6 +455,52 @@ void main() {
       expect(nextDayBlocks.single.title, 'Work');
     });
 
+    testWidgets('an uncommitted title edit is committed before copying to '
+        'the next day', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      final nextDate = DateTime(2000, 1, 2);
+      await container.read(dayBlocksProvider(nextDate).future);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      // Type a new title but never submit it or otherwise blur the field
+      // before tapping copy.
+      await tester.enterText(find.byType(TextField), 'Deep work');
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.content_copy));
+      await tester.pumpAndSettle();
+
+      final nextDayBlocks = container
+          .read(dayBlocksProvider(nextDate))
+          .value!;
+      expect(nextDayBlocks, hasLength(1));
+      expect(nextDayBlocks.single.title, 'Deep work');
+    });
+
+    testWidgets('tapping outside the dialog does not dismiss it', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+
+      // Tap a point clearly on the barrier, outside the centered dialog.
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('Work'), findsOneWidget);
+    });
+
     testWidgets('confirming delete twice removes the block and closes', (
       tester,
     ) async {
