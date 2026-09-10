@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_edit_sheet.dart';
-
-/// Below this viewport width, the category list fills the screen edge to
-/// edge (the native mobile list look); at or above it, it's capped and
-/// wrapped in a visible card so it doesn't float as bare text in a wide
-/// page. Matches the edit sheet's own breakpoint.
-const _narrowBreakpoint = 700.0;
 
 /// Lists all categories and lets the user add, edit, or delete them. The
 /// default category is always first and has no delete affordance.
@@ -60,7 +55,7 @@ class CategoriesScreen extends ConsumerWidget {
       body: switch (categoriesAsync) {
         AsyncData(:final value) => LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < _narrowBreakpoint;
+            final isNarrow = constraints.maxWidth < narrowBreakpoint;
             final list = ListView(
               padding: isNarrow
                   ? EdgeInsets.zero

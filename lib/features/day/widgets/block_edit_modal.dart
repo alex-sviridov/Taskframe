@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
@@ -240,10 +241,6 @@ class _BlockDeleteButtonState extends State<BlockDeleteButton> {
   }
 }
 
-/// Below this viewport width, [showBlockEditModal] shows a near-fullscreen
-/// bottom sheet; at or above it, a centered fixed-width dialog.
-const _narrowBreakpoint = 700.0;
-
 /// Opens the block edit modal for [block] (which belongs to [date]):
 /// title, start/end, copy-to-next-day and delete. Near-fullscreen on a
 /// narrow (mobile) width, a centered fixed-width dialog on a wide one.
@@ -252,8 +249,7 @@ Future<void> showBlockEditModal({
   required DateTime date,
   required TimeObject block,
 }) {
-  final isNarrow = MediaQuery.sizeOf(context).width < _narrowBreakpoint;
-  if (isNarrow) {
+  if (isNarrow(context)) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
