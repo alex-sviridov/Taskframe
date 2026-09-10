@@ -1437,39 +1437,38 @@ import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 ```
 
-Then add a shared block and pump helper above `void main()`:
+Then add a shared seeding and pump helper above `void main()`:
 
 ```dart
 final _date = DateTime(2026, 9, 9);
 
-final _block = TimeObject(
-  id: '1',
-  title: 'Work',
-  start: DateTime(2026, 9, 9, 9),
-  end: DateTime(2026, 9, 9, 9, 30),
-  kind: BlockKind.anchor,
-  locked: false,
-);
-
-Future<ProviderContainer> _seededContainer() async {
+/// Seeds a fresh container with one block on [_date] and returns both the
+/// container and the block exactly as the repository assigned it (in
+/// particular, its real generated id). [BlockEditModal] looks up the live
+/// block from the provider by [TimeObject.id] every rebuild — passing it a
+/// [TimeObject] whose id doesn't match anything in that provider's list
+/// would make the modal think the block was deleted and close itself
+/// immediately, so every test opens the modal with this returned block,
+/// never a hand-built one.
+Future<(ProviderContainer, TimeObject)> _seededContainer() async {
   final container = ProviderContainer();
   await container.read(dayBlocksProvider(_date).future);
-  await container
+  final block = await container
       .read(dayBlocksProvider(_date).notifier)
       .addBlock(
-        start: _block.start,
-        end: _block.end,
-        kind: _block.kind,
-        title: _block.title,
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 30),
+        kind: BlockKind.anchor,
+        title: 'Work',
       );
-  return container;
+  return (container, block);
 }
 
 Future<void> _pumpOpenButton(
   WidgetTester tester,
-  ProviderContainer container, {
-  TimeObject? block,
-}) => tester.pumpWidget(
+  ProviderContainer container,
+  TimeObject block,
+) => tester.pumpWidget(
   UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
@@ -1479,7 +1478,7 @@ Future<void> _pumpOpenButton(
             onPressed: () => showBlockEditModal(
               context: context,
               date: _date,
-              block: block ?? _block,
+              block: block,
             ),
             child: const Text('Open'),
           ),
@@ -1495,9 +1494,9 @@ Then add, inside `void main()`:
 ```dart
   group('BlockEditModal', () {
     testWidgets('shows the block\'s title, start and end', (tester) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
 
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -1512,9 +1511,9 @@ Then add, inside `void main()`:
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
 
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -1527,9 +1526,9 @@ Then add, inside `void main()`:
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
 
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -1540,9 +1539,9 @@ Then add, inside `void main()`:
     testWidgets('editing the title persists it via the provider', (
       tester,
     ) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -1556,9 +1555,9 @@ Then add, inside `void main()`:
 
     testWidgets('tapping the start row and confirming a new time updates '
         'it', (tester) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -1571,19 +1570,23 @@ Then add, inside `void main()`:
       // confirms without scrolling, so the start is unchanged but the round
       // trip through updateBlock must not have been silently rejected.
       final blocks = container.read(dayBlocksProvider(_date)).value!;
-      expect(blocks.single.start, _block.start);
+      expect(blocks.single.start, block.start);
     });
 
     testWidgets('the copy button is disabled when the next day is busy at '
         'the same time', (tester) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
       final nextDate = DateTime(2026, 9, 10);
       await container.read(dayBlocksProvider(nextDate).future);
       await container
           .read(dayBlocksProvider(nextDate).notifier)
-          .addBlock(start: _block.start.add(const Duration(days: 1)), end: _block.end.add(const Duration(days: 1)), kind: BlockKind.anchor);
-      await _pumpOpenButton(tester, container);
+          .addBlock(
+            start: block.start.add(const Duration(days: 1)),
+            end: block.end.add(const Duration(days: 1)),
+            kind: BlockKind.anchor,
+          );
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -1595,11 +1598,11 @@ Then add, inside `void main()`:
 
     testWidgets('the copy button is enabled and copies when the next day '
         'is free', (tester) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
       final nextDate = DateTime(2026, 9, 10);
       await container.read(dayBlocksProvider(nextDate).future);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -1614,9 +1617,9 @@ Then add, inside `void main()`:
     testWidgets('confirming delete twice removes the block and closes', (
       tester,
     ) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -1632,13 +1635,13 @@ Then add, inside `void main()`:
 
     testWidgets('closes itself if the block is deleted elsewhere while '
         'open', (tester) async {
-      final container = await _seededContainer();
+      final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      await container.read(dayBlocksProvider(_date).notifier).deleteBlock(_block);
+      await container.read(dayBlocksProvider(_date).notifier).deleteBlock(block);
       await tester.pumpAndSettle();
 
       expect(find.byType(BlockEditModal), findsNothing);
@@ -1938,7 +1941,21 @@ Append to `test/widget/day_grid_test.dart`, inside `group('block drag', ...)`, r
     ) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      await _pump(tester, [_workBlock], container: container);
+      // `BlockEditModal` looks up the live block from `dayBlocksProvider`
+      // by id every rebuild, so the tapped block must actually be seeded
+      // into that provider (with its real, repository-assigned id) rather
+      // than only passed via `DayGrid`'s own `blocks` parameter — otherwise
+      // the modal finds no matching block and immediately closes itself.
+      await container.read(dayBlocksProvider(_date).future);
+      final seeded = await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: _workBlock.start,
+            end: _workBlock.end,
+            kind: _workBlock.kind,
+            title: _workBlock.title,
+          );
+      await _pump(tester, [seeded], container: container);
 
       await tester.tapAt(const Offset(200, 300));
       await tester.pump(const Duration(milliseconds: 300));
