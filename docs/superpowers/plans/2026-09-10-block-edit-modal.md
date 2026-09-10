@@ -704,7 +704,7 @@ Append to `test/unit/day_blocks_provider_test.dart`, inside `group('dayBlocksPro
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final date = DateTime(2026, 9, 9);
-      final nextDate = DateTime(2026, 9, 10);
+      final nextDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(date).future);
       final created = await container
           .read(dayBlocksProvider(date).notifier)
@@ -1440,7 +1440,12 @@ import 'package:taskframe/features/day/providers.dart';
 Then add a shared seeding and pump helper above `void main()`:
 
 ```dart
-final _date = DateTime(2026, 9, 9);
+// Fixed, far-past date: InMemoryDayBlocksRepository seeds hardcoded blocks
+// for whatever date happens to be the real wall-clock "today", so tests
+// must never risk a date (or a date+1 next-day computation) coinciding
+// with it. Matches the convention already established in
+// test/unit/resize_state_provider_test.dart.
+final _date = DateTime(2000, 1, 1);
 
 /// Seeds a fresh container with one block on [_date] and returns both the
 /// container and the block exactly as the repository assigned it (in
@@ -1456,8 +1461,8 @@ Future<(ProviderContainer, TimeObject)> _seededContainer() async {
   final block = await container
       .read(dayBlocksProvider(_date).notifier)
       .addBlock(
-        start: DateTime(2026, 9, 9, 9),
-        end: DateTime(2026, 9, 9, 9, 30),
+        start: DateTime(2000, 1, 1, 9),
+        end: DateTime(2000, 1, 1, 9, 30),
         kind: BlockKind.anchor,
         title: 'Work',
       );
@@ -1577,7 +1582,7 @@ Then add, inside `void main()`:
         'the same time', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      final nextDate = DateTime(2026, 9, 10);
+      final nextDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(nextDate).future);
       await container
           .read(dayBlocksProvider(nextDate).notifier)
@@ -1600,7 +1605,7 @@ Then add, inside `void main()`:
         'is free', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
-      final nextDate = DateTime(2026, 9, 10);
+      final nextDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(nextDate).future);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
