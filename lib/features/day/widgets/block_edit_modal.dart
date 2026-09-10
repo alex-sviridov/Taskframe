@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 
@@ -166,6 +168,59 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A delete icon button that requires two taps within [_confirmWindow] to
+/// call [onConfirmed] — no separate confirmation dialog. The first tap
+/// swaps the icon/tooltip into a "confirming" state and starts a timer; a
+/// second tap before it lapses confirms, letting it lapse reverts.
+class BlockDeleteButton extends StatefulWidget {
+  /// Creates a [BlockDeleteButton].
+  const BlockDeleteButton({required this.onConfirmed, super.key});
+
+  /// Called when the second tap lands within the confirm window.
+  final VoidCallback onConfirmed;
+
+  @override
+  State<BlockDeleteButton> createState() => _BlockDeleteButtonState();
+}
+
+class _BlockDeleteButtonState extends State<BlockDeleteButton> {
+  static const _confirmWindow = Duration(seconds: 3);
+
+  bool _confirming = false;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (_confirming) {
+      _timer?.cancel();
+      setState(() => _confirming = false);
+      widget.onConfirmed();
+      return;
+    }
+    setState(() => _confirming = true);
+    _timer = Timer(_confirmWindow, () {
+      if (mounted) setState(() => _confirming = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: _confirming ? 'Tap again to delete' : 'Delete',
+      icon: Icon(
+        _confirming ? Icons.warning_amber : Icons.delete_outline,
+        color: Theme.of(context).colorScheme.error,
+      ),
+      onPressed: _handleTap,
     );
   }
 }

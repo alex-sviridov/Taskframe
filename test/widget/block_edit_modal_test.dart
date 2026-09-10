@@ -126,4 +126,61 @@ void main() {
       expect(picked, isNull);
     });
   });
+
+  group('BlockDeleteButton', () {
+    testWidgets('does not confirm on a single tap', (tester) async {
+      var confirmed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlockDeleteButton(onConfirmed: () => confirmed = true),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump();
+
+      expect(confirmed, isFalse);
+    });
+
+    testWidgets('confirms on a second tap within the timeout', (
+      tester,
+    ) async {
+      var confirmed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlockDeleteButton(onConfirmed: () => confirmed = true),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump();
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump();
+
+      expect(confirmed, isTrue);
+    });
+
+    testWidgets('reverts to needing two taps again after the timeout '
+        'lapses', (tester) async {
+      var confirmed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlockDeleteButton(onConfirmed: () => confirmed = true),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump(const Duration(seconds: 4));
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump();
+
+      expect(confirmed, isFalse);
+    });
+  });
 }
