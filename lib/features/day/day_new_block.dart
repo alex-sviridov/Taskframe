@@ -89,8 +89,7 @@ Duration durationForNewBlock({
   final nextSlotEnd = slotStart.add(_defaultDuration);
 
   final nextSlotTaken = existingBlocks.any(
-    (block) =>
-        block.start.isBefore(nextSlotEnd) && block.end.isAfter(nextSlotStart),
+    (block) => block.overlaps(nextSlotStart, nextSlotEnd),
   );
 
   final duration = nextSlotTaken ? _shrunkDuration : _defaultDuration;

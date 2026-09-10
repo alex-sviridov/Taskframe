@@ -8,6 +8,7 @@ import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
@@ -112,12 +113,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
         : null;
   }
 
-  bool get _isToday {
-    final now = DateTime.now();
-    return widget.date.year == now.year &&
-        widget.date.month == now.month &&
-        widget.date.day == now.day;
-  }
+  bool get _isToday => isSameDay(widget.date, DateTime.now());
 
   int get _slotCount =>
       (widget.settings.dayEndHour - widget.settings.dayStartHour) * 4;
@@ -229,8 +225,20 @@ class _DayGridState extends ConsumerState<DayGrid> {
     final scheme = Theme.of(context).colorScheme;
     final height = _slotCount * widget.slotHeight;
     final draft = _draft;
-    final dragState = ref.watch(dragStateProvider);
-    final resizeState = ref.watch(resizeStateProvider);
+    // Selected rather than watched outright: a plain `ref.watch` here would
+    // rebuild every visible `DayGrid` column on every pointer move of a drag
+    // or resize happening on some other day (most columns, in week view).
+    // `dragStateForDate`/`resizeStateForDate` collapse to `null` for a date
+    // the in-flight gesture doesn't touch, and `null == null`, so `select`
+    // skips the rebuild there entirely.
+    final dragState = ref.watch(
+      dragStateProvider.select((state) => dragStateForDate(state, widget.date)),
+    );
+    final resizeState = ref.watch(
+      resizeStateProvider.select(
+        (state) => resizeStateForDate(state, widget.date),
+      ),
+    );
     final hiddenBlockId =
         dragState != null && dragState.originalDate == widget.date
         ? dragState.block.id

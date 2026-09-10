@@ -350,16 +350,9 @@ class _SchedulePage extends ConsumerWidget {
 
   bool get _showHourLabels => dayCount == 1;
 
-  static bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
-  }
-
   TextStyle? _headerStyle(BuildContext context, DateTime date) {
     final base = Theme.of(context).textTheme.titleMedium;
-    if (!_isToday(date)) return base;
+    if (!isSameDay(date, DateTime.now())) return base;
     return base?.copyWith(
       fontWeight: FontWeight.bold,
       color: Theme.of(context).colorScheme.primary,

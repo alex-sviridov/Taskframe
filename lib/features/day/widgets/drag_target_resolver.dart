@@ -26,8 +26,52 @@ DateTime _calendarDay(DateTime date) =>
 /// previous build's, making `Widget.canUpdate` return false and forcing
 /// Flutter to destroy and reinflate the whole `DayGrid` element — losing its
 /// open draft and now-timer — on every rebuild.
-GlobalKey dayGridKeyFor(DateTime date) =>
-    _dayGridKeys.putIfAbsent(_calendarDay(date), GlobalKey.new);
+GlobalKey dayGridKeyFor(DateTime date) {
+  _schedulePrune();
+  return _dayGridKeys.putIfAbsent(_calendarDay(date), GlobalKey.new);
+}
+
+/// Whether a prune sweep has already been scheduled for the current frame,
+/// so a page with many columns (e.g. a 7-day week view) doesn't queue one
+/// callback per [dayGridKeyFor] call.
+bool _pruneScheduled = false;
+
+/// Queues [_pruneUnmountedKeys] to run once, after the current frame
+/// finishes.
+///
+/// Deferred to a post-frame callback rather than run inline: a page
+/// building several columns (e.g. a week view's 7 dates) calls
+/// [dayGridKeyFor] once per column in the same synchronous build, before
+/// any of that frame's widgets have mounted — pruning inline right then
+/// would see every one of those brand-new keys as still `currentContext ==
+/// null` and wrongly discard them before they ever get the chance to
+/// attach. By the end of the frame, every key requested during it is either
+/// mounted (kept) or was never actually built (safe to drop).
+void _schedulePrune() {
+  if (_pruneScheduled) return;
+  _pruneScheduled = true;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _pruneScheduled = false;
+    _pruneUnmountedKeys();
+  });
+}
+
+/// Drops every memoized key whose `DayGrid` has since unmounted, so a long
+/// session paging through many calendar days doesn't grow [_dayGridKeys]
+/// forever.
+///
+/// Safe to call once every frame's widgets have settled: a key still
+/// attached to a mounted element (in particular, every currently visible
+/// day) always has a non-null [GlobalKey.currentContext] and so is never
+/// touched, preserving the one-key-per-calendar-day identity documented on
+/// [dayGridKeyFor].
+void _pruneUnmountedKeys() {
+  _dayGridKeys.removeWhere((_, key) => key.currentContext == null);
+}
+
+/// The number of dates currently memoized in [_dayGridKeys].
+@visibleForTesting
+int dayGridKeyCacheSizeForTest() => _dayGridKeys.length;
 
 /// Finds which day column [globalPosition] currently falls over, and the
 /// 15-minute slot within it, by looking up each candidate date's mounted

@@ -134,4 +134,47 @@ void main() {
       },
     );
   });
+
+  group('dayGridKeyFor cache growth', () {
+    testWidgets(
+      'drops keys for dates whose DayGrid has since unmounted, instead of '
+      'growing forever as new dates are visited',
+      (tester) async {
+        final manyDates = List.generate(5, (i) => DateTime(2026, 9, 9 + i));
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Row(
+                children: [
+                  for (final date in manyDates)
+                    SizedBox(key: dayGridKeyFor(date), width: 10, height: 10),
+                ],
+              ),
+            ),
+          ),
+        );
+        expect(dayGridKeyCacheSizeForTest(), 5);
+
+        // Replaces every SizedBox above with a single new one for a new
+        // date, unmounting the previous 5.
+        final newDate = DateTime(2026, 9, 30);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                key: dayGridKeyFor(newDate),
+                width: 10,
+                height: 10,
+              ),
+            ),
+          ),
+        );
+
+        // The new date's own key is mounted and kept; the previous 5,
+        // unmounted, get swept once this frame's prune callback has run.
+        expect(dayGridKeyCacheSizeForTest(), 1);
+      },
+    );
+  });
 }

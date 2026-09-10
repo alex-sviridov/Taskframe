@@ -191,10 +191,7 @@ class DragNotifier extends Notifier<DragState?> {
     if (blocks == null) return false;
     final end = start.add(dragged.end.difference(dragged.start));
     return blocks.any(
-      (block) =>
-          block.id != dragged.id &&
-          start.isBefore(block.end) &&
-          end.isAfter(block.start),
+      (block) => block.id != dragged.id && block.overlaps(start, end),
     );
   }
 
@@ -313,6 +310,20 @@ final dragStateProvider = NotifierProvider<DragNotifier, DragState?>(
   DragNotifier.new,
 );
 
+/// Projects [dragState] to the value a `DayGrid` for [date] actually cares
+/// about, collapsing to `null` whenever [date] is neither the drag's origin
+/// nor its current landzone target.
+///
+/// Meant to be passed to `dragStateProvider.select(...)` so a day column
+/// only rebuilds while a drag actually touches it, instead of on every
+/// pointer move of a drag happening on some other, unrelated day.
+DragState? dragStateForDate(DragState? dragState, DateTime date) {
+  if (dragState == null) return null;
+  final relevant =
+      dragState.originalDate == date || dragState.targetDate == date;
+  return relevant ? dragState : null;
+}
+
 /// Tracks the block currently being resized by dragging one of its edges,
 /// if any.
 ///
@@ -405,3 +416,11 @@ class ResizeNotifier extends Notifier<ResizeState?> {
 final resizeStateProvider = NotifierProvider<ResizeNotifier, ResizeState?>(
   ResizeNotifier.new,
 );
+
+/// Projects [resizeState] to the value a `DayGrid` for [date] actually cares
+/// about, collapsing to `null` whenever the resize belongs to some other
+/// date. See [dragStateForDate], its drag equivalent.
+ResizeState? resizeStateForDate(ResizeState? resizeState, DateTime date) {
+  if (resizeState == null) return null;
+  return resizeState.date == date ? resizeState : null;
+}

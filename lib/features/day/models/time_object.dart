@@ -51,4 +51,9 @@ class TimeObject {
       time.millisecond == 0 &&
       time.microsecond == 0 &&
       time.minute % 15 == 0;
+
+  /// Whether the half-open range `[start, end)` overlaps this block's own
+  /// `[this.start, this.end)`.
+  bool overlaps(DateTime start, DateTime end) =>
+      start.isBefore(this.end) && end.isAfter(this.start);
 }

@@ -59,4 +59,48 @@ void main() {
       );
     });
   });
+
+  group('TimeObject.overlaps', () {
+    TimeObject block({required int startHour, required int endHour}) =>
+        TimeObject(
+          id: '1',
+          title: 'Work',
+          start: DateTime(2026, 9, 9, startHour),
+          end: DateTime(2026, 9, 9, endHour),
+          kind: BlockKind.frame,
+          locked: false,
+        );
+
+    test('is true when the given range overlaps the block', () {
+      final b = block(startHour: 9, endHour: 10);
+      expect(
+        b.overlaps(DateTime(2026, 9, 9, 9, 30), DateTime(2026, 9, 9, 11)),
+        isTrue,
+      );
+    });
+
+    test('is false when the given range ends exactly at the block start', () {
+      final b = block(startHour: 9, endHour: 10);
+      expect(
+        b.overlaps(DateTime(2026, 9, 9, 8), DateTime(2026, 9, 9, 9)),
+        isFalse,
+      );
+    });
+
+    test('is false when the given range starts exactly at the block end', () {
+      final b = block(startHour: 9, endHour: 10);
+      expect(
+        b.overlaps(DateTime(2026, 9, 9, 10), DateTime(2026, 9, 9, 11)),
+        isFalse,
+      );
+    });
+
+    test('is false when the given range is entirely outside the block', () {
+      final b = block(startHour: 9, endHour: 10);
+      expect(
+        b.overlaps(DateTime(2026, 9, 9, 11), DateTime(2026, 9, 9, 12)),
+        isFalse,
+      );
+    });
+  });
 }
