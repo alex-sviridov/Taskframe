@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:taskframe/features/day/data/day_blocks_repository.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
@@ -19,7 +18,7 @@ const _settings = DaySettings(
 // must never risk a date (or a date+1 next-day computation) coinciding
 // with it. Matches the convention already established in
 // test/unit/resize_state_provider_test.dart.
-final _date = DateTime(2000, 1, 1);
+final _date = DateTime(2000);
 
 /// Seeds a fresh container with one block on [_date] and returns both the
 /// container and the block exactly as the repository assigned it (in
@@ -242,7 +241,7 @@ void main() {
   });
 
   group('BlockEditModal', () {
-    testWidgets('shows the block\'s title, start and end', (tester) async {
+    testWidgets("shows the block's title, start and end", (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
       await _pumpOpenButton(tester, container, block);
@@ -302,8 +301,58 @@ void main() {
       expect(blocks.single.title, 'Deep work');
     });
 
-    testWidgets('tapping the start row and confirming a new time updates '
-        'it', (tester) async {
+    testWidgets('clearing the title resets the field to the current title '
+        'instead of persisting a blank one', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '   ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Work'), findsOneWidget);
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.title, 'Work');
+    });
+
+    testWidgets('deleting the block while an uncommitted title edit is '
+        'focused does not resurrect it', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      // Focus and edit the title but never submit or blur it — deleting
+      // the block below must pop (and unfocus) before any late blur-commit
+      // can call updateBlock on the now-deleted block.
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Deep work');
+
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pump();
+      await tester.tap(find.byType(BlockDeleteButton));
+      await tester.pumpAndSettle();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks, isEmpty);
+
+      // The notifier's own cached state can't show a resurrection (its
+      // update-in-place loop only replaces an id it still holds), so also
+      // force a fresh load straight from the repository — this is what
+      // actually surfaces a late blur-commit's "promote as if seeded"
+      // write landing after the delete.
+      container.invalidate(dayBlocksProvider(_date));
+      final reloaded = await container.read(dayBlocksProvider(_date).future);
+      expect(reloaded, isEmpty);
+    });
+
+    testWidgets('tapping the start row, scrolling the minute wheel and '
+        'confirming updates the start', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
       await _pumpOpenButton(tester, container, block);
@@ -312,14 +361,55 @@ void main() {
 
       await tester.tap(find.byType(BlockTimeRow).first);
       await tester.pumpAndSettle();
+      // The minute wheel opens on the block's own start minute (00, index
+      // 0) with a 40px itemExtent; dragging it up by exactly one item
+      // moves the selection to 15 without touching the hour wheel.
+      await tester.drag(
+        find.byType(ListWheelScrollView).at(1),
+        const Offset(0, -40),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
 
-      // The wheel opens scrolled to the block's own start (09:00) and Done
-      // confirms without scrolling, so the start is unchanged but the round
-      // trip through updateBlock must not have been silently rejected.
       final blocks = container.read(dayBlocksProvider(_date)).value!;
-      expect(blocks.single.start, block.start);
+      expect(blocks.single.start, DateTime(2000, 1, 1, 9, 15));
+    });
+
+    testWidgets('an edit that would overlap another block is silently '
+        'rejected', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      // Touches (but doesn't overlap) the block's own 09:00-09:30 span, so
+      // it's only in the way once the end below moves to 09:45.
+      await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 9, 30),
+            end: DateTime(2000, 1, 1, 10),
+            kind: BlockKind.anchor,
+          );
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).last);
+      await tester.pumpAndSettle();
+      // The minute wheel opens on the block's own end minute (30, index
+      // 2); dragging it up by one item moves the selection to 45, making
+      // the block span 09:00-09:45 — overlapping the 09:30-10:00 block
+      // just added.
+      await tester.drag(
+        find.byType(ListWheelScrollView).at(1),
+        const Offset(0, -40),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      final updated = blocks.firstWhere((b) => b.id == block.id);
+      expect(updated.end, block.end);
     });
 
     testWidgets('the copy button is disabled when the next day is busy at '
@@ -358,7 +448,9 @@ void main() {
       await tester.tap(find.widgetWithIcon(IconButton, Icons.content_copy));
       await tester.pumpAndSettle();
 
-      final nextDayBlocks = container.read(dayBlocksProvider(nextDate)).value!;
+      final nextDayBlocks = container
+          .read(dayBlocksProvider(nextDate))
+          .value!;
       expect(nextDayBlocks, hasLength(1));
       expect(nextDayBlocks.single.title, 'Work');
     });
@@ -390,7 +482,9 @@ void main() {
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      await container.read(dayBlocksProvider(_date).notifier).deleteBlock(block);
+      await container
+          .read(dayBlocksProvider(_date).notifier)
+          .deleteBlock(block);
       await tester.pumpAndSettle();
 
       expect(find.byType(BlockEditModal), findsNothing);

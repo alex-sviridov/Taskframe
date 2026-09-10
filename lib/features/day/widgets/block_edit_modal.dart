@@ -273,11 +273,7 @@ Future<void> showBlockEditModal({
 class BlockEditModal extends ConsumerStatefulWidget {
   /// Creates a [BlockEditModal] for the block identified by
   /// [initialBlock]'s id, belonging to [date].
-  const BlockEditModal({
-    required this.date,
-    required this.initialBlock,
-    super.key,
-  });
+  const new({required this.date, required this.initialBlock, super.key});
 
   /// The date [initialBlock] belongs to.
   final DateTime date;
@@ -319,7 +315,11 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   void _commitTitle(TimeObject block) {
     final value = _titleController.text.trim();
-    if (value.isNotEmpty && value != block.title) {
+    if (value.isEmpty) {
+      _titleController.text = block.title;
+      return;
+    }
+    if (value != block.title) {
       unawaited(
         ref
             .read(dayBlocksProvider(widget.date).notifier)
@@ -353,7 +353,9 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   Future<void> _copyToNextDay(TimeObject block) async {
-    await ref.read(dayBlocksProvider(widget.date).notifier).copyToNextDay(block);
+    await ref
+        .read(dayBlocksProvider(widget.date).notifier)
+        .copyToNextDay(block);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -362,6 +364,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   Future<void> _delete(TimeObject block) async {
     await ref.read(dayBlocksProvider(widget.date).notifier).deleteBlock(block);
+    _currentBlock = null;
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -380,6 +383,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
         : _findById(blocks, widget.initialBlock.id);
 
     if (blocks != null && block == null) {
+      _currentBlock = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
