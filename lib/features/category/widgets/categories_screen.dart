@@ -44,6 +44,9 @@ class CategoriesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        // Reserves the leading slot so AppShell's floating hamburger button
+        // (narrow widths only) has room without covering the title.
+        leading: const SizedBox(),
         title: const Text('Categories'),
         actions: [
           IconButton(

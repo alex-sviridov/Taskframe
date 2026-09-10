@@ -40,7 +40,7 @@ GoRouter _buildTestRouter() => GoRouter(
 
 void main() {
   group('AppShell', () {
-    testWidgets('narrow: shows a NavigationBar with both destinations', (
+    testWidgets('narrow: the drawer starts closed, with a menu button', (
       tester,
     ) async {
       _setViewportWidth(tester, 600);
@@ -49,29 +49,44 @@ void main() {
         MaterialApp.router(routerConfig: _buildTestRouter()),
       );
 
-      expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.byType(NavigationRail), findsNothing);
-      expect(find.text('Day'), findsOneWidget);
-      expect(find.text('Categories'), findsOneWidget);
+      expect(find.byIcon(Icons.menu), findsOneWidget);
+      expect(find.text('Categories'), findsNothing);
       expect(find.text('Branch one'), findsOneWidget);
     });
 
-    testWidgets('narrow: tapping the second destination switches branch', (
-      tester,
-    ) async {
+    testWidgets('narrow: the menu button opens the drawer', (tester) async {
       _setViewportWidth(tester, 600);
       await tester.pumpWidget(
         MaterialApp.router(routerConfig: _buildTestRouter()),
       );
 
-      await tester.tap(find.text('Categories'));
+      await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
 
-      expect(find.text('Branch two'), findsOneWidget);
-      expect(find.text('Branch one'), findsNothing);
+      expect(find.byType(NavigationDrawer), findsOneWidget);
+      expect(find.text('Day'), findsOneWidget);
+      expect(find.text('Categories'), findsOneWidget);
     });
 
-    testWidgets('wide: shows a NavigationRail with both destinations', (
+    testWidgets(
+      'narrow: tapping a destination in the open drawer switches branch',
+      (tester) async {
+        _setViewportWidth(tester, 600);
+        await tester.pumpWidget(
+          MaterialApp.router(routerConfig: _buildTestRouter()),
+        );
+
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Categories'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Branch two'), findsOneWidget);
+        expect(find.text('Branch one'), findsNothing);
+      },
+    );
+
+    testWidgets('wide: shows a persistent sidebar with both destinations', (
       tester,
     ) async {
       _setViewportWidth(tester, 1000);
@@ -80,8 +95,8 @@ void main() {
         MaterialApp.router(routerConfig: _buildTestRouter()),
       );
 
-      expect(find.byType(NavigationRail), findsOneWidget);
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(NavigationDrawer), findsOneWidget);
+      expect(find.byIcon(Icons.menu), findsNothing);
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
       expect(find.text('Branch one'), findsOneWidget);

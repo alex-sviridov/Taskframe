@@ -205,7 +205,12 @@ class _DayScreenState extends ConsumerState<DayScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Day Frame')),
+      appBar: AppBar(
+        // Reserves the leading slot so AppShell's floating hamburger button
+        // (narrow widths only) has room without covering the title.
+        leading: const SizedBox(),
+        title: const Text('Day Frame'),
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final wantedDaysPerPage = _daysPerPageFor(constraints.maxWidth);
