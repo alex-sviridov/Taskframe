@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/widgets/app_shell.dart';
@@ -54,7 +55,9 @@ void main() {
       _setViewportWidth(tester, 600);
 
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       expect(find.byIcon(Icons.menu), findsOneWidget);
@@ -66,7 +69,9 @@ void main() {
     testWidgets('narrow: the menu button opens the drawer', (tester) async {
       _setViewportWidth(tester, 600);
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       await tester.tap(find.byIcon(Icons.menu));
@@ -83,7 +88,9 @@ void main() {
       (tester) async {
         _setViewportWidth(tester, 600);
         await tester.pumpWidget(
-          MaterialApp.router(routerConfig: _buildTestRouter()),
+          ProviderScope(
+            child: MaterialApp.router(routerConfig: _buildTestRouter()),
+          ),
         );
 
         await tester.tap(find.byIcon(Icons.menu));
@@ -102,7 +109,9 @@ void main() {
       _setViewportWidth(tester, 1000);
 
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       expect(find.byType(NavigationDrawer), findsOneWidget);
@@ -118,7 +127,9 @@ void main() {
       _setViewportWidth(tester, 1000);
 
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       final width = tester.getSize(find.byType(NavigationDrawer)).width;
@@ -130,7 +141,9 @@ void main() {
     ) async {
       _setViewportWidth(tester, 1000);
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       await tester.tap(find.text('Templates'));
@@ -145,7 +158,9 @@ void main() {
     ) async {
       _setViewportWidth(tester, 1000);
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: _buildTestRouter()),
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
       );
 
       await tester.tap(find.text('Categories'));

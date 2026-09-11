@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
 
 /// One destination in the app's top-level navigation.
 class _Destination {
@@ -58,48 +59,64 @@ class AppShell extends StatelessWidget {
           },
           children: _drawerDestinations(),
         ),
-        body: Builder(
-          builder: (context) => Stack(
-            children: [
-              navigationShell,
-              Positioned(
-                top: MediaQuery.paddingOf(context).top,
-                left: 4,
-                child: IconButton(
-                  tooltip: 'Menu',
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
+        body: Column(
+          children: [
+            const IosInstallHintBanner(),
+            Expanded(
+              child: Builder(
+                builder: (context) => Stack(
+                  children: [
+                    navigationShell,
+                    Positioned(
+                      top: MediaQuery.paddingOf(context).top,
+                      left: 4,
+                      child: IconButton(
+                        tooltip: 'Menu',
+                        icon: const Icon(Icons.menu),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          // NavigationDrawer has no width parameter of its own — it always
-          // builds a Drawer, whose default width (304) is baked in via a
-          // tight BoxConstraints.expand, so shrinking it as a persistent
-          // sidebar means constraining it from outside like this rather
-          // than passing it any property directly.
-          SizedBox(
-            width: _sidebarWidth,
-            child: NavigationDrawer(
-              // The narrower sidebar no longer has room for the default
-              // tile padding (24px total) without its longest label
-              // ("Categories") overflowing.
-              tilePadding: const EdgeInsets.symmetric(horizontal: 8),
-              selectedIndex: navigationShell.currentIndex,
-              onDestinationSelected: navigationShell.goBranch,
-              children: _drawerDestinations(),
-            ),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: navigationShell),
+          const IosInstallHintBanner(),
+          Expanded(child: _wideBody(navigationShell)),
         ],
       ),
+    );
+  }
+
+  Widget _wideBody(StatefulNavigationShell navigationShell) {
+    return Row(
+      children: [
+        // NavigationDrawer has no width parameter of its own — it always
+        // builds a Drawer, whose default width (304) is baked in via a
+        // tight BoxConstraints.expand, so shrinking it as a persistent
+        // sidebar means constraining it from outside like this rather
+        // than passing it any property directly.
+        SizedBox(
+          width: _sidebarWidth,
+          child: NavigationDrawer(
+            // The narrower sidebar no longer has room for the default
+            // tile padding (24px total) without its longest label
+            // ("Categories") overflowing.
+            tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+            selectedIndex: navigationShell.currentIndex,
+            onDestinationSelected: navigationShell.goBranch,
+            children: _drawerDestinations(),
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: navigationShell),
+      ],
     );
   }
 }
