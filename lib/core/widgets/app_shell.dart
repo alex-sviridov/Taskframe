@@ -87,7 +87,7 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          const IosInstallHintBanner(),
+          const SafeArea(bottom: false, child: IosInstallHintBanner()),
           Expanded(child: _wideBody(navigationShell)),
         ],
       ),
