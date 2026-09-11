@@ -131,5 +131,22 @@ void main() {
 
       expect(await repository.load('t1'), isEmpty);
     });
+
+    test('deleteAll clears one templateId without touching another', () async {
+      final repository = InMemoryTemplateBlocksRepository();
+      for (final templateId in ['t1', 't2']) {
+        await repository.add(
+          templateId,
+          start: DateTime(2000, 1, 1, 9),
+          end: DateTime(2000, 1, 1, 9, 30),
+          kind: BlockKind.anchor,
+        );
+      }
+
+      await repository.deleteAll('t1');
+
+      expect(await repository.load('t1'), isEmpty);
+      expect(await repository.load('t2'), hasLength(1));
+    });
   });
 }

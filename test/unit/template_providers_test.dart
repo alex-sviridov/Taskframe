@@ -52,6 +52,36 @@ void main() {
 
       expect(container.read(templateListProvider).value, isEmpty);
     });
+
+    test(
+      'deleteTemplate also clears that template\'s blocks, so a later '
+      'template reusing the id cannot inherit them',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(templateListProvider.future);
+        final added = await container
+            .read(templateListProvider.notifier)
+            .addTemplate(name: 'Weekday');
+        await container.read(templateBlocksProvider(added.id).future);
+        await container
+            .read(templateBlocksProvider(added.id).notifier)
+            .addBlock(
+              start: DateTime(2000, 1, 1, 9),
+              end: DateTime(2000, 1, 1, 9, 30),
+              kind: BlockKind.anchor,
+            );
+
+        await container
+            .read(templateListProvider.notifier)
+            .deleteTemplate(added);
+
+        expect(
+          await container.read(templateBlocksProvider(added.id).future),
+          isEmpty,
+        );
+      },
+    );
   });
 
   group('templateBlocksProvider', () {
@@ -153,5 +183,40 @@ void main() {
       expect(container.read(templateBlocksProvider('t1')).value, isEmpty);
       expect(container.read(templateBlocksProvider('t2')).value!.single.id, added.id);
     });
+
+    test(
+      'rejects a non-template column rather than silently mishandling it '
+      '(the invariant the drag resolver\'s variant scoping upholds)',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final ref = container.read(_refProvider);
+        const controller = TemplateScheduleController();
+        final day = DayColumn(DateTime(2026, 9, 9));
+
+        expect(
+          () => controller.blocksOf(ref, day),
+          throwsA(isA<TypeError>()),
+        );
+        expect(
+          () => controller.moveBlock(
+            ref,
+            block: TimeObject(
+              id: 'b1',
+              title: 'Block',
+              start: DateTime(2000, 1, 1, 9),
+              end: DateTime(2000, 1, 1, 9, 30),
+              kind: BlockKind.anchor,
+              locked: false,
+            ),
+            fromColumn: day,
+            toColumn: day,
+            newStart: DateTime(2000, 1, 1, 10),
+            newEnd: DateTime(2000, 1, 1, 10, 30),
+          ),
+          throwsA(isA<TypeError>()),
+        );
+      },
+    );
   });
 }

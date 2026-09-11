@@ -95,6 +95,10 @@ abstract class TemplateBlocksRepository {
 
   /// Removes [block] (which belongs to [templateId]).
   Future<void> delete(TimeObject block, {required String templateId});
+
+  /// Removes every block belonging to [templateId], so deleting a
+  /// template doesn't leave its blocks stranded in the store forever.
+  Future<void> deleteAll(String templateId);
 }
 
 /// A [TemplateBlocksRepository] that keeps blocks in memory for the life
@@ -188,5 +192,10 @@ class InMemoryTemplateBlocksRepository implements TemplateBlocksRepository {
     if (list != null) {
       _blocks[templateId] = list.where((b) => b.id != block.id).toList();
     }
+  }
+
+  @override
+  Future<void> deleteAll(String templateId) async {
+    _blocks.remove(templateId);
   }
 }

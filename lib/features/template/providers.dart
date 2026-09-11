@@ -41,10 +41,14 @@ class TemplateListNotifier extends AsyncNotifier<List<Template>> {
   }
 
   /// Removes [template], persisting via the repository and refreshing
-  /// state.
+  /// state. Its blocks go with it: without the cascade, a deleted
+  /// template's blocks (and its [templateBlocksProvider] family entry)
+  /// would stay in the store with nothing left able to reach them.
   Future<void> deleteTemplate(Template template) async {
     final repository = ref.read(templateRepositoryProvider);
     await repository.delete(template);
+    await ref.read(templateBlocksRepositoryProvider).deleteAll(template.id);
+    ref.invalidate(templateBlocksProvider(template.id));
     state = AsyncData([
       for (final t in state.value ?? <Template>[])
         if (t.id != template.id) t,
@@ -160,11 +164,9 @@ final templateBlocksProvider =
 class TemplateScheduleController extends ScheduleController {
   const TemplateScheduleController();
 
-  String _idOf(ScheduleColumn column) => (column as TemplateColumn).templateId;
-
   @override
   List<TimeObject>? blocksOf(Ref ref, ScheduleColumn column) =>
-      ref.read(templateBlocksProvider(_idOf(column))).value;
+      ref.read(templateBlocksProvider(_idOfColumn(column))).value;
 
   @override
   Future<void> moveBlock(
@@ -175,8 +177,8 @@ class TemplateScheduleController extends ScheduleController {
     required DateTime newStart,
     required DateTime newEnd,
   }) async {
-    final fromId = _idOf(fromColumn);
-    final toId = _idOf(toColumn);
+    final fromId = _idOfColumn(fromColumn);
+    final toId = _idOfColumn(toColumn);
     final repository = ref.read(templateBlocksRepositoryProvider);
     await repository.move(
       block,
@@ -192,6 +194,10 @@ class TemplateScheduleController extends ScheduleController {
   }
 }
 
+/// The template id [column] identifies. Throws if [column] is any other
+/// [ScheduleColumn] variant — everything in this file is template-only, and
+/// a foreign column reaching here means a caller resolved the wrong grid,
+/// which is worth failing loudly over rather than silently mishandling.
 String _idOfColumn(ScheduleColumn column) => (column as TemplateColumn).templateId;
 
 List<TimeObject>? _watchTemplateBlocks(WidgetRef ref, ScheduleColumn column) =>
