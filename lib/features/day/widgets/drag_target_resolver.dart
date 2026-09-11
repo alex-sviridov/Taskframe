@@ -68,21 +68,34 @@ int scheduleGridKeyCacheSizeForTest() => _scheduleGridKeys.length;
 /// 15-minute slot within it, by looking up each candidate column's
 /// mounted widget via [scheduleGridKeyFor].
 ///
-/// [candidateColumns] defaults to *every* column [scheduleGridKeyFor] has
-/// ever been asked for; only the handful whose `DayGrid` is mounted and
-/// attached right now can match, so the result always reflects whatever
-/// page is visible at the moment of the call rather than whatever was
-/// visible when a drag started. Pass [candidateColumns] explicitly only to
-/// restrict the search (tests do).
+/// [origin] is the column the dragged/resized block started in, and only
+/// candidates of the *same* [ScheduleColumn] variant can match it: a drag
+/// begun on a [TemplateColumn] can only ever land on another
+/// [TemplateColumn], and likewise for [DayColumn]. Mounted-and-attached is
+/// not a strong enough filter on its own — `StatefulShellRoute.indexedStack`
+/// lays out every branch's widget tree even while it is offstage
+/// (`Offstage` skips painting and hit-testing but not layout, and
+/// `IndexedStack` lays every child out at the same origin), so once both
+/// `/` and `/templates` have been visited their `DayGrid`s report
+/// overlapping global rects and a rect test alone would happily resolve
+/// the invisible other branch's column. Landing on the wrong variant is not
+/// merely a misplaced drop: each controller casts its columns to the
+/// variant it owns, so a cross-variant target crashes.
 ///
-/// Returns `null` if [globalPosition] isn't over any mounted column, or if
-/// it's over a column but a block of [blockDuration] dropped at the
-/// snapped slot there would end after that column's boundary — see
-/// [dayEndFor]. Either way, the caller's existing "no valid column"
-/// fallback (previewing the snap-back at the block's own original
-/// position) applies.
+/// [candidateColumns] defaults to every column [scheduleGridKeyFor] has
+/// ever been asked for, narrowed by the [origin] variant rule above. Pass
+/// it explicitly only to restrict the search further (tests do); the
+/// variant rule still applies to whatever is passed.
+///
+/// Returns `null` if [globalPosition] isn't over any mounted column of
+/// [origin]'s variant, or if it's over such a column but a block of
+/// [blockDuration] dropped at the snapped slot there would end after that
+/// column's boundary — see [dayEndFor]. Either way, the caller's existing
+/// "no valid column" fallback (previewing the snap-back at the block's own
+/// original position) applies.
 ({ScheduleColumn column, DateTime start})? resolveDragTarget({
   required Offset globalPosition,
+  required ScheduleColumn origin,
   required DaySettings settings,
   required double slotHeight,
   required Duration blockDuration,
@@ -91,6 +104,8 @@ int scheduleGridKeyCacheSizeForTest() => _scheduleGridKeys.length;
   final columns =
       candidateColumns ?? _scheduleGridKeys.keys.toList(growable: false);
   for (final column in columns) {
+    if (!_sameVariant(column, origin)) continue;
+
     final renderObject =
         scheduleGridKeyFor(column).currentContext?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.attached) continue;
@@ -115,3 +130,11 @@ int scheduleGridKeyCacheSizeForTest() => _scheduleGridKeys.length;
   }
   return null;
 }
+
+/// Whether [column] is the same [ScheduleColumn] variant as [origin], and
+/// so a legal drag target for a block that started in [origin].
+bool _sameVariant(ScheduleColumn column, ScheduleColumn origin) =>
+    switch (origin) {
+      DayColumn() => column is DayColumn,
+      TemplateColumn() => column is TemplateColumn,
+    };

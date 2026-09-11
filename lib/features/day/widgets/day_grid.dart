@@ -643,18 +643,20 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
     final controller = widget.controller;
+    final origin = widget.column;
     final blockDuration = widget.block.end.difference(widget.block.start);
 
     ref
         .read(dragStateProvider.notifier)
         .start(
           block: widget.block,
-          originalColumn: widget.column,
+          originalColumn: origin,
           controller: controller,
           pointerGlobalPosition: globalPosition,
           pointer: _pointer,
           resolveTarget: (position) => resolveDragTarget(
             globalPosition: position,
+            origin: origin,
             settings: settings,
             slotHeight: slotHeight,
             blockDuration: blockDuration,

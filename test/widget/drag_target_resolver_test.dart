@@ -55,6 +55,7 @@ void main() {
       // the 6:00 day start.
       final target = resolveDragTarget(
         globalPosition: const Offset(310, 192),
+        origin: _columns[0],
         candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
@@ -72,6 +73,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(3000, 192),
+        origin: _columns[0],
         candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
@@ -88,6 +90,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(10, 5000),
+        origin: _columns[0],
         candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
@@ -108,6 +111,7 @@ void main() {
         // the 6:00 day start.
         final target = resolveDragTarget(
           globalPosition: const Offset(10, 1072),
+          origin: _columns[0],
           candidateColumns: _columns,
           settings: _settings,
           slotHeight: _slotHeight,
@@ -127,6 +131,7 @@ void main() {
 
         final target = resolveDragTarget(
           globalPosition: const Offset(10, 1072),
+          origin: _columns[0],
           candidateColumns: _columns,
           settings: _settings,
           slotHeight: _slotHeight,

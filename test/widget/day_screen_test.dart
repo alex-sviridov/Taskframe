@@ -632,6 +632,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: secondColumnCenter,
+        origin: DayColumn(DateTime(2026, 9, 9)),
         settings: settings,
         slotHeight: slotHeight,
         blockDuration: const Duration(minutes: 30),
