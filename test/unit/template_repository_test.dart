@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/template/data/template_repository.dart';
+import 'package:taskframe/features/template/models/template.dart';
 
 void main() {
   group('InMemoryTemplateRepository', () {
@@ -22,6 +23,15 @@ void main() {
       final renamed = await repository.rename(added, name: 'Renamed');
       expect(renamed.id, added.id);
       expect((await repository.load()).single.name, 'Renamed');
+    });
+
+    test('rename throws StateError if template not found', () async {
+      final repository = InMemoryTemplateRepository();
+      final missingTemplate = const Template(id: 't-missing', name: 'Weekday');
+      expect(
+        () => repository.rename(missingTemplate, name: 'Renamed'),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('delete removes the template', () async {

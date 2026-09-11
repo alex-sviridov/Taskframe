@@ -37,6 +37,9 @@ class InMemoryTemplateRepository implements TemplateRepository {
   Future<Template> rename(Template template, {required String name}) async {
     final renamed = template.copyWith(name: name);
     final index = _templates.indexWhere((t) => t.id == template.id);
+    if (index == -1) {
+      throw StateError('Template ${template.id} not found');
+    }
     _templates[index] = renamed;
     return renamed;
   }
