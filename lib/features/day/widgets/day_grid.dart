@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
@@ -166,6 +168,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
     final boxTop = isShort
         ? trueTop + trueHeight / 2 - _titleOverlayHeight / 2
         : trueTop;
+    final category = _categoryFor(block);
 
     return Positioned(
       key: key,
@@ -183,7 +186,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
           child: Align(
             alignment: isShort ? Alignment.centerLeft : Alignment.topLeft,
             child: Text(
-              block.title,
+              category?.formatTitle(block.title) ?? block.title,
               style: Theme.of(context).textTheme.bodySmall,
               overflow: TextOverflow.ellipsis,
             ),
@@ -191,6 +194,14 @@ class _DayGridState extends ConsumerState<DayGrid> {
         ),
       ),
     );
+  }
+
+  /// The category [block] is tagged with, resolved from the currently
+  /// loaded category list, or `null` while categories are still loading.
+  Category? _categoryFor(TimeObject block) {
+    final categories = ref.watch(categoryListProvider).value;
+    if (categories == null) return null;
+    return categoryById(categories, block.categoryId);
   }
 
   void _openDraftAt(double dy) {
@@ -352,7 +363,11 @@ class _DayGridState extends ConsumerState<DayGrid> {
                     : Container(
                         color: scheme.surface,
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: BlockView(block: block, showTitle: false),
+                        child: BlockView(
+                          block: block,
+                          showTitle: false,
+                          category: _categoryFor(block),
+                        ),
                       ),
               ),
             ),
@@ -398,7 +413,11 @@ class _DayGridState extends ConsumerState<DayGrid> {
                   child: Container(
                     color: scheme.surface,
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: BlockView(block: dragState.block, showTitle: false),
+                    child: BlockView(
+                      block: dragState.block,
+                      showTitle: false,
+                      category: _categoryFor(dragState.block),
+                    ),
                   ),
                 ),
               ),
@@ -428,6 +447,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
                     child: BlockView(
                       block: resizeState.block,
                       showTitle: false,
+                      category: _categoryFor(resizeState.block),
                     ),
                   ),
                 ),

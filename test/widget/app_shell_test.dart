@@ -102,6 +102,18 @@ void main() {
       expect(find.text('Branch one'), findsOneWidget);
     });
 
+    testWidgets('wide: the persistent sidebar is 30% narrower than the '
+        'NavigationDrawer default (304 * 0.7 ≈ 213)', (tester) async {
+      _setViewportWidth(tester, 1000);
+
+      await tester.pumpWidget(
+        MaterialApp.router(routerConfig: _buildTestRouter()),
+      );
+
+      final width = tester.getSize(find.byType(NavigationDrawer)).width;
+      expect(width, closeTo(213, 1));
+    });
+
     testWidgets('wide: tapping the second destination switches branch', (
       tester,
     ) async {

@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
@@ -10,31 +13,130 @@ import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 
-/// A fixed-height row of empty, non-interactive rounded squares reserving
-/// visual space for a future category carousel. Carries no data model or
-/// selection state yet.
-class BlockCategoryPlaceholder extends StatelessWidget {
-  /// Creates a [BlockCategoryPlaceholder].
-  const BlockCategoryPlaceholder({super.key});
+/// A small color dot for [category] followed by its emoji-prefixed name,
+/// used for every row of [BlockCategoryPicker] — the closed field, its
+/// dropdown menu items, and its wheel entries alike — so they never drift
+/// out of visual sync with each other. Color is an accent (a swatch), not
+/// the row's whole background, so it reads as a standard field/menu row
+/// rather than a colored block.
+class _CategoryRow extends StatelessWidget {
+  const _CategoryRow({required this.category});
 
-  static const double _size = 40;
-  static const int _count = 5;
+  final Category category;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: _size,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _count,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) => Container(
-          width: _size,
-          height: _size,
-          decoration: BoxDecoration(
-            border: Border.all(color: scheme.outlineVariant),
-            borderRadius: BorderRadius.circular(8),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(radius: 8, backgroundColor: Color(category.colorValue)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            category.formatTitle(category.name),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The shared field chrome (outline + "Category" label) both the wide
+/// dropdown and the narrow wheel-picker trigger sit inside, so the two
+/// read as the same kind of control regardless of width.
+const _fieldDecoration = InputDecoration(
+  labelText: 'Category',
+  border: OutlineInputBorder(),
+  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+);
+
+/// Lets the user assign a category to the block being edited: a standard
+/// [DropdownButtonFormField] on a wide width, or — since a dropdown menu
+/// is awkward to operate with a finger — the same field chrome wrapping a
+/// tappable row that opens a [CupertinoPicker] wheel on a narrow one.
+/// Either way every row is a [_CategoryRow], and picking one calls
+/// [onSelected] immediately, no separate confirm step, matching the block
+/// edit modal's other selectors.
+class BlockCategoryPicker extends ConsumerWidget {
+  /// Creates a [BlockCategoryPicker].
+  const BlockCategoryPicker({
+    required this.selectedCategoryId,
+    required this.onSelected,
+    super.key,
+  });
+
+  /// The id of the category currently assigned to the block being edited.
+  final String selectedCategoryId;
+
+  /// Called with a category's id when a new one is picked.
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoryListProvider).value ?? const [];
+    if (categories.isEmpty) return const SizedBox.shrink();
+    final selected = categoryById(categories, selectedCategoryId);
+
+    if (isNarrow(context)) {
+      return InputDecorator(
+        decoration: _fieldDecoration,
+        child: GestureDetector(
+          onTap: () => _showWheelPicker(context, categories, selected.id),
+          child: _CategoryRow(category: selected),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      // Forces the field to reset to [selected.id] whenever it changes
+      // for a reason other than this field's own [onChanged] — e.g. the
+      // block being edited changes underneath it — since a FormField
+      // otherwise only reads [initialValue] on its very first build.
+      key: ValueKey(selected.id),
+      initialValue: selected.id,
+      decoration: _fieldDecoration,
+      selectedItemBuilder: (context) => [
+        for (final category in categories) _CategoryRow(category: category),
+      ],
+      items: [
+        for (final category in categories)
+          DropdownMenuItem(
+            value: category.id,
+            child: _CategoryRow(category: category),
+          ),
+      ],
+      onChanged: (id) {
+        if (id != null) onSelected(id);
+      },
+    );
+  }
+
+  /// Opens a bottom sheet containing a [CupertinoPicker] wheel of every
+  /// category, initially centered on [selectedId]. Applies [onSelected]
+  /// on every settle, same as scrolling the block edit modal's own time
+  /// wheels — there's no separate Done/confirm action.
+  Future<void> _showWheelPicker(
+    BuildContext context,
+    List<Category> categories,
+    String selectedId,
+  ) {
+    final initialItem = categories.indexWhere((c) => c.id == selectedId);
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: 216,
+          child: CupertinoPicker(
+            itemExtent: 48,
+            scrollController: FixedExtentScrollController(
+              initialItem: initialItem < 0 ? 0 : initialItem,
+            ),
+            onSelectedItemChanged: (index) => onSelected(categories[index].id),
+            children: [
+              for (final category in categories)
+                Center(child: _CategoryRow(category: category)),
+            ],
           ),
         ),
       ),
@@ -64,16 +166,79 @@ class BlockTimeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text =
-        '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}';
     return ListTile(
       title: Text(label),
-      trailing: Text(text, style: Theme.of(context).textTheme.titleMedium),
+      trailing: Text(
+        formatHm(time),
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
       onTap: onTap,
     );
   }
 }
+
+/// A labeled dropdown field listing every 15-minute mark within [range]
+/// (see [validEditRange]) — so a value that would push the block past its
+/// neighbor or the day's own bounds is never offered — used in place of
+/// [BlockTimeRow] and its wheel picker on a wide width, where dragging a
+/// wheel with a mouse is awkward and an inline-expanding picker pushes
+/// the rest of the modal's layout around. Selecting an item calls
+/// [onChanged] immediately, no separate confirm step.
+class BlockTimeDropdown extends StatelessWidget {
+  /// Creates a [BlockTimeDropdown].
+  const BlockTimeDropdown({
+    required this.label,
+    required this.value,
+    required this.range,
+    required this.onChanged,
+    super.key,
+  });
+
+  /// The field's label, e.g. "Starts".
+  final String label;
+
+  /// The currently selected time; must be one of [_quarterHourMarks]
+  /// within [range] (guaranteed since both are always derived from the
+  /// same on-grid [TimeObject] field).
+  final DateTime value;
+
+  /// The contiguous range [value] may move within.
+  final ({DateTime start, DateTime end}) range;
+
+  /// Called with the newly picked time when a different one is selected.
+  final ValueChanged<DateTime> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = _quarterHourMarks(range.start, range.end);
+    return DropdownButtonFormField<DateTime>(
+      // Forces the field to reset to [value] whenever it changes for a
+      // reason other than this field's own [onChanged] — see the same
+      // pattern (and why) on `BlockCategoryPicker`'s dropdown.
+      key: ValueKey(value),
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      items: [
+        for (final option in options)
+          DropdownMenuItem(value: option, child: Text(formatHm(option))),
+      ],
+      onChanged: (picked) {
+        if (picked != null) onChanged(picked);
+      },
+    );
+  }
+}
+
+/// Every 15-minute mark from [start] to [end] inclusive. Both must already
+/// fall on the 15-minute grid (true of every [TimeObject] field and
+/// [validEditRange] bound), so this never needs to snap either one.
+List<DateTime> _quarterHourMarks(DateTime start, DateTime end) => [
+  for (var t = start; !t.isAfter(end); t = t.add(const Duration(minutes: 15)))
+    t,
+];
 
 /// The 15-minute grid values a minute wheel can ever offer.
 const _quarterMinutes = [0, 15, 30, 45];
@@ -344,7 +509,7 @@ Future<void> showBlockEditModal({
   }
   return showDialog<void>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
@@ -354,7 +519,7 @@ Future<void> showBlockEditModal({
   );
 }
 
-/// The block edit modal's content: title, category placeholder, start/end
+/// The block edit modal's content: title, category picker, start/end
 /// rows, and copy/delete actions. Reads the live block from
 /// `dayBlocksProvider(date)` by [initialBlock]'s id on every rebuild —
 /// [initialBlock] itself is only the optimistic value shown before that
@@ -522,6 +687,13 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
         .updateBlock(block, kind: kind);
   }
 
+  Future<void> _setCategory(TimeObject block, String categoryId) async {
+    if (categoryId == block.categoryId) return;
+    await ref
+        .read(dayBlocksProvider(_currentDate).notifier)
+        .updateBlock(block, categoryId: categoryId);
+  }
+
   Future<void> _copyToNextDay(TimeObject block) async {
     await _commitTitle(block);
     if (!mounted) return;
@@ -608,36 +780,80 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                   IconButton(
                     tooltip: 'Close',
                     icon: const Icon(Icons.close),
+                    visualDensity: VisualDensity.compact,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
               TextField(
                 controller: _titleController,
                 focusNode: _titleFocus,
                 autofocus: _autofocusTitle,
                 onSubmitted: (_) => _commitTitle(current),
-                decoration: const InputDecoration(border: InputBorder.none),
+                decoration: const InputDecoration(
+                  border: UnderlineInputBorder(),
+                  isDense: true,
+                ),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
-              const BlockCategoryPlaceholder(),
+              BlockCategoryPicker(
+                selectedCategoryId: current.categoryId,
+                onSelected: (categoryId) => _setCategory(current, categoryId),
+              ),
               const SizedBox(height: 12),
               ListTile(
                 leading: const Icon(Icons.calendar_today),
                 title: Text(formatDate(_currentDate, settings.dateFormat)),
                 onTap: () => _changeDate(current),
               ),
-              BlockTimeRow(
-                label: 'Starts',
-                time: current.start,
-                onTap: () => _toggleTimeField(_TimeField.start, current),
-              ),
-              if (_expandedField == _TimeField.start)
-                _TimeWheelPicker(
-                  initial: current.start,
-                  settings: settings,
+              if (isNarrow(context)) ...[
+                BlockTimeRow(
+                  label: 'Starts',
+                  time: current.start,
+                  onTap: () => _toggleTimeField(_TimeField.start, current),
+                ),
+                if (_expandedField == _TimeField.start)
+                  _TimeWheelPicker(
+                    initial: current.start,
+                    settings: settings,
+                    range: validEditRange(
+                      block: current,
+                      editingStart: true,
+                      day: _currentDate,
+                      settings: settings,
+                      others: others,
+                    ),
+                    onDone: (picked) =>
+                        _confirmTime(current, _TimeField.start, picked),
+                  ),
+                BlockTimeRow(
+                  label: 'Ends',
+                  time: current.end,
+                  onTap: () => _toggleTimeField(_TimeField.end, current),
+                ),
+                if (_expandedField == _TimeField.end)
+                  _TimeWheelPicker(
+                    initial: current.end,
+                    settings: settings,
+                    range: validEditRange(
+                      block: current,
+                      editingStart: false,
+                      day: _currentDate,
+                      settings: settings,
+                      others: others,
+                    ),
+                    onDone: (picked) =>
+                        _confirmTime(current, _TimeField.end, picked),
+                  ),
+              ] else ...[
+                // A drag-to-scroll wheel is awkward with a mouse and, as an
+                // inline-expanding picker, pushes the rest of this layout
+                // around — a plain dropdown avoids both on a wide width.
+                BlockTimeDropdown(
+                  label: 'Starts',
+                  value: current.start,
                   range: validEditRange(
                     block: current,
                     editingStart: true,
@@ -645,18 +861,13 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                     settings: settings,
                     others: others,
                   ),
-                  onDone: (picked) =>
+                  onChanged: (picked) =>
                       _confirmTime(current, _TimeField.start, picked),
                 ),
-              BlockTimeRow(
-                label: 'Ends',
-                time: current.end,
-                onTap: () => _toggleTimeField(_TimeField.end, current),
-              ),
-              if (_expandedField == _TimeField.end)
-                _TimeWheelPicker(
-                  initial: current.end,
-                  settings: settings,
+                const SizedBox(height: 12),
+                BlockTimeDropdown(
+                  label: 'Ends',
+                  value: current.end,
                   range: validEditRange(
                     block: current,
                     editingStart: false,
@@ -664,9 +875,10 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                     settings: settings,
                     others: others,
                   ),
-                  onDone: (picked) =>
+                  onChanged: (picked) =>
                       _confirmTime(current, _TimeField.end, picked),
                 ),
+              ],
               const SizedBox(height: 12),
               Center(
                 child: SegmentedButton<BlockKind>(

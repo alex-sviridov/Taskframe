@@ -1,3 +1,4 @@
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 /// Loads and stores the timeline blocks for a given date.
@@ -16,6 +17,7 @@ abstract class DayBlocksRepository {
     required DateTime end,
     required BlockKind kind,
     String? title,
+    String? categoryId,
   });
 
   /// Moves [block] from [fromDate] to [toDate], updating its start/end to
@@ -30,8 +32,8 @@ abstract class DayBlocksRepository {
   });
 
   /// Updates [block] (which belongs to [date]) in place, replacing any of
-  /// [title]/[start]/[end]/[kind] that are given and leaving the rest
-  /// unchanged. Returns the updated block.
+  /// [title]/[start]/[end]/[kind]/[categoryId] that are given and leaving
+  /// the rest unchanged. Returns the updated block.
   Future<TimeObject> update(
     TimeObject block, {
     required DateTime date,
@@ -39,6 +41,7 @@ abstract class DayBlocksRepository {
     DateTime? start,
     DateTime? end,
     BlockKind? kind,
+    String? categoryId,
   });
 
   /// Removes [block] (which belongs to [date]).
@@ -64,6 +67,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
     required DateTime end,
     required BlockKind kind,
     String? title,
+    String? categoryId,
   }) async {
     final block = TimeObject(
       id: 'block-${_nextId++}',
@@ -72,6 +76,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
       end: end,
       kind: kind,
       locked: false,
+      categoryId: categoryId ?? Category.defaultId,
     );
 
     final key = _dateKey(date);
@@ -104,6 +109,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
       end: newEnd,
       kind: block.kind,
       locked: block.locked,
+      categoryId: block.categoryId,
     );
 
     _added[toKey] = [...?_added[toKey], moved];
@@ -118,6 +124,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
     DateTime? start,
     DateTime? end,
     BlockKind? kind,
+    String? categoryId,
   }) async {
     final key = _dateKey(date);
     final updated = TimeObject(
@@ -127,6 +134,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
       end: end ?? block.end,
       kind: kind ?? block.kind,
       locked: block.locked,
+      categoryId: categoryId ?? block.categoryId,
     );
 
     final list = _added[key];

@@ -29,18 +29,21 @@ test('editing the title and pressing Enter renames the block', async ({
   await expect(page.getByText('Breakfast')).toHaveCount(0);
 });
 
-test('opening the start time picker and confirming Done closes it, '
+test('picking a time from the Starts dropdown updates it immediately, '
   + 'leaving the modal open', async ({ page }) => {
   await clickCenter(page, page.getByText('Breakfast'));
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 
-  await clickCenter(page, page.getByText('Starts'));
-  await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+  // Breakfast seeds 07:00-07:30; clicking the field's current value opens
+  // its dropdown menu of every valid 15-minute mark.
+  await clickCenter(page, page.getByText('07:00'));
+  await expect(page.getByRole('menuitem', { name: '07:15' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('menuitem', { name: '07:15' }).click();
 
-  await expect(page.getByRole('button', { name: 'Done' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '07:15' })).toBeVisible();
 });
 
 test('the type selector switches Event/Frame without closing the modal '

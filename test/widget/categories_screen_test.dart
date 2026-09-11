@@ -22,19 +22,28 @@ void main() {
       expect(find.byIcon(Icons.delete), findsNothing);
     });
 
-    testWidgets('adding a category via the app bar action shows it in the list', (
+    testWidgets('the add-category action has an accessible tooltip', (
       tester,
     ) async {
       await _pump(tester);
 
-      await tester.tap(find.byIcon(Icons.add));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Work');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Work'), findsOneWidget);
+      expect(find.byTooltip('Add category'), findsOneWidget);
     });
+
+    testWidgets(
+      'adding a category via the app bar action shows it in the list',
+      (tester) async {
+        await _pump(tester);
+
+        await tester.tap(find.byIcon(Icons.add));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Work');
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Work'), findsOneWidget);
+      },
+    );
 
     testWidgets('tapping a non-default category row opens it in edit mode', (
       tester,

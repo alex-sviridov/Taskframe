@@ -2,11 +2,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
@@ -221,6 +223,54 @@ void main() {
       expect(find.text('Work'), findsOneWidget);
     });
 
+    testWidgets('passes each block\'s resolved category to its BlockView', (
+      tester,
+    ) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      final work = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+      await _pump(tester, [
+        TimeObject(
+          id: '1',
+          title: 'Work',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 13),
+          kind: BlockKind.anchor,
+          locked: false,
+          categoryId: work.id,
+        ),
+      ], container: container);
+
+      final blockView = tester.widget<BlockView>(find.byType(BlockView));
+      expect(blockView.category?.id, work.id);
+    });
+
+    testWidgets("prefixes a block's title overlay with its category's "
+        'emoji', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      final work = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+      await _pump(tester, [
+        TimeObject(
+          id: '1',
+          title: 'Work',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 13),
+          kind: BlockKind.anchor,
+          locked: false,
+          categoryId: work.id,
+        ),
+      ], container: container);
+
+      expect(find.text('💼 Work'), findsOneWidget);
+    });
+
     testWidgets(
       'shows every title for a run of adjacent (zero-gap) short blocks, '
       'even at the minimum slot height '
@@ -318,48 +368,45 @@ void main() {
       },
     );
 
-    testWidgets(
-      "centers a too-short block's title box on the block's own true "
-      'vertical midpoint, rather than pinning it to the top',
-      (tester) async {
-        final tiny = TimeObject(
-          id: '1',
-          title: 'Tiny',
-          start: DateTime(2026, 9, 9, 9),
-          end: DateTime(2026, 9, 9, 9, 15),
-          kind: BlockKind.anchor,
-          locked: false,
-        );
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: ProviderContainer(),
-            child: MaterialApp(
-              home: Scaffold(
-                body: DayGrid(
-                  date: _date,
-                  blocks: [tiny],
-                  settings: _settings,
-                  slotHeight: 8,
-                  onCreateBlock: ({
-                    required start,
-                    required end,
-                    required kind,
-                  }) {},
-                ),
+    testWidgets("centers a too-short block's title box on the block's own true "
+        'vertical midpoint, rather than pinning it to the top', (tester) async {
+      final tiny = TimeObject(
+        id: '1',
+        title: 'Tiny',
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 15),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: ProviderContainer(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: DayGrid(
+                date: _date,
+                blocks: [tiny],
+                settings: _settings,
+                slotHeight: 8,
+                onCreateBlock: ({
+                  required start,
+                  required end,
+                  required kind,
+                }) {},
               ),
             ),
           ),
-        );
+        ),
+      );
 
-        final titleBox = tester.widget<Positioned>(
-          find.byKey(const ValueKey('day-grid-block-title-1')),
-        );
-        // 9:00 is 3 hours (12 slots) after the 6:00 day start = 96px; the
-        // block spans 96-104 (one 15-min slot at slotHeight 8), so its
-        // true vertical center is 100.
-        expect(titleBox.top! + titleBox.height! / 2, 100);
-      },
-    );
+      final titleBox = tester.widget<Positioned>(
+        find.byKey(const ValueKey('day-grid-block-title-1')),
+      );
+      // 9:00 is 3 hours (12 slots) after the 6:00 day start = 96px; the
+      // block spans 96-104 (one 15-min slot at slotHeight 8), so its
+      // true vertical center is 100.
+      expect(titleBox.top! + titleBox.height! / 2, 100);
+    });
 
     testWidgets(
       "does not shift a tall block's title box away from its top edge",
@@ -414,37 +461,34 @@ void main() {
         },
       );
 
-      testWidgets(
-        "shows a too-short resized block's title during the resize, "
-        'styled the same way as the static grid',
-        (tester) async {
-          final tiny = TimeObject(
-            id: '1',
-            title: 'Tiny',
-            start: DateTime(2026, 9, 9, 9),
-            end: DateTime(2026, 9, 9, 9, 15),
-            kind: BlockKind.anchor,
-            locked: false,
-          );
-          final container = ProviderContainer();
-          addTearDown(container.dispose);
-          container
-              .read(resizeStateProvider.notifier)
-              .start(block: tiny, date: _date, edge: ResizeEdge.end);
+      testWidgets("shows a too-short resized block's title during the resize, "
+          'styled the same way as the static grid', (tester) async {
+        final tiny = TimeObject(
+          id: '1',
+          title: 'Tiny',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 15),
+          kind: BlockKind.anchor,
+          locked: false,
+        );
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        container
+            .read(resizeStateProvider.notifier)
+            .start(block: tiny, date: _date, edge: ResizeEdge.end);
 
-          await _pump(tester, [tiny], container: container);
+        await _pump(tester, [tiny], container: container);
 
-          // The real block's own title is suppressed for the duration of
-          // the resize (see `hiddenBlockId`), so this can only be the
-          // resize-draft preview's title.
-          expect(find.text('Tiny'), findsOneWidget);
+        // The real block's own title is suppressed for the duration of
+        // the resize (see `hiddenBlockId`), so this can only be the
+        // resize-draft preview's title.
+        expect(find.text('Tiny'), findsOneWidget);
 
-          final titleBox = tester.widget<Positioned>(
-            find.byKey(const Key('day-grid-resize-draft-title')),
-          );
-          expect(titleBox.height, greaterThan(8));
-        },
-      );
+        final titleBox = tester.widget<Positioned>(
+          find.byKey(const Key('day-grid-resize-draft-title')),
+        );
+        expect(titleBox.height, greaterThan(8));
+      });
     });
 
     testWidgets(
@@ -471,9 +515,8 @@ void main() {
         ]);
 
         final stack = tester.widget<Stack>(find.byType(Stack).first);
-        int indexOfKey(String key) => stack.children.indexWhere(
-          (w) => w.key == ValueKey(key),
-        );
+        int indexOfKey(String key) =>
+            stack.children.indexWhere((w) => w.key == ValueKey(key));
 
         final lastBoxIndex = [
           indexOfKey('day-grid-block-position-a'),

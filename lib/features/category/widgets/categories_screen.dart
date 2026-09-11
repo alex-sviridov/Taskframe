@@ -50,6 +50,7 @@ class CategoriesScreen extends ConsumerWidget {
         title: const Text('Categories'),
         actions: [
           IconButton(
+            tooltip: 'Add category',
             icon: const Icon(Icons.add),
             onPressed: () => showCategoryEditSheet(context: context),
           ),

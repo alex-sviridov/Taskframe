@@ -1,6 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
@@ -64,15 +67,192 @@ Future<void> _pumpOpenButton(
   ),
 );
 
-void main() {
-  group('BlockCategoryPlaceholder', () {
-    testWidgets('renders a row of empty squares', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: BlockCategoryPlaceholder())),
-      );
+Future<void> _pumpPicker(
+  WidgetTester tester,
+  ProviderContainer container, {
+  required String selectedCategoryId,
+  required ValueChanged<String> onSelected,
+}) => tester.pumpWidget(
+  UncontrolledProviderScope(
+    container: container,
+    child: MaterialApp(
+      home: Scaffold(
+        body: BlockCategoryPicker(
+          selectedCategoryId: selectedCategoryId,
+          onSelected: onSelected,
+        ),
+      ),
+    ),
+  ),
+);
 
-      expect(find.byType(BlockCategoryPlaceholder), findsOneWidget);
-      expect(find.byType(Container), findsWidgets);
+/// Sets the test surface to a narrow (mobile) width for the duration of
+/// the current test, matching the convention already used for the modal's
+/// own bottom-sheet-vs-dialog tests.
+void _useNarrowView(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+void main() {
+  group('BlockCategoryPicker', () {
+    group('on a wide width', () {
+      testWidgets('shows a labeled dropdown field listing every loaded '
+          'category', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: Category.defaultId,
+          onSelected: (_) {},
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+        expect(find.text('Category'), findsOneWidget);
+
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+
+        expect(find.text('💼 Work'), findsWidgets);
+      });
+
+      testWidgets('selecting an item in the dropdown calls onSelected with '
+          'its category id', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        String? selected;
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: Category.defaultId,
+          onSelected: (id) => selected = id,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Work').last);
+        await tester.pumpAndSettle();
+
+        expect(selected, work.id);
+      });
+
+      testWidgets('the closed field shows a swatch of the selected '
+          "category's color, not a full-color background", (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: work.id,
+          onSelected: (_) {},
+        );
+        await tester.pumpAndSettle();
+
+        final swatch = tester.widget<CircleAvatar>(
+          find
+              .descendant(
+                of: find.byType(DropdownButtonFormField<String>),
+                matching: find.byType(CircleAvatar),
+              )
+              .first,
+        );
+        expect(swatch.backgroundColor, const Color(0xFF2196F3));
+      });
+    });
+
+    group('on a narrow width', () {
+      testWidgets('shows a labeled field with the selected category '
+          'instead of a dropdown', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+        _useNarrowView(tester);
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: work.id,
+          onSelected: (_) {},
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+        expect(find.text('Category'), findsOneWidget);
+        expect(find.text('💼 Work'), findsOneWidget);
+      });
+
+      testWidgets('tapping the chip opens a wheel picker listing every '
+          'category', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        _useNarrowView(tester);
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: Category.defaultId,
+          onSelected: (_) {},
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Default'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(CupertinoPicker), findsOneWidget);
+        expect(find.text('Work'), findsOneWidget);
+      });
+
+      testWidgets('settling the wheel on a new category calls onSelected '
+          'with its id, with no separate confirm step', (tester) async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        String? selected;
+        _useNarrowView(tester);
+        await _pumpPicker(
+          tester,
+          container,
+          selectedCategoryId: Category.defaultId,
+          onSelected: (id) => selected = id,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Default'));
+        await tester.pumpAndSettle();
+        // Default is the wheel's first (index 0) entry, Work its second;
+        // dragging up by one 48px item settles the wheel on Work.
+        await tester.drag(find.byType(CupertinoPicker), const Offset(0, -48));
+        await tester.pumpAndSettle();
+
+        expect(selected, work.id);
+        // No Done/confirm button anywhere in the sheet.
+        expect(find.byType(TextButton), findsNothing);
+      });
     });
   });
 
@@ -111,6 +291,86 @@ void main() {
       await tester.tap(find.byType(BlockTimeRow));
 
       expect(tapped, isTrue);
+    });
+  });
+
+  group('BlockTimeDropdown', () {
+    Future<void> pump(
+      WidgetTester tester, {
+      required String label,
+      required DateTime value,
+      required ({DateTime start, DateTime end}) range,
+      required ValueChanged<DateTime> onChanged,
+    }) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BlockTimeDropdown(
+            label: label,
+            value: value,
+            range: range,
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('shows the label and the current time formatted as HH:mm', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        label: 'Starts',
+        value: DateTime(2026, 9, 9, 9),
+        range: (start: DateTime(2026, 9, 9, 6), end: DateTime(2026, 9, 9, 12)),
+        onChanged: (_) {},
+      );
+
+      expect(find.text('Starts'), findsOneWidget);
+      expect(find.text('09:00'), findsOneWidget);
+    });
+
+    testWidgets('lists only the quarter-hour marks within range', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        label: 'Starts',
+        value: DateTime(2026, 9, 9, 9),
+        range: (
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 30),
+        ),
+        onChanged: (_) {},
+      );
+
+      await tester.tap(find.byType(DropdownButtonFormField<DateTime>));
+      await tester.pumpAndSettle();
+
+      expect(find.text('09:00'), findsWidgets);
+      expect(find.text('09:15'), findsOneWidget);
+      expect(find.text('09:30'), findsOneWidget);
+      expect(find.text('09:45'), findsNothing);
+    });
+
+    testWidgets('selecting a time calls onChanged with it', (tester) async {
+      DateTime? picked;
+      await pump(
+        tester,
+        label: 'Starts',
+        value: DateTime(2026, 9, 9, 9),
+        range: (
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 9, 30),
+        ),
+        onChanged: (value) => picked = value,
+      );
+
+      await tester.tap(find.byType(DropdownButtonFormField<DateTime>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('09:15').last);
+      await tester.pumpAndSettle();
+
+      expect(picked, DateTime(2026, 9, 9, 9, 15));
     });
   });
 
@@ -183,6 +443,19 @@ void main() {
       expect(closeTop, lessThan(titleTop));
     });
 
+    testWidgets('the title field shows a visible underline, signaling '
+        "it's editable", (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.decoration?.border, isA<UnderlineInputBorder>());
+    });
+
     testWidgets('a freshly created block (empty title) autofocuses the '
         'title field', (tester) async {
       final container = ProviderContainer();
@@ -229,6 +502,23 @@ void main() {
       expect(find.text('Work'), findsOneWidget);
       expect(find.text('09:00'), findsOneWidget);
       expect(find.text('09:30'), findsOneWidget);
+    });
+
+    testWidgets('on a wide width, picking a time from the Starts dropdown '
+        'persists it immediately', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeDropdown).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('09:15').last);
+      await tester.pumpAndSettle();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.start, DateTime(2000, 1, 1, 9, 15));
     });
 
     testWidgets('shows a bottom sheet on a narrow width', (tester) async {
@@ -334,6 +624,7 @@ void main() {
     ) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -369,6 +660,7 @@ void main() {
             end: DateTime(2000, 1, 1, 10),
             kind: BlockKind.anchor,
           );
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -452,9 +744,7 @@ void main() {
       expect(nextDayBlocks.single.title, 'Deep work');
     });
 
-    testWidgets('tapping outside the dialog does not dismiss it', (
-      tester,
-    ) async {
+    testWidgets('tapping outside the dialog dismisses it', (tester) async {
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -471,8 +761,7 @@ void main() {
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
 
-      expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('Work'), findsOneWidget);
+      expect(find.byType(Dialog), findsNothing);
     });
 
     testWidgets("shows the block's date", (tester) async {
@@ -552,6 +841,7 @@ void main() {
             end: DateTime(2000, 1, 1, 8, 30),
             kind: BlockKind.anchor,
           );
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -576,6 +866,7 @@ void main() {
             end: DateTime(2000, 1, 1, 8, 30),
             kind: BlockKind.anchor,
           );
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -596,6 +887,7 @@ void main() {
     ) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -616,16 +908,20 @@ void main() {
         'instead of opening a bottom sheet', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(BottomSheet), findsNothing);
+      // The modal itself is a bottom sheet on a narrow width, so this
+      // checks that count doesn't grow — the wheel picker never opens a
+      // second, separate one of its own.
+      expect(find.byType(BottomSheet), findsOneWidget);
 
       await tester.tap(find.byType(BlockTimeRow).first);
       await tester.pumpAndSettle();
 
-      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(BottomSheet), findsOneWidget);
       expect(find.byType(ListWheelScrollView), findsWidgets);
     });
 
@@ -633,6 +929,7 @@ void main() {
         'changing the time', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -651,6 +948,7 @@ void main() {
         'start picker', (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
+      _useNarrowView(tester);
       await _pumpOpenButton(tester, container, block);
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -663,6 +961,28 @@ void main() {
 
       // Only one field's wheels (hour + minute) should be showing at once.
       expect(find.byType(ListWheelScrollView), findsNWidgets(2));
+    });
+
+    testWidgets('shows a category picker and selecting an option persists '
+        'the category change', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      final work = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BlockCategoryPicker), findsOneWidget);
+
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Work').last);
+      await tester.pumpAndSettle();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.categoryId, work.id);
     });
 
     testWidgets('shows a segmented type selector with the current kind '

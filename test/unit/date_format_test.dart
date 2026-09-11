@@ -16,6 +16,16 @@ void main() {
     });
   });
 
+  group('formatHm', () {
+    test('zero-pads both hour and minute', () {
+      expect(formatHm(DateTime(2026, 9, 9, 7, 5)), '07:05');
+    });
+
+    test('formats a time with no padding needed', () {
+      expect(formatHm(DateTime(2026, 9, 9, 13, 30)), '13:30');
+    });
+  });
+
   group('formatDayHeaderLabel', () {
     test('includes the weekday name when showWeekday is true', () {
       final date = DateTime(2026, 9, 9); // a Wednesday

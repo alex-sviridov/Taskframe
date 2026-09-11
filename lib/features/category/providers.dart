@@ -72,3 +72,13 @@ final categoryListProvider =
     AsyncNotifierProvider<CategoryListNotifier, List<Category>>(
       CategoryListNotifier.new,
     );
+
+/// Returns the category in [categories] whose id is [id], or the default
+/// category when none matches — e.g. a block still tagged with a category
+/// that has since been deleted.
+Category categoryById(List<Category> categories, String id) {
+  for (final category in categories) {
+    if (category.id == id) return category;
+  }
+  return categories.firstWhere((c) => c.isDefault);
+}

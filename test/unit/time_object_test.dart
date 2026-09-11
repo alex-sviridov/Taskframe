@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 void main() {
@@ -15,6 +16,33 @@ void main() {
 
       expect(block.title, 'Work');
       expect(block.kind, BlockKind.frame);
+    });
+
+    test('categoryId defaults to the default category when not given', () {
+      final block = TimeObject(
+        id: '1',
+        title: 'Work',
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 10),
+        kind: BlockKind.frame,
+        locked: false,
+      );
+
+      expect(block.categoryId, Category.defaultId);
+    });
+
+    test('categoryId can be set explicitly', () {
+      final block = TimeObject(
+        id: '1',
+        title: 'Work',
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 10),
+        kind: BlockKind.frame,
+        locked: false,
+        categoryId: 'category-1',
+      );
+
+      expect(block.categoryId, 'category-1');
     });
 
     test('throws when start is off the 15-minute grid', () {

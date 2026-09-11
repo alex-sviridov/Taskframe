@@ -63,6 +63,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
     required DateTime end,
     required BlockKind kind,
     String? title,
+    String? categoryId,
   }) async {
     final repository = ref.read(dayBlocksRepositoryProvider);
     final added = await repository.add(
@@ -71,6 +72,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
       end: end,
       kind: kind,
       title: title,
+      categoryId: categoryId,
     );
     state = AsyncData([...?state.value, added]);
     return added;
@@ -86,6 +88,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
     DateTime? start,
     DateTime? end,
     BlockKind? kind,
+    String? categoryId,
   }) async {
     final newStart = start ?? block.start;
     final newEnd = end ?? block.end;
@@ -109,6 +112,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
       start: start,
       end: end,
       kind: kind,
+      categoryId: categoryId,
     );
     state = AsyncData([
       for (final b in state.value ?? <TimeObject>[])
@@ -145,6 +149,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
           end: nextStart.add(duration),
           kind: block.kind,
           title: block.title,
+          categoryId: block.categoryId,
         );
   }
 }

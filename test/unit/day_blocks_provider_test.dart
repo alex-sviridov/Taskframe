@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
@@ -76,6 +77,72 @@ void main() {
       expect(created.title, 'Gym');
     });
 
+    test('addBlock defaults categoryId to the default category', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final date = DateTime(2026, 9, 9);
+      await container.read(dayBlocksProvider(date).future);
+
+      final created = await container
+          .read(dayBlocksProvider(date).notifier)
+          .addBlock(
+            start: DateTime(2026, 9, 9, 10),
+            end: DateTime(2026, 9, 9, 10, 30),
+            kind: BlockKind.anchor,
+          );
+
+      expect(created.categoryId, Category.defaultId);
+    });
+
+    test('updateBlock persists a categoryId change', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final date = DateTime(2026, 9, 9);
+      await container.read(dayBlocksProvider(date).future);
+      final created = await container
+          .read(dayBlocksProvider(date).notifier)
+          .addBlock(
+            start: DateTime(2026, 9, 9, 10),
+            end: DateTime(2026, 9, 9, 10, 30),
+            kind: BlockKind.anchor,
+          );
+
+      await container
+          .read(dayBlocksProvider(date).notifier)
+          .updateBlock(created, categoryId: 'category-1');
+
+      final blocks = container.read(dayBlocksProvider(date)).value!;
+      expect(
+        blocks.singleWhere((b) => b.id == created.id).categoryId,
+        'category-1',
+      );
+    });
+
+    test('copyToNextDay carries over the block\'s categoryId', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final date = DateTime(2000, 1, 1);
+      final nextDate = DateTime(2000, 1, 2);
+      await container.read(dayBlocksProvider(date).future);
+      final created = await container
+          .read(dayBlocksProvider(date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 10),
+            end: DateTime(2000, 1, 1, 10, 30),
+            kind: BlockKind.anchor,
+            categoryId: 'category-1',
+          );
+
+      await container
+          .read(dayBlocksProvider(date).notifier)
+          .copyToNextDay(created);
+
+      final nextDayBlocks = await container.read(
+        dayBlocksProvider(nextDate).future,
+      );
+      expect(nextDayBlocks.single.categoryId, 'category-1');
+    });
+
     test('updateBlock persists a valid title/time change', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -123,7 +190,10 @@ void main() {
           .updateBlock(created, kind: BlockKind.frame);
 
       final blocks = container.read(dayBlocksProvider(date)).value!;
-      expect(blocks.singleWhere((b) => b.id == created.id).kind, BlockKind.frame);
+      expect(
+        blocks.singleWhere((b) => b.id == created.id).kind,
+        BlockKind.frame,
+      );
     });
 
     test('updateBlock silently no-ops on an overlapping candidate', () async {
@@ -166,7 +236,9 @@ void main() {
             kind: BlockKind.anchor,
           );
 
-      await container.read(dayBlocksProvider(date).notifier).deleteBlock(created);
+      await container
+          .read(dayBlocksProvider(date).notifier)
+          .deleteBlock(created);
 
       final blocks = container.read(dayBlocksProvider(date)).value!;
       expect(blocks.where((b) => b.id == created.id), isEmpty);
@@ -191,9 +263,13 @@ void main() {
             title: 'Gym',
           );
 
-      await container.read(dayBlocksProvider(date).notifier).copyToNextDay(created);
+      await container
+          .read(dayBlocksProvider(date).notifier)
+          .copyToNextDay(created);
 
-      final nextDayBlocks = await container.read(dayBlocksProvider(nextDate).future);
+      final nextDayBlocks = await container.read(
+        dayBlocksProvider(nextDate).future,
+      );
       expect(nextDayBlocks, hasLength(1));
       expect(nextDayBlocks.single.title, 'Gym');
       expect(nextDayBlocks.single.start, DateTime(2000, 1, 2, 10));

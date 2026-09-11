@@ -1,9 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/data/category_repository.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 
 void main() {
+  group('categoryById', () {
+    const categories = [
+      Category(id: Category.defaultId, name: 'Default', colorValue: 0xFF009688),
+      Category(id: 'category-1', name: 'Work', colorValue: 0xFF2196F3),
+    ];
+
+    test('returns the category with the matching id', () {
+      expect(categoryById(categories, 'category-1').id, 'category-1');
+    });
+
+    test('falls back to the default category when the id matches none', () {
+      expect(
+        categoryById(categories, 'deleted-category').id,
+        Category.defaultId,
+      );
+    });
+  });
+
   group('categoryListProvider', () {
     test('loads the repository categories', () async {
       final container = ProviderContainer();
@@ -15,18 +34,21 @@ void main() {
       expect(categories.map((c) => c.id), expected.map((c) => c.id));
     });
 
-    test('addCategory appends the new category returned by the repository', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await container.read(categoryListProvider.future);
+    test(
+      'addCategory appends the new category returned by the repository',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
 
-      await container
-          .read(categoryListProvider.notifier)
-          .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+        await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
 
-      final categories = container.read(categoryListProvider).value!;
-      expect(categories.where((c) => c.name == 'Work'), hasLength(1));
-    });
+        final categories = container.read(categoryListProvider).value!;
+        expect(categories.where((c) => c.name == 'Work'), hasLength(1));
+      },
+    );
 
     test('addCategory returns the created category', () async {
       final container = ProviderContainer();
@@ -67,7 +89,9 @@ void main() {
           .read(categoryListProvider.notifier)
           .addCategory(name: 'Work', colorValue: 0xFF2196F3);
 
-      await container.read(categoryListProvider.notifier).deleteCategory(created);
+      await container
+          .read(categoryListProvider.notifier)
+          .deleteCategory(created);
 
       final categories = container.read(categoryListProvider).value!;
       expect(categories.where((c) => c.id == created.id), isEmpty);

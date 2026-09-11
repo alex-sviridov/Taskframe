@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 
@@ -16,9 +17,12 @@ Future<void> _pump(
   WidgetTester tester,
   TimeObject block, {
   bool showTitle = true,
+  Category? category,
 }) => tester.pumpWidget(
   MaterialApp(
-    home: Scaffold(body: BlockView(block: block, showTitle: showTitle)),
+    home: Scaffold(
+      body: BlockView(block: block, showTitle: showTitle, category: category),
+    ),
   ),
 );
 
@@ -60,6 +64,67 @@ void main() {
 
       expect(decoration.color, isNull);
       expect(decoration.border, isNotNull);
+    });
+
+    testWidgets('fills with the category color for an anchor block', (
+      tester,
+    ) async {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+      );
+
+      await _pump(tester, _block(BlockKind.anchor), category: category);
+
+      final container = tester.widget<Container>(find.byType(Container));
+      final decoration = container.decoration! as BoxDecoration;
+      expect(decoration.color, const Color(0xFF2196F3));
+    });
+
+    testWidgets('outlines with the category color for a frame block', (
+      tester,
+    ) async {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+      );
+
+      await _pump(tester, _block(BlockKind.frame), category: category);
+
+      final container = tester.widget<Container>(find.byType(Container));
+      final decoration = container.decoration! as BoxDecoration;
+      expect(decoration.color, isNull);
+      expect(decoration.border!.top.color, const Color(0xFF2196F3));
+    });
+
+    testWidgets('prefixes the title with the category emoji when it has '
+        'one', (tester) async {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+        emoji: '💼',
+      );
+
+      await _pump(tester, _block(BlockKind.anchor), category: category);
+
+      expect(find.text('💼 Work'), findsOneWidget);
+    });
+
+    testWidgets('shows the plain title when the category has no emoji', (
+      tester,
+    ) async {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+      );
+
+      await _pump(tester, _block(BlockKind.anchor), category: category);
+
+      expect(find.text('Work'), findsOneWidget);
     });
   });
 }

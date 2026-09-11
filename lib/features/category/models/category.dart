@@ -31,13 +31,16 @@ class Category {
   /// Whether this is the single, permanent default category.
   bool get isDefault => id == defaultId;
 
+  /// [title] prefixed with this category's emoji, or [title] unchanged
+  /// when it has none.
+  String formatTitle(String title) => emoji == null ? title : '$emoji $title';
+
   /// Returns a copy of this category with any of [name]/[colorValue]/
   /// [emoji] replaced.
-  Category copyWith({String? name, int? colorValue, String? emoji}) =>
-      Category(
-        id: id,
-        name: name ?? this.name,
-        colorValue: colorValue ?? this.colorValue,
-        emoji: emoji ?? this.emoji,
-      );
+  Category copyWith({String? name, int? colorValue, String? emoji}) => Category(
+    id: id,
+    name: name ?? this.name,
+    colorValue: colorValue ?? this.colorValue,
+    emoji: emoji ?? this.emoji,
+  );
 }

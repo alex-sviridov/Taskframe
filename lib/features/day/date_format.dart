@@ -22,6 +22,11 @@ String formatDate(DateTime date, String pattern) {
       .replaceAll('yyyy', year);
 }
 
+/// Formats [time]'s hour and minute as `HH:mm`.
+String formatHm(DateTime time) =>
+    '${time.hour.toString().padLeft(2, '0')}:'
+    '${time.minute.toString().padLeft(2, '0')}';
+
 /// Formats [date] for a schedule header: with its weekday name prefixed
 /// (e.g. `"Wednesday, 09/09/2026"`) when [showWeekday] is true, or just the
 /// formatted date (e.g. `"09/09/2026"`) when it's false.

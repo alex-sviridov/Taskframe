@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
@@ -103,7 +104,13 @@ void main() {
         fromDate: date,
         toDate: laterDate,
         newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
-        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+        newEnd: DateTime(
+          laterDate.year,
+          laterDate.month,
+          laterDate.day,
+          14,
+          30,
+        ),
       );
 
       expect(moved.id, added.id);
@@ -132,7 +139,13 @@ void main() {
         fromDate: date,
         toDate: laterDate,
         newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
-        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+        newEnd: DateTime(
+          laterDate.year,
+          laterDate.month,
+          laterDate.day,
+          14,
+          30,
+        ),
       );
 
       expect(await repository.load(date), isEmpty);
@@ -153,7 +166,13 @@ void main() {
         fromDate: date,
         toDate: laterDate,
         newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
-        newEnd: DateTime(laterDate.year, laterDate.month, laterDate.day, 14, 30),
+        newEnd: DateTime(
+          laterDate.year,
+          laterDate.month,
+          laterDate.day,
+          14,
+          30,
+        ),
       );
 
       final blocks = await repository.load(laterDate);
@@ -206,7 +225,102 @@ void main() {
 
       final blocks = await repository.load(date);
       expect(blocks, hasLength(1));
-      expect(blocks.single.start, DateTime(date.year, date.month, date.day, 15));
+      expect(
+        blocks.single.start,
+        DateTime(date.year, date.month, date.day, 15),
+      );
+    });
+
+    test('add defaults categoryId to the default category', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      expect(added.categoryId, Category.defaultId);
+    });
+
+    test('add uses the given categoryId when provided', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+        categoryId: 'category-1',
+      );
+
+      expect(added.categoryId, 'category-1');
+    });
+
+    test('move preserves the block\'s categoryId', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final laterDate = date.add(const Duration(days: 1));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+        categoryId: 'category-1',
+      );
+
+      final moved = await repository.move(
+        added,
+        fromDate: date,
+        toDate: laterDate,
+        newStart: DateTime(laterDate.year, laterDate.month, laterDate.day, 14),
+        newEnd: DateTime(
+          laterDate.year,
+          laterDate.month,
+          laterDate.day,
+          14,
+          30,
+        ),
+      );
+
+      expect(moved.categoryId, 'category-1');
+    });
+
+    test('update changes an added block\'s categoryId', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      final updated = await repository.update(
+        added,
+        date: date,
+        categoryId: 'category-1',
+      );
+
+      expect(updated.categoryId, 'category-1');
+    });
+
+    test('update leaves categoryId unchanged when not given', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+        categoryId: 'category-1',
+      );
+
+      final updated = await repository.update(
+        added,
+        date: date,
+        title: 'Renamed',
+      );
+
+      expect(updated.categoryId, 'category-1');
     });
 
     test('add uses the given title when provided', () async {
@@ -273,7 +387,11 @@ void main() {
         kind: BlockKind.anchor,
       );
 
-      final updated = await repository.update(added, date: date, title: 'Renamed');
+      final updated = await repository.update(
+        added,
+        date: date,
+        title: 'Renamed',
+      );
 
       expect(updated.start, added.start);
       expect(updated.end, added.end);

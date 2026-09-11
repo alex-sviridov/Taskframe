@@ -1,3 +1,5 @@
+import 'package:taskframe/features/category/models/category.dart';
+
 /// What a [TimeObject] represents on the timeline.
 enum BlockKind {
   /// A concrete activity at a concrete time (e.g. breakfast, commute).
@@ -24,6 +26,7 @@ class TimeObject {
     required this.end,
     required this.kind,
     required this.locked,
+    this.categoryId = Category.defaultId,
   }) : assert(_isOnGrid(start), 'start must be on the 15-minute grid'),
        assert(_isOnGrid(end), 'end must be on the 15-minute grid'),
        assert(end.isAfter(start), 'end must be after start');
@@ -45,6 +48,10 @@ class TimeObject {
 
   /// Whether this block must not move during replanning.
   final bool locked;
+
+  /// The id of the [Category] this block is tagged with. Defaults to
+  /// [Category.defaultId], so every block always resolves to some category.
+  final String categoryId;
 
   static bool _isOnGrid(DateTime time) =>
       time.second == 0 &&

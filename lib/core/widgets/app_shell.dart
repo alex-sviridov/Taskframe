@@ -21,6 +21,13 @@ const _destinations = [
   _Destination(icon: Icons.category, label: 'Categories'),
 ];
 
+/// Width of the persistent (wide-width) sidebar — 30% narrower than
+/// [NavigationDrawer]'s own default width of 304 (304 * 0.7 = 212.8,
+/// rounded to a whole pixel: a fractional width here was enough to push
+/// layout into an extra pass, which could transiently double-build the
+/// day view's paged content underneath).
+const _sidebarWidth = 213.0;
+
 List<NavigationDrawerDestination> _drawerDestinations() => [
   for (final d in _destinations)
     NavigationDrawerDestination(icon: Icon(d.icon), label: Text(d.label)),
@@ -71,10 +78,22 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          NavigationDrawer(
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: navigationShell.goBranch,
-            children: _drawerDestinations(),
+          // NavigationDrawer has no width parameter of its own — it always
+          // builds a Drawer, whose default width (304) is baked in via a
+          // tight BoxConstraints.expand, so shrinking it as a persistent
+          // sidebar means constraining it from outside like this rather
+          // than passing it any property directly.
+          SizedBox(
+            width: _sidebarWidth,
+            child: NavigationDrawer(
+              // The narrower sidebar no longer has room for the default
+              // tile padding (24px total) without its longest label
+              // ("Categories") overflowing.
+              tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+              selectedIndex: navigationShell.currentIndex,
+              onDestinationSelected: navigationShell.goBranch,
+              children: _drawerDestinations(),
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: navigationShell),
