@@ -7,7 +7,9 @@ import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
+import 'package:taskframe/features/day/schedule_controller.dart';
 
 /// The shortest duration a block can be resized down to.
 const _minBlockDuration = Duration(minutes: 15);
@@ -161,16 +163,15 @@ final dayBlocksProvider =
       DayBlocksNotifier.new,
     );
 
-/// Resolves a global pointer position into the day column and 15-minute
-/// slot under it, or `null` when the pointer is over no column.
+/// Resolves a global pointer position into the column and 15-minute slot
+/// under it, or `null` when the pointer is over no column.
 ///
-/// Supplied by the widget that starts a drag (it knows the grid's settings
-/// and slot height) and then called by [DragNotifier] for the rest of the
-/// drag's life, so target resolution keeps working after that widget is
-/// gone.
-typedef DragTargetResolver = ({DateTime date, DateTime start})? Function(
-  Offset globalPosition,
-);
+/// Supplied by the widget that starts a drag (it knows the grid's
+/// settings and slot height) and then called by [DragNotifier] for the
+/// rest of the drag's life, so target resolution keeps working after that
+/// widget is gone.
+typedef DragTargetResolver =
+    ({ScheduleColumn column, DateTime start})? Function(Offset globalPosition);
 
 /// Tracks the block currently being dragged to a new time/date, if any.
 ///
@@ -197,15 +198,10 @@ typedef DragTargetResolver = ({DateTime date, DateTime start})? Function(
 /// widget-local recognizers therefore only detect the *start* of a drag;
 /// all update/end/cancel handling happens here.
 class DragNotifier extends Notifier<DragState?> {
-  /// The pointer id this notifier currently owns a global route for.
   int? _pointer;
-
-  /// The registered global route, kept so it can be removed again — a
-  /// leaked route would misfire on the next gesture that recycles the same
-  /// pointer id.
   PointerRoute? _globalRoute;
-
   DragTargetResolver? _resolveTarget;
+  ScheduleController? _controller;
 
   @override
   DragState? build() {
@@ -213,23 +209,24 @@ class DragNotifier extends Notifier<DragState?> {
     return null;
   }
 
-  /// Begins dragging [block], which belonged to [originalDate]. The
-  /// landzone starts at the block's own current date/time.
-  ///
-  /// When [pointer] is given, this notifier takes ownership of that
-  /// pointer for the rest of the drag (see the class docs) and drives all
-  /// further updates itself, resolving landzones with [resolveTarget].
+  /// Begins dragging [block], which belonged to [originalColumn]. The
+  /// landzone starts at the block's own current column/time. [controller]
+  /// is used for every subsequent read/move this drag makes, so it must
+  /// match [originalColumn]'s kind (a [DayScheduleController] for a
+  /// [DayColumn], and so on).
   void start({
     required TimeObject block,
-    required DateTime originalDate,
+    required ScheduleColumn originalColumn,
+    required ScheduleController controller,
     required Offset pointerGlobalPosition,
     int? pointer,
     DragTargetResolver? resolveTarget,
   }) {
+    _controller = controller;
     state = DragState(
       block: block,
-      originalDate: originalDate,
-      targetDate: originalDate,
+      originalColumn: originalColumn,
+      targetColumn: originalColumn,
       targetStart: block.start,
       pointerGlobalPosition: pointerGlobalPosition,
     );
@@ -238,39 +235,43 @@ class DragNotifier extends Notifier<DragState?> {
 
   /// Updates the dragging pointer's position and its landzone.
   ///
-  /// [targetDate]/[targetStart] are the freshly resolved target under the
-  /// pointer; passing `null` for them means the pointer is over no column
-  /// right now, which *clears* the landzone rather than leaving a stale one
-  /// showing. That keeps what the user sees honest: releasing where no
-  /// landzone is drawn cancels the move. Does nothing if no drag is in
-  /// progress.
+  /// [targetColumn]/[targetStart] are the freshly resolved target under
+  /// the pointer; passing `null` for them means the pointer is over no
+  /// column right now, which *clears* the landzone rather than leaving a
+  /// stale one showing. That keeps what the user sees honest: releasing
+  /// where no landzone is drawn cancels the move. Does nothing if no drag
+  /// is in progress.
   void updatePointer(
     Offset globalPosition, {
-    DateTime? targetDate,
+    ScheduleColumn? targetColumn,
     DateTime? targetStart,
   }) {
     final current = state;
     if (current == null) return;
-    var resolvedDate = targetDate;
+    var resolvedColumn = targetColumn;
     var resolvedStart = targetStart;
-    if (resolvedDate != null &&
+    if (resolvedColumn != null &&
         resolvedStart != null &&
-        _overlapsExisting(current.block, resolvedDate, resolvedStart)) {
-      resolvedDate = current.originalDate;
+        _overlapsExisting(current.block, resolvedColumn, resolvedStart)) {
+      resolvedColumn = current.originalColumn;
       resolvedStart = current.block.start;
     }
     state = current.copyWith(
-      targetDate: resolvedDate,
+      targetColumn: resolvedColumn,
       targetStart: resolvedStart,
       pointerGlobalPosition: globalPosition,
-      clearTarget: resolvedDate == null || resolvedStart == null,
+      clearTarget: resolvedColumn == null || resolvedStart == null,
     );
   }
 
-  /// Whether placing [dragged] at [date]/[start] would overlap another
-  /// block already on [date].
-  bool _overlapsExisting(TimeObject dragged, DateTime date, DateTime start) {
-    final blocks = ref.read(dayBlocksProvider(date)).value;
+  /// Whether placing [dragged] at [column]/[start] would overlap another
+  /// block already on [column].
+  bool _overlapsExisting(
+    TimeObject dragged,
+    ScheduleColumn column,
+    DateTime start,
+  ) {
+    final blocks = _controller?.blocksOf(ref, column);
     if (blocks == null) return false;
     final end = start.add(dragged.end.difference(dragged.start));
     return blocks.any(
@@ -279,40 +280,36 @@ class DragNotifier extends Notifier<DragState?> {
   }
 
   /// Commits the current drag: moves the block to its current landzone
-  /// date/time via the repository, refreshes both the origin and target
-  /// day's blocks, then clears the drag. Does nothing if no drag is in
-  /// progress; cancels instead if there is no valid landzone.
+  /// column/time via [_controller], then clears the drag. Does nothing if
+  /// no drag is in progress; cancels instead if there is no valid
+  /// landzone.
   Future<void> drop() async {
     final current = state;
     if (current == null) return;
-    final toDate = current.targetDate;
+    final toColumn = current.targetColumn;
     final newStart = current.targetStart;
-    if (toDate == null || newStart == null) {
+    if (toColumn == null || newStart == null) {
       cancel();
       return;
     }
-    // TODO(alex): clearing the drag state before awaiting `repository.move()`
-    // means a failing `move` would surface as an unhandled async error and
-    // a silent UI no-op (the block snaps back with no explanation). Fine
-    // for today's in-memory stub, which cannot fail; must be revisited
-    // before any real or networked repository backs this.
+    final controller = _controller!;
+    // TODO(alex): clearing the drag state before awaiting `moveBlock` means
+    // a failing move would surface as an unhandled async error and a
+    // silent UI no-op (the block snaps back with no explanation). Fine for
+    // today's in-memory stubs, which cannot fail; must be revisited before
+    // any real or networked repository backs this.
     state = null;
     _releasePointer();
 
     final duration = current.block.end.difference(current.block.start);
-    final repository = ref.read(dayBlocksRepositoryProvider);
-    await repository.move(
-      current.block,
-      fromDate: current.originalDate,
-      toDate: toDate,
+    await controller.moveBlock(
+      ref,
+      block: current.block,
+      fromColumn: current.originalColumn,
+      toColumn: toColumn,
       newStart: newStart,
       newEnd: newStart.add(duration),
     );
-
-    ref.invalidate(dayBlocksProvider(current.originalDate));
-    ref.invalidate(dayBlocksProvider(toDate));
-    await ref.read(dayBlocksProvider(current.originalDate).future);
-    await ref.read(dayBlocksProvider(toDate).future);
   }
 
   /// Abandons the current drag without moving the block.
@@ -321,8 +318,6 @@ class DragNotifier extends Notifier<DragState?> {
     _releasePointer();
   }
 
-  /// Registers a global pointer route for [pointer], replacing any route
-  /// this notifier already held.
   void _takePointer(int? pointer, DragTargetResolver? resolveTarget) {
     _releasePointer();
     if (pointer == null) return;
@@ -333,9 +328,6 @@ class DragNotifier extends Notifier<DragState?> {
     GestureBinding.instance.pointerRouter.addGlobalRoute(route);
   }
 
-  /// Removes the global route, if any. Safe to call repeatedly, and never
-  /// touches [GestureBinding] unless a route was actually registered (so
-  /// binding-free unit tests can use this notifier).
   void _releasePointer() {
     final route = _globalRoute;
     if (route != null) {
@@ -346,8 +338,6 @@ class DragNotifier extends Notifier<DragState?> {
     _resolveTarget = null;
   }
 
-  /// Drives the whole in-flight drag from raw pointer events, independent
-  /// of whether the block's own widget is still mounted.
   void _handlePointerEvent(PointerEvent event) {
     if (event.pointer != _pointer) return;
     final current = state;
@@ -356,18 +346,11 @@ class DragNotifier extends Notifier<DragState?> {
       return;
     }
 
-    // `event.position` on a raw PointerEvent routed globally is already in
-    // global (screen) coordinates.
     if (event is PointerMoveEvent) {
       final target = _resolveTarget?.call(event.position);
-      // No valid column under the pointer right now: fall back to the
-      // block's own original date/time so the landzone previews the
-      // snap-back instead of disappearing. This only changes what's
-      // *displayed* — release still re-resolves fresh and cancels for
-      // real if the pointer is still outside every column then (below).
       updatePointer(
         event.position,
-        targetDate: target?.date ?? current.originalDate,
+        targetColumn: target?.column ?? current.originalColumn,
         targetStart: target?.start ?? current.block.start,
       );
     } else if (event is PointerUpEvent) {
@@ -377,7 +360,7 @@ class DragNotifier extends Notifier<DragState?> {
       } else {
         updatePointer(
           event.position,
-          targetDate: target.date,
+          targetColumn: target.column,
           targetStart: target.start,
         );
         unawaited(drop());
@@ -393,17 +376,13 @@ final dragStateProvider = NotifierProvider<DragNotifier, DragState?>(
   DragNotifier.new,
 );
 
-/// Projects [dragState] to the value a `DayGrid` for [date] actually cares
-/// about, collapsing to `null` whenever [date] is neither the drag's origin
-/// nor its current landzone target.
-///
-/// Meant to be passed to `dragStateProvider.select(...)` so a day column
-/// only rebuilds while a drag actually touches it, instead of on every
-/// pointer move of a drag happening on some other, unrelated day.
-DragState? dragStateForDate(DragState? dragState, DateTime date) {
+/// Projects [dragState] to the value a `DayGrid` for [column] actually
+/// cares about, collapsing to `null` whenever [column] is neither the
+/// drag's origin nor its current landzone target.
+DragState? dragStateForColumn(DragState? dragState, ScheduleColumn column) {
   if (dragState == null) return null;
   final relevant =
-      dragState.originalDate == date || dragState.targetDate == date;
+      dragState.originalColumn == column || dragState.targetColumn == column;
   return relevant ? dragState : null;
 }
 
@@ -414,34 +393,40 @@ DragState? dragStateForDate(DragState? dragState, DateTime date) {
 /// date, so unlike [DragNotifier] this needs no pointer-ownership dance —
 /// the widget driving the drag stays mounted for its whole lifetime.
 class ResizeNotifier extends Notifier<ResizeState?> {
+  ScheduleController? _controller;
+
   @override
   ResizeState? build() => null;
 
-  /// Begins resizing [block] on [date] from [edge]. The draft starts out
-  /// equal to the block's own current start/end.
+  /// Begins resizing [block] on [column] from [edge]. The draft starts out
+  /// equal to the block's own current start/end. [controller] is used for
+  /// every subsequent read/commit this resize makes.
   void start({
     required TimeObject block,
-    required DateTime date,
+    required ScheduleColumn column,
+    required ScheduleController controller,
     required ResizeEdge edge,
   }) {
+    _controller = controller;
     state = ResizeState(
       block: block,
-      date: date,
+      column: column,
       edge: edge,
       draftStart: block.start,
       draftEnd: block.end,
     );
   }
 
-  /// Updates the dragged edge's draft time to [candidate] (already snapped
-  /// to the 15-minute grid), clamped so the block never shrinks below
-  /// [_minBlockDuration] and never overlaps another block on [ResizeState.
-  /// date].
+  /// Updates the dragged edge's draft time to [candidate] (already
+  /// snapped to the 15-minute grid), clamped so the block never shrinks
+  /// below [_minBlockDuration] and never overlaps another block on
+  /// [ResizeState.column].
   void update(DateTime candidate) {
     final current = state;
     if (current == null) return;
-    final others = (ref.read(dayBlocksProvider(current.date)).value ?? [])
-        .where((block) => block.id != current.block.id);
+    final others = (_controller?.blocksOf(ref, current.column) ?? []).where(
+      (block) => block.id != current.block.id,
+    );
 
     if (current.edge == ResizeEdge.end) {
       var newEnd = candidate;
@@ -468,25 +453,23 @@ class ResizeNotifier extends Notifier<ResizeState?> {
     }
   }
 
-  /// Commits the current resize: persists the draft start/end via the
-  /// repository, refreshes the date's blocks, then clears the resize. Does
-  /// nothing if no resize is in progress.
+  /// Commits the current resize: persists the draft start/end via
+  /// [_controller], then clears the resize. Does nothing if no resize is
+  /// in progress.
   Future<void> commit() async {
     final current = state;
     if (current == null) return;
+    final controller = _controller!;
     state = null;
 
-    final repository = ref.read(dayBlocksRepositoryProvider);
-    await repository.move(
-      current.block,
-      fromDate: current.date,
-      toDate: current.date,
+    await controller.moveBlock(
+      ref,
+      block: current.block,
+      fromColumn: current.column,
+      toColumn: current.column,
       newStart: current.draftStart,
       newEnd: current.draftEnd,
     );
-
-    ref.invalidate(dayBlocksProvider(current.date));
-    await ref.read(dayBlocksProvider(current.date).future);
   }
 
   /// Abandons the current resize without changing the block.
@@ -500,10 +483,13 @@ final resizeStateProvider = NotifierProvider<ResizeNotifier, ResizeState?>(
   ResizeNotifier.new,
 );
 
-/// Projects [resizeState] to the value a `DayGrid` for [date] actually cares
-/// about, collapsing to `null` whenever the resize belongs to some other
-/// date. See [dragStateForDate], its drag equivalent.
-ResizeState? resizeStateForDate(ResizeState? resizeState, DateTime date) {
+/// Projects [resizeState] to the value a `DayGrid` for [column] actually
+/// cares about, collapsing to `null` whenever the resize belongs to some
+/// other column. See [dragStateForColumn], its drag equivalent.
+ResizeState? resizeStateForColumn(
+  ResizeState? resizeState,
+  ScheduleColumn column,
+) {
   if (resizeState == null) return null;
-  return resizeState.date == date ? resizeState : null;
+  return resizeState.column == column ? resizeState : null;
 }

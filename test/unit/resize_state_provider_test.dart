@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 
@@ -34,11 +36,16 @@ void main() {
 
       container
           .read(resizeStateProvider.notifier)
-          .start(block: block, date: _date, edge: ResizeEdge.end);
+          .start(
+            block: block,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
+            edge: ResizeEdge.end,
+          );
 
       final state = container.read(resizeStateProvider)!;
       expect(state.block, block);
-      expect(state.date, _date);
+      expect(state.column, DayColumn(_date));
       expect(state.edge, ResizeEdge.end);
       expect(state.draftStart, block.start);
       expect(state.draftEnd, block.end);
@@ -58,7 +65,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.end,
           );
 
@@ -85,7 +93,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.start,
           );
 
@@ -112,7 +121,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.end,
           );
 
@@ -138,7 +148,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.start,
           );
 
@@ -173,7 +184,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.end,
           );
 
@@ -208,7 +220,8 @@ void main() {
               kind: BlockKind.anchor,
               locked: false,
             ),
-            date: _date,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
             edge: ResizeEdge.start,
           );
 
@@ -234,7 +247,12 @@ void main() {
       final block = container.read(dayBlocksProvider(_date)).value!.last;
       container
           .read(resizeStateProvider.notifier)
-          .start(block: block, date: _date, edge: ResizeEdge.end);
+          .start(
+            block: block,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
+            edge: ResizeEdge.end,
+          );
       container
           .read(resizeStateProvider.notifier)
           .update(DateTime(2000, 1, 1, 10));
@@ -261,7 +279,12 @@ void main() {
       final block = container.read(dayBlocksProvider(_date)).value!.last;
       container
           .read(resizeStateProvider.notifier)
-          .start(block: block, date: _date, edge: ResizeEdge.end);
+          .start(
+            block: block,
+            column: DayColumn(_date),
+            controller: const DayScheduleController(),
+            edge: ResizeEdge.end,
+          );
       container
           .read(resizeStateProvider.notifier)
           .update(DateTime(2000, 1, 1, 10));
