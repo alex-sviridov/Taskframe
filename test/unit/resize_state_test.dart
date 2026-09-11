@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 TimeObject _block() => TimeObject(
@@ -16,7 +17,7 @@ void main() {
     test('copyWith overrides only the given fields', () {
       final state = ResizeState(
         block: _block(),
-        date: DateTime(2026, 9, 9),
+        column: DayColumn(DateTime(2026, 9, 9)),
         edge: ResizeEdge.end,
         draftStart: DateTime(2026, 9, 9, 9),
         draftEnd: DateTime(2026, 9, 9, 9, 30),
@@ -25,7 +26,7 @@ void main() {
       final updated = state.copyWith(draftEnd: DateTime(2026, 9, 9, 10));
 
       expect(updated.block, state.block);
-      expect(updated.date, state.date);
+      expect(updated.column, state.column);
       expect(updated.edge, state.edge);
       expect(updated.draftStart, state.draftStart);
       expect(updated.draftEnd, DateTime(2026, 9, 9, 10));
@@ -34,7 +35,7 @@ void main() {
     test('copyWith with no arguments returns identical values', () {
       final state = ResizeState(
         block: _block(),
-        date: DateTime(2026, 9, 9),
+        column: DayColumn(DateTime(2026, 9, 9)),
         edge: ResizeEdge.start,
         draftStart: DateTime(2026, 9, 9, 9),
         draftEnd: DateTime(2026, 9, 9, 9, 30),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 TimeObject _block() => TimeObject(
@@ -17,21 +18,21 @@ void main() {
     test('copyWith overrides only the given fields', () {
       final state = DragState(
         block: _block(),
-        originalDate: DateTime(2026, 9, 9),
-        targetDate: DateTime(2026, 9, 9),
+        originalColumn: DayColumn(DateTime(2026, 9, 9)),
+        targetColumn: DayColumn(DateTime(2026, 9, 9)),
         targetStart: DateTime(2026, 9, 9, 9),
         pointerGlobalPosition: const Offset(10, 20),
       );
 
       final updated = state.copyWith(
-        targetDate: DateTime(2026, 9, 10),
+        targetColumn: DayColumn(DateTime(2026, 9, 10)),
         targetStart: DateTime(2026, 9, 10, 11),
         pointerGlobalPosition: const Offset(30, 40),
       );
 
       expect(updated.block, state.block);
-      expect(updated.originalDate, state.originalDate);
-      expect(updated.targetDate, DateTime(2026, 9, 10));
+      expect(updated.originalColumn, state.originalColumn);
+      expect(updated.targetColumn, DayColumn(DateTime(2026, 9, 10)));
       expect(updated.targetStart, DateTime(2026, 9, 10, 11));
       expect(updated.pointerGlobalPosition, const Offset(30, 40));
     });
@@ -39,15 +40,15 @@ void main() {
     test('copyWith with no arguments returns identical values', () {
       final state = DragState(
         block: _block(),
-        originalDate: DateTime(2026, 9, 9),
-        targetDate: DateTime(2026, 9, 9),
+        originalColumn: DayColumn(DateTime(2026, 9, 9)),
+        targetColumn: DayColumn(DateTime(2026, 9, 9)),
         targetStart: DateTime(2026, 9, 9, 9),
         pointerGlobalPosition: const Offset(10, 20),
       );
 
       final copy = state.copyWith();
 
-      expect(copy.targetDate, state.targetDate);
+      expect(copy.targetColumn, state.targetColumn);
       expect(copy.targetStart, state.targetStart);
       expect(copy.pointerGlobalPosition, state.pointerGlobalPosition);
     });
@@ -55,8 +56,8 @@ void main() {
     test('copyWith(clearTarget: true) drops the landzone entirely', () {
       final state = DragState(
         block: _block(),
-        originalDate: DateTime(2026, 9, 9),
-        targetDate: DateTime(2026, 9, 9),
+        originalColumn: DayColumn(DateTime(2026, 9, 9)),
+        targetColumn: DayColumn(DateTime(2026, 9, 9)),
         targetStart: DateTime(2026, 9, 9, 9),
         pointerGlobalPosition: const Offset(10, 20),
       );
@@ -67,11 +68,11 @@ void main() {
         pointerGlobalPosition: const Offset(30, 40),
       );
 
-      expect(cleared.targetDate, isNull);
+      expect(cleared.targetColumn, isNull);
       expect(cleared.targetStart, isNull);
       expect(cleared.hasTarget, isFalse);
       expect(cleared.block, state.block);
-      expect(cleared.originalDate, state.originalDate);
+      expect(cleared.originalColumn, state.originalColumn);
       expect(cleared.pointerGlobalPosition, const Offset(30, 40));
     });
   });
