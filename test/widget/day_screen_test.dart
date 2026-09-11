@@ -2,8 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/day_screen.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
@@ -465,7 +467,8 @@ void main() {
           .read(dragStateProvider.notifier)
           .start(
             block: block,
-            originalDate: container.read(selectedDateProvider),
+            originalColumn: DayColumn(container.read(selectedDateProvider)),
+            controller: const DayScheduleController(),
             pointerGlobalPosition: const Offset(500, 500),
           );
 
@@ -520,7 +523,8 @@ void main() {
             .read(dragStateProvider.notifier)
             .start(
               block: block,
-              originalDate: container.read(selectedDateProvider),
+              originalColumn: DayColumn(container.read(selectedDateProvider)),
+              controller: const DayScheduleController(),
               pointerGlobalPosition: const Offset(500, 500),
             );
 
@@ -566,7 +570,8 @@ void main() {
           .read(dragStateProvider.notifier)
           .start(
             block: block,
-            originalDate: container.read(selectedDateProvider),
+            originalColumn: DayColumn(container.read(selectedDateProvider)),
+            controller: const DayScheduleController(),
             pointerGlobalPosition: const Offset(500, 500),
           );
 
@@ -614,13 +619,15 @@ void main() {
       // Two identity traps have to stay fixed for this to resolve. The
       // original one: `_buildColumn` built a *fresh* date list for its
       // `pageDates` argument whose `DateTime`s were `==`-equal but not
-      // `identical()` to the ones each column's `key: dayGridKeyFor(date)`
-      // was built from, and `GlobalObjectKey` compares by `identical()`,
-      // so every lookup failed. `dayGridKeyFor` now memoizes one
-      // `GlobalKey` per calendar day, so `==`-equal dates share a key and
-      // no caller has to preserve object identity at all — which is why
-      // this call passes no candidate list and simply lets the resolver
-      // search whichever columns are mounted right now.
+      // `identical()` to the ones each column's
+      // `key: scheduleGridKeyFor(DayColumn(date))` was built from, and
+      // `GlobalObjectKey` compares by `identical()`, so every lookup
+      // failed. `scheduleGridKeyFor` now memoizes one `GlobalKey` per
+      // column, and `DayColumn` equality is by calendar day, so
+      // `==`-equal dates share a key and no caller has to preserve object
+      // identity at all — which is why this call passes no candidate list
+      // and simply lets the resolver search whichever columns are mounted
+      // right now.
       final secondColumnCenter = tester.getCenter(find.byType(DayGrid).at(1));
 
       final target = resolveDragTarget(
@@ -638,25 +645,25 @@ void main() {
             'pointer via its memoized GlobalKey',
       );
       // Monday-first week of Wednesday 2026-09-09 starts on 2026-09-07.
-      expect(target!.date, DateTime(2026, 9, 8));
+      expect(target!.column, DayColumn(DateTime(2026, 9, 8)));
     });
 
     testWidgets(
-      'dayGridKeyFor memoizes one key per calendar day, so a rebuild with '
-      'fresh DateTime instances does not reinflate every DayGrid',
+      'scheduleGridKeyFor memoizes one key per calendar day, so a rebuild '
+      'with fresh DateTime instances does not reinflate every DayGrid',
       (tester) async {
         expect(
-          dayGridKeyFor(DateTime(2026, 9, 9)),
-          same(dayGridKeyFor(DateTime(2026, 9, 9))),
+          scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 9))),
+          same(scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 9)))),
         );
         // Same calendar day, different instance and time of day.
         expect(
-          dayGridKeyFor(DateTime(2026, 9, 9, 13, 45)),
-          same(dayGridKeyFor(DateTime(2026, 9, 9))),
+          scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 9, 13, 45))),
+          same(scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 9)))),
         );
         expect(
-          dayGridKeyFor(DateTime(2026, 9, 10)),
-          isNot(same(dayGridKeyFor(DateTime(2026, 9, 9)))),
+          scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 10))),
+          isNot(same(scheduleGridKeyFor(DayColumn(DateTime(2026, 9, 9))))),
         );
       },
     );
@@ -724,8 +731,8 @@ void main() {
         final duringDrag = container.read(dragStateProvider);
         expect(duringDrag, isNotNull);
         expect(
-          duringDrag!.targetDate,
-          tomorrow,
+          duringDrag!.targetColumn,
+          DayColumn(tomorrow),
           reason:
               'pointer moves after the page turn must resolve against the '
               'column visible now, not the page the drag started on',
@@ -797,7 +804,10 @@ void main() {
       // still cancels the move, this just shows where it would land.
       final dragStateOverHeader = container.read(dragStateProvider)!;
       expect(dragStateOverHeader.hasTarget, isTrue);
-      expect(dragStateOverHeader.targetDate, dragStateOverHeader.originalDate);
+      expect(
+        dragStateOverHeader.targetColumn,
+        dragStateOverHeader.originalColumn,
+      );
       expect(
         dragStateOverHeader.targetStart,
         dragStateOverHeader.block.start,

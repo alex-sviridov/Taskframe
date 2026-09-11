@@ -6,8 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
+import 'package:taskframe/features/day/day_schedule_block_actions.dart';
+import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
@@ -126,7 +129,12 @@ class _DayScreenState extends ConsumerState<DayScreen> {
         .read(dayBlocksProvider(date).notifier)
         .addBlock(start: start, end: end, kind: BlockKind.anchor);
     if (!context.mounted) return;
-    await showBlockEditModal(context: context, date: date, block: created);
+    await showBlockEditModal(
+      context: context,
+      column: DayColumn(date),
+      actions: dayScheduleBlockActions,
+      block: created,
+    );
   }
 
   DateTime _startDateForPage(int page) => DateTime(
@@ -513,8 +521,11 @@ class _SchedulePage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Failed to load: $error')),
         data: (blocks) => DayGrid(
-          key: dayGridKeyFor(date),
+          key: scheduleGridKeyFor(DayColumn(date)),
           date: date,
+          column: DayColumn(date),
+          controller: const DayScheduleController(),
+          actions: dayScheduleBlockActions,
           blocks: blocks,
           settings: settings,
           slotHeight: slotHeight,
@@ -552,6 +563,11 @@ class _SchedulePage extends ConsumerWidget {
         .read(dayBlocksProvider(date).notifier)
         .addBlock(start: start, end: end, kind: kind);
     if (!context.mounted) return;
-    await showBlockEditModal(context: context, date: date, block: created);
+    await showBlockEditModal(
+      context: context,
+      column: DayColumn(date),
+      actions: dayScheduleBlockActions,
+      block: created,
+    );
   }
 }
