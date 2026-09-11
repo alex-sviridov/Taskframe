@@ -4,6 +4,7 @@ import 'package:taskframe/app.dart';
 import 'package:taskframe/core/platform/persistent_storage.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/core/storage/first_run_seed.dart';
+import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
@@ -40,6 +41,9 @@ Future<void> main() async {
         ),
         templateBlocksRepositoryProvider.overrideWithValue(
           SembastTemplateBlocksRepository(db),
+        ),
+        appSettingsRepositoryProvider.overrideWithValue(
+          SembastAppSettingsRepository(db),
         ),
       ],
       child: const App(),
