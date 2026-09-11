@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/app.dart';
+import 'package:taskframe/core/platform/persistent_storage.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/core/storage/first_run_seed.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final db = await openAppDatabase();
   await seedIfEmpty(db);
+  await requestPersistentStorage();
 
   runApp(
     ProviderScope(
