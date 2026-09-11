@@ -67,7 +67,10 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
 
   @override
   Future<List<TimeObject>> load(String templateId) async {
-    final finder = Finder(filter: Filter.equals('templateId', templateId));
+    final finder = Finder(
+      filter: Filter.equals('templateId', templateId),
+      sortOrders: [SortOrder('start')],
+    );
     final records = await templateBlocksStore.find(_db, finder: finder);
     return [for (final record in records) TimeObject.fromMap(record.value)];
   }
@@ -90,9 +93,10 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       locked: false,
       categoryId: categoryId ?? Category.defaultId,
     );
-    await templateBlocksStore
-        .record(block.id)
-        .put(_db, {...block.toMap(), 'templateId': templateId});
+    await templateBlocksStore.record(block.id).put(_db, {
+      ...block.toMap(),
+      'templateId': templateId,
+    });
     return block;
   }
 
@@ -113,9 +117,10 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       locked: block.locked,
       categoryId: block.categoryId,
     );
-    await templateBlocksStore
-        .record(block.id)
-        .put(_db, {...moved.toMap(), 'templateId': toTemplateId});
+    await templateBlocksStore.record(block.id).put(_db, {
+      ...moved.toMap(),
+      'templateId': toTemplateId,
+    });
     return moved;
   }
 
@@ -138,9 +143,12 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       locked: block.locked,
       categoryId: categoryId ?? block.categoryId,
     );
-    await templateBlocksStore
-        .record(block.id)
-        .put(_db, {...updated.toMap(), 'templateId': templateId});
+    final existing = await templateBlocksStore.record(block.id).get(_db);
+    if (existing == null) return updated;
+    await templateBlocksStore.record(block.id).put(_db, {
+      ...updated.toMap(),
+      'templateId': templateId,
+    });
     return updated;
   }
 

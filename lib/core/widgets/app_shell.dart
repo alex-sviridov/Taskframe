@@ -61,7 +61,7 @@ class AppShell extends StatelessWidget {
         ),
         body: Column(
           children: [
-            const IosInstallHintBanner(),
+            const SafeArea(bottom: false, child: IosInstallHintBanner()),
             Expanded(
               child: Builder(
                 builder: (context) => Stack(

@@ -18,16 +18,19 @@ void main() {
       expect(records.single.value['name'], 'Default');
     });
 
-    test('writes five seed blocks for today when day_blocks is empty', () async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+    test(
+      'writes five seed blocks for today when day_blocks is empty',
+      () async {
+        final db = await newDatabaseFactoryMemory().openDatabase('test.db');
 
-      await seedIfEmpty(db);
+        await seedIfEmpty(db);
 
-      final records = await dayBlocksStore.find(db);
-      expect(records, hasLength(5));
-      final todayKey = dateKeyFor(DateTime.now());
-      expect(records.every((r) => r.value['dateKey'] == todayKey), isTrue);
-    });
+        final records = await dayBlocksStore.find(db);
+        expect(records, hasLength(5));
+        final todayKey = dateKeyFor(DateTime.now());
+        expect(records.every((r) => r.value['dateKey'] == todayKey), isTrue);
+      },
+    );
 
     test('does not duplicate seed blocks on a second call', () async {
       final db = await newDatabaseFactoryMemory().openDatabase('test.db');
@@ -36,6 +39,22 @@ void main() {
       await seedIfEmpty(db);
 
       expect(await dayBlocksStore.count(db), 5);
+    });
+
+    test('does not reseed deleted day blocks on a later call', () async {
+      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+
+      await seedIfEmpty(db);
+
+      final records = await dayBlocksStore.find(db);
+      for (final record in records) {
+        await dayBlocksStore.record(record.key).delete(db);
+      }
+      expect(await dayBlocksStore.count(db), 0);
+
+      await seedIfEmpty(db);
+
+      expect(await dayBlocksStore.count(db), 0);
     });
 
     test('does not overwrite an existing category', () async {

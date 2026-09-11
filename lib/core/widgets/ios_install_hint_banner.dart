@@ -56,6 +56,11 @@ class IosInstallHintBanner extends ConsumerWidget {
             await ref
                 .read(appSettingsRepositoryProvider)
                 .setInstallHintDismissedAt(DateTime.now());
+            // Riverpod's WidgetRef (backed by the widget's Element here)
+            // throws a StateError from ref.invalidate/read if the widget
+            // has been unmounted since the await above started — it does
+            // not silently no-op — so guard with the context it exposes.
+            if (!ref.context.mounted) return;
             ref.invalidate(installHintVisibleProvider);
           },
           child: const Text('Dismiss'),

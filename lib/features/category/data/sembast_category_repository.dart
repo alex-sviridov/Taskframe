@@ -71,10 +71,12 @@ class SembastCategoryRepository implements CategoryRepository {
         ? current.copyWith(colorValue: colorValue)
         : current.copyWith(name: name, colorValue: colorValue, emoji: emoji);
     final order =
-        existingRecord?['order'] ?? DateTime.now().microsecondsSinceEpoch;
-    await categoriesStore
-        .record(updated.id)
-        .put(_db, {...updated.toMap(), 'order': order});
+        existingRecord?['order'] ??
+        (current.isDefault ? 0 : DateTime.now().microsecondsSinceEpoch);
+    await categoriesStore.record(updated.id).put(_db, {
+      ...updated.toMap(),
+      'order': order,
+    });
     return updated;
   }
 

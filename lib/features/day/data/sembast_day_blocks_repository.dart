@@ -19,7 +19,10 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
 
   @override
   Future<List<TimeObject>> load(DateTime date) async {
-    final finder = Finder(filter: Filter.equals('dateKey', dateKeyFor(date)));
+    final finder = Finder(
+      filter: Filter.equals('dateKey', dateKeyFor(date)),
+      sortOrders: [SortOrder('start')],
+    );
     final records = await dayBlocksStore.find(_db, finder: finder);
     return [for (final record in records) TimeObject.fromMap(record.value)];
   }
@@ -42,9 +45,10 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       locked: false,
       categoryId: categoryId ?? Category.defaultId,
     );
-    await dayBlocksStore
-        .record(block.id)
-        .put(_db, {...block.toMap(), 'dateKey': dateKeyFor(date)});
+    await dayBlocksStore.record(block.id).put(_db, {
+      ...block.toMap(),
+      'dateKey': dateKeyFor(date),
+    });
     return block;
   }
 
@@ -65,9 +69,10 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       locked: block.locked,
       categoryId: block.categoryId,
     );
-    await dayBlocksStore
-        .record(block.id)
-        .put(_db, {...moved.toMap(), 'dateKey': dateKeyFor(toDate)});
+    await dayBlocksStore.record(block.id).put(_db, {
+      ...moved.toMap(),
+      'dateKey': dateKeyFor(toDate),
+    });
     return moved;
   }
 
@@ -90,9 +95,10 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       locked: block.locked,
       categoryId: categoryId ?? block.categoryId,
     );
-    await dayBlocksStore
-        .record(block.id)
-        .put(_db, {...updated.toMap(), 'dateKey': dateKeyFor(date)});
+    await dayBlocksStore.record(block.id).put(_db, {
+      ...updated.toMap(),
+      'dateKey': dateKeyFor(date),
+    });
     return updated;
   }
 

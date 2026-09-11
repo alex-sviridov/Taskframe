@@ -147,3 +147,15 @@ Out of scope:
 - Re-evaluating the Skwasm renderer for resource savings once it's more
   mature and iOS Safari's WASM-thread support is solid — deferred here
   since it's an unrelated, independently-decidable change.
+- Local storage is currently unencrypted plaintext, which is fine for now
+  since only non-sensitive schedule/category data is stored and nothing
+  leaves the device, but it's worth revisiting alongside encryption-at-rest
+  once backend sync (above) is added.
+
+## Documented deviations from this spec
+
+- The composition root doesn't expose the sembast `Database` via a
+  `sembastDatabaseProvider` as originally described above; instead
+  `main.dart` passes it directly into a plain constructor function,
+  `sembastOverrides(db)` (see `lib/core/storage/sembast_overrides.dart`),
+  which is simpler and avoids an otherwise-unused Riverpod provider.

@@ -4,13 +4,7 @@ import 'package:taskframe/app.dart';
 import 'package:taskframe/core/platform/persistent_storage.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/core/storage/first_run_seed.dart';
-import 'package:taskframe/core/storage/app_settings_repository.dart';
-import 'package:taskframe/features/category/data/sembast_category_repository.dart';
-import 'package:taskframe/features/category/providers.dart';
-import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
-import 'package:taskframe/features/day/providers.dart';
-import 'package:taskframe/features/template/data/sembast_template_repository.dart';
-import 'package:taskframe/features/template/providers.dart';
+import 'package:taskframe/core/storage/sembast_overrides.dart';
 
 /// Entry point: opens the local database, seeds it on first run, then
 /// boots the app inside a [ProviderScope] that overrides every repository
@@ -27,26 +21,5 @@ Future<void> main() async {
   await seedIfEmpty(db);
   await requestPersistentStorage();
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        dayBlocksRepositoryProvider.overrideWithValue(
-          SembastDayBlocksRepository(db),
-        ),
-        categoryRepositoryProvider.overrideWithValue(
-          SembastCategoryRepository(db),
-        ),
-        templateRepositoryProvider.overrideWithValue(
-          SembastTemplateRepository(db),
-        ),
-        templateBlocksRepositoryProvider.overrideWithValue(
-          SembastTemplateBlocksRepository(db),
-        ),
-        appSettingsRepositoryProvider.overrideWithValue(
-          SembastAppSettingsRepository(db),
-        ),
-      ],
-      child: const App(),
-    ),
-  );
+  runApp(ProviderScope(overrides: sembastOverrides(db), child: const App()));
 }
