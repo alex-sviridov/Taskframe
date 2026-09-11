@@ -18,6 +18,7 @@ class _Destination {
 /// never drift out of sync with each other.
 const _destinations = [
   _Destination(icon: Icons.calendar_today, label: 'Day'),
+  _Destination(icon: Icons.dashboard_customize, label: 'Templates'),
   _Destination(icon: Icons.category, label: 'Categories'),
 ];
 

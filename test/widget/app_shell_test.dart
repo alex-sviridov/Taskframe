@@ -33,6 +33,14 @@ GoRouter _buildTestRouter() => GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/three',
+              builder: (context, state) => const Text('Branch three'),
+            ),
+          ],
+        ),
       ],
     ),
   ],
@@ -50,6 +58,7 @@ void main() {
       );
 
       expect(find.byIcon(Icons.menu), findsOneWidget);
+      expect(find.text('Templates'), findsNothing);
       expect(find.text('Categories'), findsNothing);
       expect(find.text('Branch one'), findsOneWidget);
     });
@@ -65,6 +74,7 @@ void main() {
 
       expect(find.byType(NavigationDrawer), findsOneWidget);
       expect(find.text('Day'), findsOneWidget);
+      expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
     });
 
@@ -78,7 +88,7 @@ void main() {
 
         await tester.tap(find.byIcon(Icons.menu));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Categories'));
+        await tester.tap(find.text('Templates'));
         await tester.pumpAndSettle();
 
         expect(find.text('Branch two'), findsOneWidget);
@@ -86,7 +96,7 @@ void main() {
       },
     );
 
-    testWidgets('wide: shows a persistent sidebar with both destinations', (
+    testWidgets('wide: shows a persistent sidebar with all destinations', (
       tester,
     ) async {
       _setViewportWidth(tester, 1000);
@@ -98,6 +108,7 @@ void main() {
       expect(find.byType(NavigationDrawer), findsOneWidget);
       expect(find.byIcon(Icons.menu), findsNothing);
       expect(find.text('Day'), findsOneWidget);
+      expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
       expect(find.text('Branch one'), findsOneWidget);
     });
@@ -122,10 +133,25 @@ void main() {
         MaterialApp.router(routerConfig: _buildTestRouter()),
       );
 
-      await tester.tap(find.text('Categories'));
+      await tester.tap(find.text('Templates'));
       await tester.pumpAndSettle();
 
       expect(find.text('Branch two'), findsOneWidget);
+      expect(find.text('Branch one'), findsNothing);
+    });
+
+    testWidgets('wide: tapping the third destination switches branch', (
+      tester,
+    ) async {
+      _setViewportWidth(tester, 1000);
+      await tester.pumpWidget(
+        MaterialApp.router(routerConfig: _buildTestRouter()),
+      );
+
+      await tester.tap(find.text('Categories'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Branch three'), findsOneWidget);
       expect(find.text('Branch one'), findsNothing);
     });
   });

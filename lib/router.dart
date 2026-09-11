@@ -2,9 +2,11 @@ import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/widgets/app_shell.dart';
 import 'package:taskframe/features/category/widgets/categories_screen.dart';
 import 'package:taskframe/features/day/day_screen.dart';
+import 'package:taskframe/features/template/widgets/templates_screen.dart';
 
-/// Application router: a shell with two branches (Day/Week, Categories),
-/// each keeping its own state alive when the other is shown.
+/// Application router: a shell with three branches (Day/Week, Templates,
+/// Categories), each keeping its own state alive when the others are
+/// shown.
 final GoRouter appRouter = GoRouter(
   routes: [
     StatefulShellRoute.indexedStack(
@@ -14,6 +16,14 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(path: '/', builder: (context, state) => const DayScreen()),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/templates',
+              builder: (context, state) => const TemplatesScreen(),
+            ),
           ],
         ),
         StatefulShellBranch(

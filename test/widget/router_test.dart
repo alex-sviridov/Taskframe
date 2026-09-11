@@ -40,6 +40,22 @@ void main() {
       expect(find.text('Categories'), findsWidgets);
       expect(find.text('Default'), findsOneWidget);
       final shell = tester.widget<AppShell>(find.byType(AppShell));
+      expect(shell.navigationShell.currentIndex, 2);
+    });
+
+    testWidgets('tapping Templates navigates to /templates', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: appRouter),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Templates'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Templates'), findsWidgets);
+      final shell = tester.widget<AppShell>(find.byType(AppShell));
       expect(shell.navigationShell.currentIndex, 1);
     });
 
