@@ -63,4 +63,26 @@ class TimeObject {
   /// `[this.start, this.end)`.
   bool overlaps(DateTime start, DateTime end) =>
       start.isBefore(this.end) && end.isAfter(this.start);
+
+  /// This block's field values as a JSON-safe map, for storage.
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'title': title,
+    'start': start.toIso8601String(),
+    'end': end.toIso8601String(),
+    'kind': kind.name,
+    'locked': locked,
+    'categoryId': categoryId,
+  };
+
+  /// Reconstructs a [TimeObject] from a map produced by [toMap].
+  factory TimeObject.fromMap(Map<String, Object?> map) => TimeObject(
+    id: map['id']! as String,
+    title: map['title']! as String,
+    start: DateTime.parse(map['start']! as String),
+    end: DateTime.parse(map['end']! as String),
+    kind: BlockKind.values.byName(map['kind']! as String),
+    locked: map['locked']! as bool,
+    categoryId: map['categoryId']! as String,
+  );
 }

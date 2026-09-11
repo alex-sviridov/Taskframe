@@ -43,4 +43,20 @@ class Category {
     colorValue: colorValue ?? this.colorValue,
     emoji: emoji ?? this.emoji,
   );
+
+  /// This category's field values as a JSON-safe map, for storage.
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'name': name,
+    'colorValue': colorValue,
+    'emoji': emoji,
+  };
+
+  /// Reconstructs a [Category] from a map produced by [toMap].
+  factory Category.fromMap(Map<String, Object?> map) => Category(
+    id: map['id']! as String,
+    name: map['name']! as String,
+    colorValue: map['colorValue']! as int,
+    emoji: map['emoji'] as String?,
+  );
 }

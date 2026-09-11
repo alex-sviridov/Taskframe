@@ -78,4 +78,32 @@ void main() {
       expect(copy.emoji, category.emoji);
     });
   });
+
+  group('toMap/fromMap', () {
+    test('fromMap(toMap()) round-trips every field', () {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+        emoji: '💼',
+      );
+
+      final restored = Category.fromMap(category.toMap());
+
+      expect(restored.id, category.id);
+      expect(restored.name, category.name);
+      expect(restored.colorValue, category.colorValue);
+      expect(restored.emoji, category.emoji);
+    });
+
+    test('fromMap restores a null emoji', () {
+      const category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF2196F3,
+      );
+
+      expect(Category.fromMap(category.toMap()).emoji, isNull);
+    });
+  });
 }

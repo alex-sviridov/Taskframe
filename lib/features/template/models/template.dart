@@ -13,6 +13,13 @@ class Template {
   /// Returns a copy of this template with [name] replaced.
   Template copyWith({String? name}) => Template(id: id, name: name ?? this.name);
 
+  /// This template's field values as a JSON-safe map, for storage.
+  Map<String, Object?> toMap() => {'id': id, 'name': name};
+
+  /// Reconstructs a [Template] from a map produced by [toMap].
+  factory Template.fromMap(Map<String, Object?> map) =>
+      Template(id: map['id']! as String, name: map['name']! as String);
+
   @override
   bool operator ==(Object other) =>
       other is Template && other.id == id && other.name == name;

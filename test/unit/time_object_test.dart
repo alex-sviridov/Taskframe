@@ -131,4 +131,40 @@ void main() {
       );
     });
   });
+
+  group('toMap/fromMap', () {
+    test('fromMap(toMap()) round-trips every field', () {
+      final block = TimeObject(
+        id: 'block-1',
+        title: 'Standup',
+        start: DateTime(2030, 1, 1, 9),
+        end: DateTime(2030, 1, 1, 9, 30),
+        kind: BlockKind.anchor,
+        locked: false,
+        categoryId: 'category-1',
+      );
+
+      final restored = TimeObject.fromMap(block.toMap());
+
+      expect(restored.id, block.id);
+      expect(restored.title, block.title);
+      expect(restored.start, block.start);
+      expect(restored.end, block.end);
+      expect(restored.kind, block.kind);
+      expect(restored.categoryId, block.categoryId);
+    });
+
+    test('toMap stores kind by name', () {
+      final block = TimeObject(
+        id: 'block-1',
+        title: 'Work',
+        start: DateTime(2030, 1, 1, 9),
+        end: DateTime(2030, 1, 1, 10),
+        kind: BlockKind.frame,
+        locked: false,
+      );
+
+      expect(block.toMap()['kind'], 'frame');
+    });
+  });
 }

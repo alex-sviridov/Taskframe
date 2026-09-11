@@ -15,4 +15,15 @@ void main() {
       expect(template.copyWith().name, 'Weekday');
     });
   });
+
+  group('toMap/fromMap', () {
+    test('fromMap(toMap()) round-trips every field', () {
+      const template = Template(id: 'template-1', name: 'Weekday');
+
+      final restored = Template.fromMap(template.toMap());
+
+      expect(restored.id, template.id);
+      expect(restored.name, template.name);
+    });
+  });
 }
