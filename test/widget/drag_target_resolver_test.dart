@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
 const _settings = DaySettings(
@@ -10,7 +11,10 @@ const _settings = DaySettings(
   dateFormat: 'dd/MM/yyyy',
 );
 const _slotHeight = 16.0;
-final _dates = [DateTime(2026, 9, 9), DateTime(2026, 9, 10)];
+final _columns = [
+  DayColumn(DateTime(2026, 9, 9)),
+  DayColumn(DateTime(2026, 9, 10)),
+];
 
 /// Grows the test surface so a full day's 1088px-tall column (68 slots *
 /// 16) actually fits without being constrained down to the default 600px
@@ -29,9 +33,9 @@ Future<void> _pumpTwoColumns(WidgetTester tester) => tester.pumpWidget(
     home: Scaffold(
       body: Row(
         children: [
-          for (final date in _dates)
+          for (final column in _columns)
             SizedBox(
-              key: dayGridKeyFor(date),
+              key: scheduleGridKeyFor(column),
               width: 300,
               height: 1088, // 68 slots * 16.
             ),
@@ -51,13 +55,13 @@ void main() {
       // the 6:00 day start.
       final target = resolveDragTarget(
         globalPosition: const Offset(310, 192),
-        candidateDates: _dates,
+        candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
         blockDuration: const Duration(minutes: 30),
       );
 
-      expect(target?.date, _dates[1]);
+      expect(target?.column, _columns[1]);
       expect(target?.start, DateTime(2026, 9, 10, 9));
     });
 
@@ -68,7 +72,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(3000, 192),
-        candidateDates: _dates,
+        candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
         blockDuration: const Duration(minutes: 30),
@@ -84,7 +88,7 @@ void main() {
 
       final target = resolveDragTarget(
         globalPosition: const Offset(10, 5000),
-        candidateDates: _dates,
+        candidateColumns: _columns,
         settings: _settings,
         slotHeight: _slotHeight,
         blockDuration: const Duration(minutes: 30),
@@ -104,7 +108,7 @@ void main() {
         // the 6:00 day start.
         final target = resolveDragTarget(
           globalPosition: const Offset(10, 1072),
-          candidateDates: _dates,
+          candidateColumns: _columns,
           settings: _settings,
           slotHeight: _slotHeight,
           blockDuration: const Duration(hours: 2),
@@ -123,47 +127,54 @@ void main() {
 
         final target = resolveDragTarget(
           globalPosition: const Offset(10, 1072),
-          candidateDates: _dates,
+          candidateColumns: _columns,
           settings: _settings,
           slotHeight: _slotHeight,
           blockDuration: const Duration(minutes: 15),
         );
 
-        expect(target?.date, _dates[0]);
+        expect(target?.column, _columns[0]);
         expect(target?.start, DateTime(2026, 9, 9, 22, 45));
       },
     );
   });
 
-  group('dayGridKeyFor cache growth', () {
+  group('scheduleGridKeyFor cache growth', () {
     testWidgets(
       'drops keys for dates whose DayGrid has since unmounted, instead of '
       'growing forever as new dates are visited',
       (tester) async {
-        final manyDates = List.generate(5, (i) => DateTime(2026, 9, 9 + i));
+        final manyColumns = List.generate(
+          5,
+          (i) => DayColumn(DateTime(2026, 9, 9 + i)),
+        );
 
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
               body: Row(
                 children: [
-                  for (final date in manyDates)
-                    SizedBox(key: dayGridKeyFor(date), width: 10, height: 10),
+                  for (final column in manyColumns)
+                    SizedBox(
+                      key: scheduleGridKeyFor(column),
+                      width: 10,
+                      height: 10,
+                    ),
                 ],
               ),
             ),
           ),
         );
-        expect(dayGridKeyCacheSizeForTest(), 5);
+        expect(scheduleGridKeyCacheSizeForTest(), 5);
 
         // Replaces every SizedBox above with a single new one for a new
         // date, unmounting the previous 5.
-        final newDate = DateTime(2026, 9, 30);
+        final newColumn = DayColumn(DateTime(2026, 9, 30));
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
               body: SizedBox(
-                key: dayGridKeyFor(newDate),
+                key: scheduleGridKeyFor(newColumn),
                 width: 10,
                 height: 10,
               ),
@@ -173,7 +184,7 @@ void main() {
 
         // The new date's own key is mounted and kept; the previous 5,
         // unmounted, get swept once this frame's prune callback has run.
-        expect(dayGridKeyCacheSizeForTest(), 1);
+        expect(scheduleGridKeyCacheSizeForTest(), 1);
       },
     );
   });
