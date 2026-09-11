@@ -105,6 +105,27 @@ void main() {
       expect(updated.end, DateTime(2026, 9, 9, 11, 30));
     });
 
+    test('updateBlock persists a kind change', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final date = DateTime(2026, 9, 9);
+      await container.read(dayBlocksProvider(date).future);
+      final created = await container
+          .read(dayBlocksProvider(date).notifier)
+          .addBlock(
+            start: DateTime(2026, 9, 9, 10),
+            end: DateTime(2026, 9, 9, 10, 30),
+            kind: BlockKind.anchor,
+          );
+
+      await container
+          .read(dayBlocksProvider(date).notifier)
+          .updateBlock(created, kind: BlockKind.frame);
+
+      final blocks = container.read(dayBlocksProvider(date)).value!;
+      expect(blocks.singleWhere((b) => b.id == created.id).kind, BlockKind.frame);
+    });
+
     test('updateBlock silently no-ops on an overlapping candidate', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

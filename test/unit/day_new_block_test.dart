@@ -244,6 +244,212 @@ void main() {
     });
   });
 
+  group('findNextFreeSlot', () {
+    const duration = Duration(minutes: 60);
+
+    test('starts at day start when the day is empty', () {
+      final slot = findNextFreeSlot(
+        day: DateTime(2026, 9, 9),
+        existingBlocks: const [],
+        settings: _settings,
+        duration: duration,
+      );
+
+      expect(slot, DateTime(2026, 9, 9, _settings.dayStartHour));
+    });
+
+    test('finds a gap between two existing blocks', () {
+      final slot = findNextFreeSlot(
+        day: DateTime(2026, 9, 9),
+        existingBlocks: [
+          TimeObject(
+            id: '1',
+            title: 'A',
+            start: DateTime(2026, 9, 9, 6),
+            end: DateTime(2026, 9, 9, 7),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+          TimeObject(
+            id: '2',
+            title: 'B',
+            start: DateTime(2026, 9, 9, 8),
+            end: DateTime(2026, 9, 9, 9),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+        settings: _settings,
+        duration: duration,
+      );
+
+      expect(slot, DateTime(2026, 9, 9, 7));
+    });
+
+    test('skips a gap shorter than duration and lands right after the last '
+        'block when nothing else fits', () {
+      final slot = findNextFreeSlot(
+        day: DateTime(2026, 9, 9),
+        existingBlocks: [
+          TimeObject(
+            id: '1',
+            title: 'A',
+            start: DateTime(2026, 9, 9, 6),
+            end: DateTime(2026, 9, 9, 7),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+          TimeObject(
+            id: '2',
+            title: 'B',
+            // Only a 30-minute gap before this one — too short for the
+            // 60-minute default duration.
+            start: DateTime(2026, 9, 9, 7, 30),
+            end: DateTime(2026, 9, 9, 20),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+        settings: _settings,
+        duration: duration,
+      );
+
+      expect(slot, DateTime(2026, 9, 9, 20));
+    });
+
+    test('shrinks the duration to fit before the day end when nothing else '
+        'fits and the last block ends too close to it', () {
+      final slot = findNextFreeSlot(
+        day: DateTime(2026, 9, 9),
+        existingBlocks: [
+          TimeObject(
+            id: '1',
+            title: 'A',
+            start: DateTime(2026, 9, 9, 6),
+            end: DateTime(2026, 9, 9, 22, 45),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+        settings: _settings,
+        duration: duration,
+      );
+
+      expect(slot, DateTime(2026, 9, 9, 22, 45));
+    });
+  });
+
+  group('validEditRange', () {
+    final block = TimeObject(
+      id: 'current',
+      title: 'Current',
+      start: DateTime(2026, 9, 9, 10),
+      end: DateTime(2026, 9, 9, 11),
+      kind: BlockKind.anchor,
+      locked: false,
+    );
+
+    test('editingStart with no previous block falls back to day start', () {
+      final range = validEditRange(
+        block: block,
+        editingStart: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, _settings.dayStartHour));
+      // 15 minutes before the block's own end, per the min block duration.
+      expect(range.end, DateTime(2026, 9, 9, 10, 45));
+    });
+
+    test('editingStart with a previous block starts at its end', () {
+      final range = validEditRange(
+        block: block,
+        editingStart: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'prev',
+            title: 'Prev',
+            start: DateTime(2026, 9, 9, 8),
+            end: DateTime(2026, 9, 9, 8, 30),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 8, 30));
+    });
+
+    test('editingStart ignores a block that is not the nearest previous '
+        'one', () {
+      final range = validEditRange(
+        block: block,
+        editingStart: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'far',
+            title: 'Far',
+            start: DateTime(2026, 9, 9, 6),
+            end: DateTime(2026, 9, 9, 6, 30),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+          TimeObject(
+            id: 'near',
+            title: 'Near',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 9, 30),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 9, 30));
+    });
+
+    test('editingEnd with no next block falls back to day end', () {
+      final range = validEditRange(
+        block: block,
+        editingStart: false,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      // 15 minutes after the block's own start, per the min block duration.
+      expect(range.start, DateTime(2026, 9, 9, 10, 15));
+      expect(range.end, DateTime(2026, 9, 9, _settings.dayEndHour));
+    });
+
+    test('editingEnd with a next block ends at its start', () {
+      final range = validEditRange(
+        block: block,
+        editingStart: false,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'next',
+            title: 'Next',
+            start: DateTime(2026, 9, 9, 12),
+            end: DateTime(2026, 9, 9, 12, 30),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range.end, DateTime(2026, 9, 9, 12));
+    });
+  });
+
   group('copyToNextDayWouldOverlap', () {
     final block = TimeObject(
       id: '1',

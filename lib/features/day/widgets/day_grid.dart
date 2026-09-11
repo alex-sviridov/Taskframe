@@ -10,6 +10,7 @@ import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
+import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
@@ -956,15 +957,15 @@ class _DraftOverlay extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _DraftButton(
-                  color: Colors.blue,
-                  icon: Icons.crop_free,
+                  color: BlockKind.frame.color,
+                  icon: BlockKind.frame.icon,
                   label: 'Create Frame',
                   onTap: onCreateFrame,
                 ),
                 const SizedBox(width: 8),
                 _DraftButton(
-                  color: Colors.red,
-                  icon: Icons.event,
+                  color: BlockKind.anchor.color,
+                  icon: BlockKind.anchor.icon,
                   label: 'Create Event',
                   onTap: onCreateEvent,
                 ),

@@ -246,6 +246,24 @@ void main() {
       expect(updated.end, DateTime(date.year, date.month, date.day, 11, 30));
     });
 
+    test('update changes an added block\'s kind', () async {
+      final date = DateTime.now().add(const Duration(days: 3));
+      final added = await repository.add(
+        date,
+        start: DateTime(date.year, date.month, date.day, 10),
+        end: DateTime(date.year, date.month, date.day, 10, 30),
+        kind: BlockKind.anchor,
+      );
+
+      final updated = await repository.update(
+        added,
+        date: date,
+        kind: BlockKind.frame,
+      );
+
+      expect(updated.kind, BlockKind.frame);
+    });
+
     test('update leaves fields unspecified as null unchanged', () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final added = await repository.add(

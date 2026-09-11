@@ -30,14 +30,15 @@ abstract class DayBlocksRepository {
   });
 
   /// Updates [block] (which belongs to [date]) in place, replacing any of
-  /// [title]/[start]/[end] that are given and leaving the rest unchanged.
-  /// Returns the updated block.
+  /// [title]/[start]/[end]/[kind] that are given and leaving the rest
+  /// unchanged. Returns the updated block.
   Future<TimeObject> update(
     TimeObject block, {
     required DateTime date,
     String? title,
     DateTime? start,
     DateTime? end,
+    BlockKind? kind,
   });
 
   /// Removes [block] (which belongs to [date]).
@@ -116,6 +117,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
     String? title,
     DateTime? start,
     DateTime? end,
+    BlockKind? kind,
   }) async {
     final key = _dateKey(date);
     final updated = TimeObject(
@@ -123,14 +125,15 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
       title: title ?? block.title,
       start: start ?? block.start,
       end: end ?? block.end,
-      kind: block.kind,
+      kind: kind ?? block.kind,
       locked: block.locked,
     );
 
     final list = _added[key];
     if (list != null && list.any((b) => b.id == block.id)) {
       _added[key] = [
-        for (final b in list) if (b.id == block.id) updated else b,
+        for (final b in list)
+          if (b.id == block.id) updated else b,
       ];
     } else {
       // A seeded block being edited for the first time: promote it into

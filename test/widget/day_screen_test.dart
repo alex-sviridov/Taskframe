@@ -6,6 +6,7 @@ import 'package:taskframe/features/day/day_screen.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
 
@@ -170,6 +171,34 @@ void main() {
 
       expect(find.byIcon(Icons.close), findsOneWidget);
       semantics.dispose();
+    });
+
+    testWidgets('the add button creates a block in the next free slot and '
+        'opens its edit modal', (tester) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      // Fixed, far-past date: InMemoryDayBlocksRepository only seeds
+      // hardcoded blocks for the real wall-clock "today", so this date
+      // starts out empty and the free slot lands exactly at day start.
+      final date = DateTime(2000);
+      container.read(selectedDateProvider.notifier).date = date;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: DayScreen()),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Add block'));
+      await tester.pumpAndSettle();
+
+      final settings = container.read(daySettingsProvider);
+      final blocks = container.read(dayBlocksProvider(date)).value!;
+      expect(blocks, hasLength(1));
+      expect(blocks.single.start, DateTime(2000, 1, 1, settings.dayStartHour));
+      expect(find.byType(BlockEditModal), findsOneWidget);
     });
 
     testWidgets('a horizontal fling on free grid space switches the day', (

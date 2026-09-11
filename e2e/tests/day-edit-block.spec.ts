@@ -43,6 +43,49 @@ test('opening the start time picker and confirming Done closes it, '
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 });
 
+test('the type selector switches Event/Frame without closing the modal '
+  + 'or losing the block', async ({ page }) => {
+  await clickCenter(page, page.getByText('Breakfast'));
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+
+  await expect(page.getByRole('button', { name: 'Event' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Frame' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Frame' }).click();
+
+  // Switching type doesn't close the modal.
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByText('Breakfast')).toBeVisible();
+});
+
+test('picking a new date via the calendar keeps the modal open and moves '
+  + 'the block off the original day', async ({ page }) => {
+  await clickCenter(page, page.getByText('Breakfast'));
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+
+  const dateRow = page.getByText(/^\d{2}\/\d{2}\/\d{4}$/);
+  const dateBefore = await dateRow.textContent();
+  await clickCenter(page, dateRow);
+
+  // "15" is a valid day in every month, so this reliably picks the 15th
+  // of whichever month the calendar opened on. The Material date picker's
+  // accessible name for a day cell is verbose (e.g. "15, Tuesday,
+  // September 15, 2026"), so match on the leading day number only.
+  await page.getByRole('button', { name: /^15,/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  // Only the calendar closes — the edit modal (and the block it's
+  // editing) stays open, now showing the new date.
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await expect(async () => {
+    expect(await dateRow.textContent()).not.toEqual(dateBefore);
+  }).toPass();
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByText('Breakfast')).toHaveCount(0);
+});
+
 test('copying a block to the next day shows it there', async ({ page }) => {
   await clickCenter(page, page.getByText('Breakfast'));
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();

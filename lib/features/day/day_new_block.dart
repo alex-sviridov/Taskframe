@@ -97,6 +97,89 @@ Duration durationForNewBlock({
   return duration < remaining ? duration : remaining;
 }
 
+/// The first [duration]-long free gap on [day], searching forward from
+/// [settings]'s day start through [existingBlocks] (sorted by start here
+/// regardless of the order given) and returning the first gap between two
+/// consecutive blocks (or before the first, or after the last) at least
+/// [duration] long.
+///
+/// Falls back to right after the last block if no gap that long exists
+/// anywhere on the day, even though the caller then has less than
+/// [duration] of room left before the day end — callers should clamp the
+/// resulting block's end to [dayEndFor], the same way [durationForNewBlock]
+/// does for a manually-placed block.
+DateTime findNextFreeSlot({
+  required DateTime day,
+  required List<TimeObject> existingBlocks,
+  required DaySettings settings,
+  required Duration duration,
+}) {
+  final sorted = [...existingBlocks]
+    ..sort((a, b) => a.start.compareTo(b.start));
+
+  var cursor = DateTime(day.year, day.month, day.day, settings.dayStartHour);
+  for (final block in sorted) {
+    if (block.start.difference(cursor) >= duration) {
+      return cursor;
+    }
+    if (block.end.isAfter(cursor)) {
+      cursor = block.end;
+    }
+  }
+  return cursor;
+}
+
+/// The shortest a block may ever be edited down to — mirrors the day
+/// screen's own resize-minimum, since both express the same "a block must
+/// keep at least this much duration" rule.
+const _minEditDuration = Duration(minutes: 15);
+
+/// The contiguous range [block]'s start (if [editingStart]) or end
+/// (otherwise) may move within, bounded by [block]'s nearest neighbor in
+/// [others] on that side (or [settings]'s day start/end when there is
+/// none) and by [_minEditDuration] against [block]'s own fixed edge.
+///
+/// [others] need not be pre-sorted or pre-filtered to exclude [block]
+/// itself — only the nearest block ending at or before [block]'s start
+/// (for [editingStart]) or starting at or after [block]'s end (otherwise)
+/// affects the result, so every other entry is ignored.
+({DateTime start, DateTime end}) validEditRange({
+  required TimeObject block,
+  required bool editingStart,
+  required DateTime day,
+  required DaySettings settings,
+  required List<TimeObject> others,
+}) {
+  if (editingStart) {
+    final previousEnd = others
+        .where((b) => !b.end.isAfter(block.start))
+        .map((b) => b.end)
+        .fold<DateTime?>(
+          null,
+          (latest, end) => latest == null || end.isAfter(latest) ? end : latest,
+        );
+    return (
+      start:
+          previousEnd ??
+          DateTime(day.year, day.month, day.day, settings.dayStartHour),
+      end: block.end.subtract(_minEditDuration),
+    );
+  }
+
+  final nextStart = others
+      .where((b) => !b.start.isBefore(block.end))
+      .map((b) => b.start)
+      .fold<DateTime?>(
+        null,
+        (earliest, start) =>
+            earliest == null || start.isBefore(earliest) ? start : earliest,
+      );
+  return (
+    start: block.start.add(_minEditDuration),
+    end: nextStart ?? dayEndFor(day, settings),
+  );
+}
+
 /// Whether editing a block to span `[start, end)` on [day] is allowed: the
 /// range must be ordered, fall within [settings]'s day bounds, and not
 /// overlap any of [others]. Used to silently reject an invalid title/start/

@@ -48,6 +48,24 @@ test('clicking Create Event adds a block titled "title" and opens its edit modal
   await expect(page.getByText('title')).toBeVisible();
 });
 
+test('clicking the AppBar add button creates a block in the next free '
+  + 'slot and opens its edit modal', async ({ page }) => {
+  await enableFlutterAccessibility(page);
+
+  await page.getByRole('button', { name: 'Add block' }).click();
+
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+});
+
+// The title field's autofocus-when-empty behavior is covered at the
+// widget-test level (test/widget/block_edit_modal_test.dart) instead of
+// here: Flutter web only wires up its real DOM text-input focus in
+// response to a trusted pointer event landing directly on the field, so
+// an autofocus triggered from a *different* button's click handler never
+// produces a browser-visible `document.activeElement` change for
+// Playwright to assert on, even though Flutter's own focus tree is
+// correctly focused.
+
 test('clicking outside the draft dismisses it without creating a block', async ({
   page,
 }) => {

@@ -76,21 +76,20 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
     return added;
   }
 
-  /// Updates [block]'s title/start/end, persisting via the repository and
-  /// refreshing state. Silently does nothing if the resulting start/end
-  /// would be invalid (see [isValidBlockEdit]) — title-only edits are
+  /// Updates [block]'s title/start/end/kind, persisting via the repository
+  /// and refreshing state. Silently does nothing if the resulting start/end
+  /// would be invalid (see [isValidBlockEdit]) — title/kind-only edits are
   /// always valid since they don't touch start/end.
   Future<void> updateBlock(
     TimeObject block, {
     String? title,
     DateTime? start,
     DateTime? end,
+    BlockKind? kind,
   }) async {
     final newStart = start ?? block.start;
     final newEnd = end ?? block.end;
-    final others = (state.value ?? [])
-        .where((b) => b.id != block.id)
-        .toList();
+    final others = (state.value ?? []).where((b) => b.id != block.id).toList();
     final settings = ref.read(daySettingsProvider);
     if (!isValidBlockEdit(
       start: newStart,
@@ -109,6 +108,7 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
       title: title,
       start: start,
       end: end,
+      kind: kind,
     );
     state = AsyncData([
       for (final b in state.value ?? <TimeObject>[])

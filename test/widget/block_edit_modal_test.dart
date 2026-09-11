@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
@@ -53,11 +54,8 @@ Future<void> _pumpOpenButton(
       home: Scaffold(
         body: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () => showBlockEditModal(
-              context: context,
-              date: _date,
-              block: block,
-            ),
+            onPressed: () =>
+                showBlockEditModal(context: context, date: _date, block: block),
             child: const Text('Open'),
           ),
         ),
@@ -70,9 +68,7 @@ void main() {
   group('BlockCategoryPlaceholder', () {
     testWidgets('renders a row of empty squares', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: BlockCategoryPlaceholder()),
-        ),
+        const MaterialApp(home: Scaffold(body: BlockCategoryPlaceholder())),
       );
 
       expect(find.byType(BlockCategoryPlaceholder), findsOneWidget);
@@ -118,71 +114,6 @@ void main() {
     });
   });
 
-  group('showTimeWheelPicker', () {
-    testWidgets('returns the picked time on Done', (tester) async {
-      DateTime? picked;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () async {
-                  picked = await showTimeWheelPicker(
-                    context: context,
-                    initial: DateTime(2026, 9, 9, 9),
-                    settings: _settings,
-                  );
-                },
-                child: const Text('Open'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      // The wheel starts scrolled to `initial`'s hour/minute, and Done
-      // confirms without any scrolling, so it must return the same value.
-      expect(picked, DateTime(2026, 9, 9, 9));
-    });
-
-    testWidgets('returns null when dismissed without confirming', (
-      tester,
-    ) async {
-      DateTime? picked = DateTime(2026, 9, 9, 9);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () async {
-                  picked = await showTimeWheelPicker(
-                    context: context,
-                    initial: DateTime(2026, 9, 9, 9),
-                    settings: _settings,
-                  );
-                },
-                child: const Text('Open'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      // Tap the barrier above the sheet to dismiss it without confirming.
-      await tester.tapAt(const Offset(400, 50));
-      await tester.pumpAndSettle();
-
-      expect(picked, isNull);
-    });
-  });
-
   group('BlockDeleteButton', () {
     testWidgets('does not confirm on a single tap', (tester) async {
       var confirmed = false;
@@ -200,9 +131,7 @@ void main() {
       expect(confirmed, isFalse);
     });
 
-    testWidgets('confirms on a second tap within the timeout', (
-      tester,
-    ) async {
+    testWidgets('confirms on a second tap within the timeout', (tester) async {
       var confirmed = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -241,6 +170,54 @@ void main() {
   });
 
   group('BlockEditModal', () {
+    testWidgets('the close button sits above the title field', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final closeTop = tester.getTopLeft(find.byIcon(Icons.close)).dy;
+      final titleTop = tester.getTopLeft(find.byType(TextField)).dy;
+      expect(closeTop, lessThan(titleTop));
+    });
+
+    testWidgets('a freshly created block (empty title) autofocuses the '
+        'title field', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(dayBlocksProvider(_date).future);
+      final block = await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 9),
+            end: DateTime(2000, 1, 1, 9, 30),
+            kind: BlockKind.anchor,
+            title: '',
+          );
+      await _pumpOpenButton(tester, container, block);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.focusNode!.hasFocus, isTrue);
+    });
+
+    testWidgets('an existing block with a title does not autofocus the '
+        'title field', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.focusNode!.hasFocus, isFalse);
+    });
+
     testWidgets("shows the block's title, start and end", (tester) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
@@ -351,8 +328,10 @@ void main() {
       expect(reloaded, isEmpty);
     });
 
-    testWidgets('tapping the start row, scrolling the minute wheel and '
-        'confirming updates the start', (tester) async {
+    testWidgets('tapping the start row and scrolling the minute wheel '
+        'updates the start immediately, with no separate confirm step', (
+      tester,
+    ) async {
       final (container, block) = await _seededContainer();
       addTearDown(container.dispose);
       await _pumpOpenButton(tester, container, block);
@@ -369,11 +348,12 @@ void main() {
         const Offset(0, -40),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
 
       final blocks = container.read(dayBlocksProvider(_date)).value!;
       expect(blocks.single.start, DateTime(2000, 1, 1, 9, 15));
+      // Applying a value on every scroll tick must not also collapse the
+      // picker — only tapping the row again does that.
+      expect(find.byType(ListWheelScrollView), findsWidgets);
     });
 
     testWidgets('an edit that would overlap another block is silently '
@@ -403,8 +383,6 @@ void main() {
         find.byType(ListWheelScrollView).at(1),
         const Offset(0, -40),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
 
       final blocks = container.read(dayBlocksProvider(_date)).value!;
@@ -448,9 +426,7 @@ void main() {
       await tester.tap(find.widgetWithIcon(IconButton, Icons.content_copy));
       await tester.pumpAndSettle();
 
-      final nextDayBlocks = container
-          .read(dayBlocksProvider(nextDate))
-          .value!;
+      final nextDayBlocks = container.read(dayBlocksProvider(nextDate)).value!;
       expect(nextDayBlocks, hasLength(1));
       expect(nextDayBlocks.single.title, 'Work');
     });
@@ -471,9 +447,7 @@ void main() {
       await tester.tap(find.widgetWithIcon(IconButton, Icons.content_copy));
       await tester.pumpAndSettle();
 
-      final nextDayBlocks = container
-          .read(dayBlocksProvider(nextDate))
-          .value!;
+      final nextDayBlocks = container.read(dayBlocksProvider(nextDate)).value!;
       expect(nextDayBlocks, hasLength(1));
       expect(nextDayBlocks.single.title, 'Deep work');
     });
@@ -499,6 +473,225 @@ void main() {
 
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.text('Work'), findsOneWidget);
+    });
+
+    testWidgets("shows the block's date", (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('01/01/2000'), findsOneWidget);
+    });
+
+    testWidgets("picking a different date moves the block to that date's "
+        'provider', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.calendar_today));
+      await tester.pumpAndSettle();
+      // The Material date picker defaults to a calendar grid; "15" is
+      // always a valid day in every month, so this reliably picks the
+      // 15th of whatever month the picker opened on.
+      await tester.tap(find.text('15'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      final oldDateBlocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(oldDateBlocks.where((b) => b.id == block.id), isEmpty);
+
+      final newDate = DateTime(_date.year, _date.month, 15);
+      final newDateBlocks = await container.read(
+        dayBlocksProvider(newDate).future,
+      );
+      expect(newDateBlocks.where((b) => b.id == block.id), hasLength(1));
+    });
+
+    testWidgets('picking a different date closes only the calendar, '
+        'leaving the modal open and showing the new date', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.calendar_today));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('15'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BlockEditModal), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsOneWidget);
+      final newDate = DateTime(_date.year, _date.month, 15);
+      expect(
+        find.text(formatDate(newDate, _settings.dateFormat)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the hour wheel only offers hours reachable within the gap '
+        "next to the block's nearest neighbor", (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      // "Work" runs 09:00-09:30; adding this makes 08:30 the nearest
+      // previous block boundary, so editing Starts can only reach
+      // 08:30-09:15 (bounded above by Work's own end minus the 15-minute
+      // minimum duration) — hours 8 and 9 only.
+      await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 8),
+            end: DateTime(2000, 1, 1, 8, 30),
+            kind: BlockKind.anchor,
+          );
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+
+      final hourWheel = tester.widget<ListWheelScrollView>(
+        find.byType(ListWheelScrollView).first,
+      );
+      expect(hourWheel.childDelegate.estimatedChildCount, 2);
+    });
+
+    testWidgets('the minute wheel only offers quarters valid for the '
+        'currently selected hour', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 8),
+            end: DateTime(2000, 1, 1, 8, 30),
+            kind: BlockKind.anchor,
+          );
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+
+      // Work starts at 09:00, so the minute wheel opens on hour 9, whose
+      // only valid quarters (within 08:30-09:15) are :00 and :15.
+      final minuteWheel = tester.widget<ListWheelScrollView>(
+        find.byType(ListWheelScrollView).at(1),
+      );
+      expect(minuteWheel.childDelegate.estimatedChildCount, 2);
+    });
+
+    testWidgets('the centered wheel value is styled bolder than the rest', (
+      tester,
+    ) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+
+      // Work starts at 09:00 — "09" is the centered hour; "08" is a
+      // different, non-centered one the wheel's limited visible range
+      // still renders alongside it.
+      final selected = tester.widget<Text>(find.text('09').first);
+      final unselected = tester.widget<Text>(find.text('08').first);
+      expect(selected.style?.fontWeight, FontWeight.bold);
+      expect(unselected.style?.fontWeight, isNot(FontWeight.bold));
+    });
+
+    testWidgets('tapping the start row expands the wheel picker inline '
+        'instead of opening a bottom sheet', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsNothing);
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(ListWheelScrollView), findsWidgets);
+    });
+
+    testWidgets('tapping the same row again collapses the picker without '
+        'changing the time', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ListWheelScrollView), findsNothing);
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.start, block.start);
+    });
+
+    testWidgets("opening the end row's picker collapses an already-open "
+        'start picker', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BlockTimeRow).first);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(BlockTimeRow).last);
+      await tester.tap(find.byType(BlockTimeRow).last);
+      await tester.pumpAndSettle();
+
+      // Only one field's wheels (hour + minute) should be showing at once.
+      expect(find.byType(ListWheelScrollView), findsNWidgets(2));
+    });
+
+    testWidgets('shows a segmented type selector with the current kind '
+        'selected', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final segmented = tester.widget<SegmentedButton<BlockKind>>(
+        find.byType(SegmentedButton<BlockKind>),
+      );
+      expect(segmented.selected, {BlockKind.anchor});
+    });
+
+    testWidgets('selecting Frame in the type selector persists the kind '
+        'change', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Frame'));
+      await tester.pumpAndSettle();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.kind, BlockKind.frame);
     });
 
     testWidgets('confirming delete twice removes the block and closes', (

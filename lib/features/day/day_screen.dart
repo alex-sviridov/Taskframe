@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_grid_sizing.dart';
+import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
@@ -38,6 +39,10 @@ const _edgeFadeWidth = 72.0;
 /// How long the drag pointer must stay in an edge zone before it pages to
 /// the adjacent day/week.
 const _edgeDwellDuration = Duration(milliseconds: 600);
+
+/// Duration a block created via the add button gets, before
+/// [findNextFreeSlot] shrinks it to fit a shorter gap or the day end.
+const _newBlockDuration = Duration(minutes: 60);
 
 /// Viewport width at/above which the schedule shows a full week (7 days)
 /// per page instead of a single day.
@@ -97,6 +102,31 @@ class _DayScreenState extends ConsumerState<DayScreen> {
     _cancelEdgeDwell();
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// Creates a new block on the currently selected date, in its next free
+  /// slot, and opens the edit modal for it — the AppBar add button's
+  /// equivalent of double-tapping/long-pressing free grid space, without
+  /// needing a tap location to infer a time from.
+  Future<void> _createViaButton(BuildContext context) async {
+    final date = ref.read(selectedDateProvider);
+    final settings = ref.read(daySettingsProvider);
+    final existingBlocks = ref.read(dayBlocksProvider(date)).value ?? [];
+    final start = findNextFreeSlot(
+      day: date,
+      existingBlocks: existingBlocks,
+      settings: settings,
+      duration: _newBlockDuration,
+    );
+    final end = dayEndFor(date, settings).isBefore(start.add(_newBlockDuration))
+        ? dayEndFor(date, settings)
+        : start.add(_newBlockDuration);
+
+    final created = await ref
+        .read(dayBlocksProvider(date).notifier)
+        .addBlock(start: start, end: end, kind: BlockKind.anchor);
+    if (!context.mounted) return;
+    await showBlockEditModal(context: context, date: date, block: created);
   }
 
   DateTime _startDateForPage(int page) => DateTime(
@@ -210,6 +240,13 @@ class _DayScreenState extends ConsumerState<DayScreen> {
         // (narrow widths only) has room without covering the title.
         leading: const SizedBox(),
         title: const Text('Day Frame'),
+        actions: [
+          IconButton(
+            tooltip: 'Add block',
+            icon: const Icon(Icons.add),
+            onPressed: () => unawaited(_createViaButton(context)),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

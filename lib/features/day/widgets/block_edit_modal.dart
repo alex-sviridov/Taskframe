@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 
 /// A fixed-height row of empty, non-interactive rounded squares reserving
 /// visual space for a future category carousel. Carries no data model or
@@ -73,53 +75,91 @@ class BlockTimeRow extends StatelessWidget {
   }
 }
 
-/// Opens a bottom sheet with hour/minute-in-15-increments wheels, scrolled
-/// initially to [initial]'s hour/minute (rounded down to the nearest 15),
-/// bounded by [settings]'s day start/end hour. Returns the picked
-/// [DateTime] (same year/month/day as [initial]) if the user taps "Done",
-/// or `null` if the sheet is dismissed another way.
-Future<DateTime?> showTimeWheelPicker({
-  required BuildContext context,
-  required DateTime initial,
-  required DaySettings settings,
-}) {
-  return showModalBottomSheet<DateTime>(
-    context: context,
-    builder: (context) => _TimeWheelPicker(initial: initial, settings: settings),
-  );
-}
+/// The 15-minute grid values a minute wheel can ever offer.
+const _quarterMinutes = [0, 15, 30, 45];
 
+/// An inline hour/minute-in-15-increments wheel picker, shown expanded
+/// beneath one of the block edit modal's time rows. Only offers hours and
+/// minutes that fall within [range] (see [validEditRange]) — so a value
+/// that would push the block past its neighbor or the day's own bounds is
+/// never reachable — and renders whichever value is currently centered in
+/// each wheel bolder and larger than the rest, so scrolling shows clearly
+/// what's selected.
 class _TimeWheelPicker extends StatefulWidget {
-  const _TimeWheelPicker({required this.initial, required this.settings});
+  const _TimeWheelPicker({
+    required this.initial,
+    required this.settings,
+    required this.range,
+    required this.onDone,
+  });
 
   final DateTime initial;
   final DaySettings settings;
+
+  /// The contiguous range [initial]'s hour/minute may move within; see
+  /// [validEditRange].
+  final ({DateTime start, DateTime end}) range;
+
+  /// Called with the picked time on every scroll change to either wheel —
+  /// there's no separate confirm step; the caller applies each value as
+  /// soon as it's dialed in. Tapping the row again (outside this widget)
+  /// is what hides the picker.
+  final ValueChanged<DateTime> onDone;
 
   @override
   State<_TimeWheelPicker> createState() => _TimeWheelPickerState();
 }
 
 class _TimeWheelPickerState extends State<_TimeWheelPicker> {
+  /// Computed once from [_TimeWheelPicker.range] — fixed for the picker's
+  /// whole lifetime, so this is never recomputed mid-scroll.
+  late final List<int> _hours;
+
   late int _hour;
+
+  /// The valid quarters for [_hour] specifically — recomputed only when
+  /// [_hour] changes (via [_selectHour]), not on every minute-wheel scroll.
+  late List<int> _quarters;
   late int _quarterIndex;
   late final FixedExtentScrollController _hourController;
   late final FixedExtentScrollController _minuteController;
 
-  List<int> get _hours => [
-    for (var h = widget.settings.dayStartHour; h <= widget.settings.dayEndHour; h++) h,
+  /// Whether a quarter-hour value at [hour]:[minute] falls within
+  /// [_TimeWheelPicker.range].
+  bool _isValid(int hour, int minute) {
+    final t = DateTime(
+      widget.initial.year,
+      widget.initial.month,
+      widget.initial.day,
+      hour,
+      minute,
+    );
+    return !t.isBefore(widget.range.start) && !t.isAfter(widget.range.end);
+  }
+
+  List<int> _quartersFor(int hour) => [
+    for (final m in _quarterMinutes)
+      if (_isValid(hour, m)) m,
   ];
 
   @override
   void initState() {
     super.initState();
+    _hours = [
+      for (
+        var h = widget.settings.dayStartHour;
+        h <= widget.settings.dayEndHour;
+        h++
+      )
+        if (_quartersFor(h).isNotEmpty) h,
+    ];
     _hour = widget.initial.hour;
-    _quarterIndex = widget.initial.minute ~/ 15;
+    _quarters = _quartersFor(_hour);
+    _quarterIndex = _quarters.indexOf(widget.initial.minute);
     _hourController = FixedExtentScrollController(
       initialItem: _hours.indexOf(_hour),
     );
-    _minuteController = FixedExtentScrollController(
-      initialItem: _quarterIndex,
-    );
+    _minuteController = FixedExtentScrollController(initialItem: _quarterIndex);
   }
 
   @override
@@ -129,57 +169,98 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
     super.dispose();
   }
 
+  /// Calls [_TimeWheelPicker.onDone] with the currently dialed-in hour and
+  /// quarter, applying it immediately — there's no separate confirm step.
+  void _applyCurrent() {
+    widget.onDone(
+      DateTime(
+        widget.initial.year,
+        widget.initial.month,
+        widget.initial.day,
+        _hour,
+        _quarters[_quarterIndex],
+      ),
+    );
+  }
+
+  /// Applies a new hour selection, recomputing the minute wheel's valid
+  /// quarters for it and — if the previously selected minute isn't one of
+  /// them — snapping to whichever of the new quarters is closest, then
+  /// repositions the minute wheel to match once the frame settles (jumping
+  /// it mid-callback would fight the hour wheel's own scroll settling).
+  void _selectHour(int hour) {
+    final oldMinute = _quarters[_quarterIndex];
+    final newQuarters = _quartersFor(hour);
+    var newIndex = newQuarters.indexOf(oldMinute);
+    if (newIndex == -1) {
+      newIndex = 0;
+      var bestDiff = (newQuarters[0] - oldMinute).abs();
+      for (var i = 1; i < newQuarters.length; i++) {
+        final diff = (newQuarters[i] - oldMinute).abs();
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          newIndex = i;
+        }
+      }
+    }
+    setState(() {
+      _hour = hour;
+      _quarters = newQuarters;
+      _quarterIndex = newIndex;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _minuteController.jumpToItem(newIndex);
+    });
+    _applyCurrent();
+  }
+
+  Widget _wheelText(String text, {required bool selected}) => Center(
+    child: Text(
+      text,
+      style: TextStyle(
+        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+        fontSize: selected ? 22 : 16,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final hours = _hours;
     return SafeArea(
       child: SizedBox(
-        height: 260,
-        child: Column(
+        height: 220,
+        child: Row(
           children: [
             Expanded(
-              child: Row(
+              child: ListWheelScrollView(
+                itemExtent: 40,
+                controller: _hourController,
+                onSelectedItemChanged: (index) => _selectHour(_hours[index]),
                 children: [
-                  Expanded(
-                    child: ListWheelScrollView(
-                      itemExtent: 40,
-                      controller: _hourController,
-                      onSelectedItemChanged: (index) =>
-                          setState(() => _hour = hours[index]),
-                      children: [
-                        for (final h in hours)
-                          Center(child: Text(h.toString().padLeft(2, '0'))),
-                      ],
+                  for (final h in _hours)
+                    _wheelText(
+                      h.toString().padLeft(2, '0'),
+                      selected: h == _hour,
                     ),
-                  ),
-                  Expanded(
-                    child: ListWheelScrollView(
-                      itemExtent: 40,
-                      controller: _minuteController,
-                      onSelectedItemChanged: (index) =>
-                          setState(() => _quarterIndex = index),
-                      children: const [
-                        Center(child: Text('00')),
-                        Center(child: Text('15')),
-                        Center(child: Text('30')),
-                        Center(child: Text('45')),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(
-                DateTime(
-                  widget.initial.year,
-                  widget.initial.month,
-                  widget.initial.day,
-                  _hour,
-                  _quarterIndex * 15,
-                ),
+            Expanded(
+              child: ListWheelScrollView(
+                itemExtent: 40,
+                controller: _minuteController,
+                onSelectedItemChanged: (index) {
+                  setState(() => _quarterIndex = index);
+                  _applyCurrent();
+                },
+                children: [
+                  for (final m in _quarters)
+                    _wheelText(
+                      m.toString().padLeft(2, '0'),
+                      selected: m == _quarters[_quarterIndex],
+                    ),
+                ],
               ),
-              child: const Text('Done'),
             ),
           ],
         ),
@@ -294,16 +375,30 @@ class BlockEditModal extends ConsumerStatefulWidget {
   ConsumerState<BlockEditModal> createState() => _BlockEditModalState();
 }
 
+/// Which of the modal's two time rows, if any, currently has its wheel
+/// picker expanded inline beneath it.
+enum _TimeField { start, end }
+
 class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   late final TextEditingController _titleController;
   late final FocusNode _titleFocus;
   TimeObject? _currentBlock;
+  _TimeField? _expandedField;
+
+  /// The date whose provider this modal currently watches/writes through.
+  /// Starts at [BlockEditModal.date] (a `final` constructor param that
+  /// can't itself change) and is reassigned by [_changeDate] after a
+  /// cross-day move, so the modal keeps showing the same block on its new
+  /// date instead of the move looking like the block was deleted.
+  late DateTime _currentDate;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.initialBlock.title);
     _titleFocus = FocusNode()..addListener(_handleFocusChange);
+    _autofocusTitle = widget.initialBlock.title.trim().isEmpty;
+    _currentDate = widget.date;
   }
 
   @override
@@ -314,6 +409,12 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     _titleController.dispose();
     super.dispose();
   }
+
+  /// Whether the title field should grab focus on this build — only true
+  /// once, right after opening a block whose title is still empty (a
+  /// freshly created one), so re-opening an already-titled block never
+  /// pops the keyboard unexpectedly.
+  bool _autofocusTitle = false;
 
   void _handleFocusChange() {
     final block = _currentBlock;
@@ -330,37 +431,95 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     }
     if (value != block.title) {
       await ref
-          .read(dayBlocksProvider(widget.date).notifier)
+          .read(dayBlocksProvider(_currentDate).notifier)
           .updateBlock(block, title: value);
     }
   }
 
-  Future<void> _editStart(TimeObject block, DaySettings settings) async {
+  /// Toggles [field]'s inline wheel picker: collapses it if already
+  /// expanded (a cancel, matching the old sheet's dismiss-without-
+  /// confirming behavior), otherwise commits any pending title edit first
+  /// and expands it — collapsing whichever other field was expanded, so
+  /// only one shows at a time.
+  Future<void> _toggleTimeField(_TimeField field, TimeObject block) async {
+    if (_expandedField == field) {
+      setState(() => _expandedField = null);
+      return;
+    }
     await _commitTitle(block);
     if (!mounted) return;
-    final picked = await showTimeWheelPicker(
-      context: context,
-      initial: block.start,
-      settings: settings,
-    );
-    if (picked == null) return;
-    await ref
-        .read(dayBlocksProvider(widget.date).notifier)
-        .updateBlock(block, start: picked);
+    setState(() => _expandedField = field);
   }
 
-  Future<void> _editEnd(TimeObject block, DaySettings settings) async {
+  /// Opens the standard Material date picker and, if a different date is
+  /// picked, moves [block] there via the repository — the same
+  /// move-and-refresh pattern [DragNotifier.drop] uses for a drag-and-drop
+  /// move — then switches [_currentDate] to it. Only the calendar itself
+  /// closes; the modal stays open, now reading/writing through the new
+  /// date's provider.
+  Future<void> _changeDate(TimeObject block) async {
     await _commitTitle(block);
     if (!mounted) return;
-    final picked = await showTimeWheelPicker(
+    final picked = await showDatePicker(
       context: context,
-      initial: block.end,
-      settings: settings,
+      initialDate: _currentDate,
+      firstDate: DateTime(_currentDate.year - 5),
+      lastDate: DateTime(_currentDate.year + 5),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
+
+    final newDate = DateTime(picked.year, picked.month, picked.day);
+    final oldDate = DateTime(
+      _currentDate.year,
+      _currentDate.month,
+      _currentDate.day,
+    );
+    if (newDate == oldDate) return;
+
+    final duration = block.end.difference(block.start);
+    final newStart = DateTime(
+      newDate.year,
+      newDate.month,
+      newDate.day,
+      block.start.hour,
+      block.start.minute,
+    );
+    final repository = ref.read(dayBlocksRepositoryProvider);
+    await repository.move(
+      block,
+      fromDate: oldDate,
+      toDate: newDate,
+      newStart: newStart,
+      newEnd: newStart.add(duration),
+    );
+
+    ref.invalidate(dayBlocksProvider(oldDate));
+    ref.invalidate(dayBlocksProvider(newDate));
+    await ref.read(dayBlocksProvider(oldDate).future);
+    await ref.read(dayBlocksProvider(newDate).future);
+    if (!mounted) return;
+    setState(() => _currentDate = newDate);
+  }
+
+  Future<void> _confirmTime(
+    TimeObject block,
+    _TimeField field,
+    DateTime picked,
+  ) async {
     await ref
-        .read(dayBlocksProvider(widget.date).notifier)
-        .updateBlock(block, end: picked);
+        .read(dayBlocksProvider(_currentDate).notifier)
+        .updateBlock(
+          block,
+          start: field == _TimeField.start ? picked : null,
+          end: field == _TimeField.end ? picked : null,
+        );
+  }
+
+  Future<void> _setKind(TimeObject block, BlockKind kind) async {
+    if (kind == block.kind) return;
+    await ref
+        .read(dayBlocksProvider(_currentDate).notifier)
+        .updateBlock(block, kind: kind);
   }
 
   Future<void> _copyToNextDay(TimeObject block) async {
@@ -369,21 +528,20 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     // copyToNextDay reads block.title directly, so a just-committed rename
     // must be picked up here — re-fetch by id rather than reusing the
     // pre-commit `block`, whose title field is now stale.
-    final blocks = ref.read(dayBlocksProvider(widget.date)).value;
+    final blocks = ref.read(dayBlocksProvider(_currentDate)).value;
     final toCopy = blocks == null
         ? block
         : (_findById(blocks, block.id) ?? block);
     await ref
-        .read(dayBlocksProvider(widget.date).notifier)
+        .read(dayBlocksProvider(_currentDate).notifier)
         .copyToNextDay(toCopy);
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Copied to next day')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Copied to next day')));
   }
 
   Future<void> _delete(TimeObject block) async {
-    await ref.read(dayBlocksProvider(widget.date).notifier).deleteBlock(block);
+    await ref.read(dayBlocksProvider(_currentDate).notifier).deleteBlock(block);
     _currentBlock = null;
     if (mounted) Navigator.of(context).pop();
   }
@@ -397,7 +555,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   @override
   Widget build(BuildContext context) {
-    final blocks = ref.watch(dayBlocksProvider(widget.date)).value;
+    final blocks = ref.watch(dayBlocksProvider(_currentDate)).value;
     final block = blocks == null
         ? widget.initialBlock
         : _findById(blocks, widget.initialBlock.id);
@@ -420,9 +578,9 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
     final settings = ref.watch(daySettingsProvider);
     final nextDate = DateTime(
-      widget.date.year,
-      widget.date.month,
-      widget.date.day + 1,
+      _currentDate.year,
+      _currentDate.month,
+      _currentDate.day + 1,
     );
     final nextDayBlocks = ref.watch(dayBlocksProvider(nextDate)).value;
     final canCopy =
@@ -432,58 +590,113 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
           nextDate: nextDate,
           nextDayBlocks: nextDayBlocks,
         );
+    final others = (blocks ?? const <TimeObject>[])
+        .where((b) => b.id != current.id)
+        .toList();
 
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    focusNode: _titleFocus,
-                    onSubmitted: (_) => _commitTitle(current),
-                    decoration: const InputDecoration(border: InputBorder.none),
-                    style: Theme.of(context).textTheme.titleLarge,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _titleController,
+                focusNode: _titleFocus,
+                autofocus: _autofocusTitle,
+                onSubmitted: (_) => _commitTitle(current),
+                decoration: const InputDecoration(border: InputBorder.none),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              const BlockCategoryPlaceholder(),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: Text(formatDate(_currentDate, settings.dateFormat)),
+                onTap: () => _changeDate(current),
+              ),
+              BlockTimeRow(
+                label: 'Starts',
+                time: current.start,
+                onTap: () => _toggleTimeField(_TimeField.start, current),
+              ),
+              if (_expandedField == _TimeField.start)
+                _TimeWheelPicker(
+                  initial: current.start,
+                  settings: settings,
+                  range: validEditRange(
+                    block: current,
+                    editingStart: true,
+                    day: _currentDate,
+                    settings: settings,
+                    others: others,
+                  ),
+                  onDone: (picked) =>
+                      _confirmTime(current, _TimeField.start, picked),
                 ),
-                IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
+              BlockTimeRow(
+                label: 'Ends',
+                time: current.end,
+                onTap: () => _toggleTimeField(_TimeField.end, current),
+              ),
+              if (_expandedField == _TimeField.end)
+                _TimeWheelPicker(
+                  initial: current.end,
+                  settings: settings,
+                  range: validEditRange(
+                    block: current,
+                    editingStart: false,
+                    day: _currentDate,
+                    settings: settings,
+                    others: others,
+                  ),
+                  onDone: (picked) =>
+                      _confirmTime(current, _TimeField.end, picked),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const BlockCategoryPlaceholder(),
-            const SizedBox(height: 12),
-            BlockTimeRow(
-              label: 'Starts',
-              time: current.start,
-              onTap: () => _editStart(current, settings),
-            ),
-            BlockTimeRow(
-              label: 'Ends',
-              time: current.end,
-              onTap: () => _editEnd(current, settings),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  tooltip: 'Copy to next day',
-                  icon: const Icon(Icons.content_copy),
-                  onPressed: canCopy ? () => _copyToNextDay(current) : null,
+              const SizedBox(height: 12),
+              Center(
+                child: SegmentedButton<BlockKind>(
+                  segments: [
+                    for (final kind in BlockKind.values)
+                      ButtonSegment(
+                        value: kind,
+                        label: Text(kind.label),
+                        icon: Icon(kind.icon, color: kind.color),
+                      ),
+                  ],
+                  selected: {current.kind},
+                  onSelectionChanged: (selection) =>
+                      _setKind(current, selection.single),
                 ),
-                BlockDeleteButton(onConfirmed: () => _delete(current)),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Copy to next day',
+                    icon: const Icon(Icons.content_copy),
+                    onPressed: canCopy ? () => _copyToNextDay(current) : null,
+                  ),
+                  BlockDeleteButton(onConfirmed: () => _delete(current)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
