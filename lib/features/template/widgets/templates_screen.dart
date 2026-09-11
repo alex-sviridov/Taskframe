@@ -4,32 +4,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/day/day_settings.dart';
-import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
-import 'package:taskframe/features/day/widgets/hour_gutter.dart';
+import 'package:taskframe/features/day/widgets/schedule_columns_page.dart';
 import 'package:taskframe/features/template/models/template.dart';
 import 'package:taskframe/features/template/providers.dart';
 
-const _minSlotHeight = 8.0;
-const _headerHeight = 56.0;
-const _columnGap = 8.0;
-
 /// The templates screen: a set of named templates, each with its own
 /// full schedule editor reusing `DayGrid`. Narrow widths show one
-/// template per page (swipe/arrows between templates); wide widths show
-/// every template as a side-by-side column.
+/// template per page (swipe or arrows between templates); wide widths
+/// show every template as a side-by-side column.
 class TemplatesScreen extends ConsumerStatefulWidget {
-  const TemplatesScreen({super.key});
+  /// Creates a [TemplatesScreen].
+  const new({super.key});
 
   @override
   ConsumerState<TemplatesScreen> createState() => _TemplatesScreenState();
 }
 
 class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
+  /// Only actually attached to a `PageView` at narrow widths — see
+  /// [_syncPageControllerSoon].
+  late final PageController _pageController;
+  late final PageSwipeForwarder _swipeForwarder;
+
+  /// The last width class this screen was built at, used to detect a
+  /// narrow/wide breakpoint crossing.
+  bool? _wasNarrow;
+
   int _pageIndex = 0;
 
   /// The next default name's number. Only ever increases, so deleting
@@ -37,12 +42,43 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
   /// second "Template 2" — a count-based name collides after any delete.
   int _nextTemplateNumber = 1;
 
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _swipeForwarder = PageSwipeForwarder(_pageController);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// Jumps [_pageController] to [_pageIndex] once it's actually attached
+  /// to a mounted `PageView` (i.e. once the screen is narrow).
+  ///
+  /// A `PageController`'s own `initialPage` only takes effect the first
+  /// time it attaches to a scroll view — since this screen only mounts a
+  /// `PageView` at narrow widths, a `_pageIndex` change made while wide
+  /// (add/delete a template) would otherwise be silently lost the next
+  /// time the viewport narrows and the `PageView` attaches for the first
+  /// time. Scheduled as a post-frame callback so it runs after whatever
+  /// build just attached (or re-attached) the controller.
+  void _syncPageControllerSoon() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      _pageController.jumpToPage(_pageIndex);
+    });
+  }
+
   Future<void> _addTemplate() async {
     final templates = ref.read(templateListProvider).value ?? const [];
     final name = 'Template ${_nextTemplateNumber++}';
     await ref.read(templateListProvider.notifier).addTemplate(name: name);
     if (!mounted) return;
     setState(() => _pageIndex = templates.length);
+    _syncPageControllerSoon();
   }
 
   Future<void> _deleteTemplate(Template template) async {
@@ -55,16 +91,31 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     } else if (remaining == 0) {
       setState(() => _pageIndex = 0);
     }
+    _syncPageControllerSoon();
   }
+
+  Future<void> _animateTo(int index) => _pageController.animateToPage(
+    index,
+    duration: schedulePageAnimationDuration,
+    curve: schedulePageAnimationCurve,
+  );
 
   @override
   Widget build(BuildContext context) {
     final templatesAsync = ref.watch(templateListProvider);
     final templates = templatesAsync.value ?? const <Template>[];
     final narrow = isNarrow(context);
+    final settings = ref.watch(daySettingsProvider);
     final currentIndex = templates.isEmpty
         ? 0
         : _pageIndex.clamp(0, templates.length - 1);
+
+    // Only matters the moment the viewport *becomes* narrow — see
+    // _syncPageControllerSoon's docs.
+    if (_wasNarrow != null && _wasNarrow != narrow && narrow) {
+      _syncPageControllerSoon();
+    }
+    _wasNarrow = narrow;
 
     return Scaffold(
       appBar: AppBar(
@@ -85,93 +136,112 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
           if (templates.isEmpty) {
             return const Center(child: Text('No templates yet'));
           }
-          final visible = narrow ? [templates[currentIndex]] : templates;
+
+          if (!narrow) {
+            return ScheduleColumnsPage(
+              columnCount: templates.length,
+              settings: settings,
+              headerBuilder: (context, i) => _ColumnHeader(
+                key: ValueKey(templates[i].id),
+                template: templates[i],
+                onDelete: () => unawaited(_deleteTemplate(templates[i])),
+              ),
+              gridBuilder: (context, i, slotHeight, showHourLabels) =>
+                  Expanded(
+                    child: _TemplateColumnGrid(
+                      template: templates[i],
+                      settings: settings,
+                      slotHeight: slotHeight,
+                      showHourLabels: showHourLabels,
+                    ),
+                  ),
+            );
+          }
+
           return Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: _headerHeight,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: HourGutter.width),
-                          for (var i = 0; i < visible.length; i++) ...[
-                            if (i > 0)
-                              const VerticalDivider(width: _columnGap, thickness: 1),
-                            Expanded(child: _ColumnHeader(
-                              // Positional matching alone would re-parent a
-                              // deleted column's _ColumnHeaderState (and its
-                              // TextEditingController) onto the next
-                              // template's data.
-                              key: ValueKey(visible[i].id),
-                              template: visible[i],
-                              onDelete: () => unawaited(_deleteTemplate(visible[i])),
-                            )),
-                          ],
-                          const SizedBox(width: HourGutter.width),
-                        ],
+              PageView.builder(
+                controller: _pageController,
+                // Same trick DayScreen uses: PageView's own recognizer
+                // never competes for drags that start on a block, while
+                // PageScrollPhysics' snap-to-page ballistic simulation
+                // still applies to drags forwarded via _swipeForwarder.
+                physics: const NeverScrollableScrollPhysics(
+                  parent: PageScrollPhysics(),
+                ),
+                itemCount: templates.length,
+                onPageChanged: (i) => setState(() => _pageIndex = i),
+                itemBuilder: (context, i) => ScheduleColumnsPage(
+                  columnCount: 1,
+                  settings: settings,
+                  headerBuilder: (context, _) => _ColumnHeader(
+                    key: ValueKey(templates[i].id),
+                    template: templates[i],
+                    onDelete: () => unawaited(_deleteTemplate(templates[i])),
+                  ),
+                  gridBuilder: (context, _, slotHeight, showHourLabels) =>
+                      Expanded(
+                        child: _TemplateColumnGrid(
+                          template: templates[i],
+                          settings: settings,
+                          slotHeight: slotHeight,
+                          showHourLabels: showHourLabels,
+                          onSwipeStart: _swipeForwarder.onSwipeStart,
+                          onSwipeUpdate: _swipeForwarder.onSwipeUpdate,
+                          onSwipeEnd: _swipeForwarder.onSwipeEnd,
+                          onSwipeCancel: _swipeForwarder.onSwipeCancel,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final settings = ref.watch(daySettingsProvider);
-                          final slotCount =
-                              (settings.dayEndHour - settings.dayStartHour) * 4;
-                          final slotHeight = resolveSlotHeight(
-                            availableHeight: constraints.maxHeight,
-                            slotCount: slotCount,
-                            minSlotHeight: _minSlotHeight,
-                          );
-                          return SingleChildScrollView(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                HourGutter(settings: settings, slotHeight: slotHeight),
-                                for (var i = 0; i < visible.length; i++) ...[
-                                  if (i > 0) const SizedBox(width: _columnGap),
-                                  Expanded(
-                                    child: _TemplateColumnGrid(
-                                      template: visible[i],
-                                      settings: settings,
-                                      slotHeight: slotHeight,
-                                    ),
-                                  ),
-                                ],
-                                HourGutter(settings: settings, slotHeight: slotHeight),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
                 ),
               ),
-              if (narrow && templates.length > 1) ...[
+              // Fades the sliding header content to the background color
+              // before it reaches either arrow, matching DayScreen.
+              const Positioned(
+                top: 0,
+                left: 0,
+                width: scheduleEdgeFadeWidth,
+                height: scheduleHeaderHeight,
+                child: IgnorePointer(child: ScheduleEdgeFade(alignLeft: true)),
+              ),
+              const Positioned(
+                top: 0,
+                right: 0,
+                width: scheduleEdgeFadeWidth,
+                height: scheduleHeaderHeight,
+                child: IgnorePointer(
+                  child: ScheduleEdgeFade(alignLeft: false),
+                ),
+              ),
+              if (templates.length > 1) ...[
                 Positioned(
                   top: 0,
                   left: 8,
-                  height: _headerHeight,
+                  height: scheduleHeaderHeight,
                   child: IconButton(
                     tooltip: 'Previous template',
                     icon: const Icon(Icons.chevron_left),
+                    style: IconButton.styleFrom(
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                    ),
                     onPressed: currentIndex > 0
-                        ? () => setState(() => _pageIndex = currentIndex - 1)
+                        ? () => unawaited(_animateTo(currentIndex - 1))
                         : null,
                   ),
                 ),
                 Positioned(
                   top: 0,
                   right: 8,
-                  height: _headerHeight,
+                  height: scheduleHeaderHeight,
                   child: IconButton(
                     tooltip: 'Next template',
                     icon: const Icon(Icons.chevron_right),
+                    style: IconButton.styleFrom(
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                    ),
                     onPressed: currentIndex < templates.length - 1
-                        ? () => setState(() => _pageIndex = currentIndex + 1)
+                        ? () => unawaited(_animateTo(currentIndex + 1))
                         : null,
                   ),
                 ),
@@ -185,11 +255,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
 }
 
 class _ColumnHeader extends StatefulWidget {
-  const _ColumnHeader({
-    required this.template,
-    required this.onDelete,
-    super.key,
-  });
+  const new({required this.template, required this.onDelete, super.key});
 
   final Template template;
   final VoidCallback onDelete;
@@ -231,7 +297,10 @@ class _ColumnHeaderState extends State<_ColumnHeader> {
             child: TextField(
               controller: _controller,
               textAlign: TextAlign.center,
-              decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+              ),
               onSubmitted: (value) {
                 final trimmed = value.trim();
                 if (trimmed.isNotEmpty && trimmed != widget.template.name) {
@@ -257,15 +326,25 @@ class _ColumnHeaderState extends State<_ColumnHeader> {
 }
 
 class _TemplateColumnGrid extends ConsumerWidget {
-  const _TemplateColumnGrid({
+  const new({
     required this.template,
     required this.settings,
     required this.slotHeight,
+    required this.showHourLabels,
+    this.onSwipeStart,
+    this.onSwipeUpdate,
+    this.onSwipeEnd,
+    this.onSwipeCancel,
   });
 
   final Template template;
   final DaySettings settings;
   final double slotHeight;
+  final bool showHourLabels;
+  final GestureDragStartCallback? onSwipeStart;
+  final GestureDragUpdateCallback? onSwipeUpdate;
+  final GestureDragEndCallback? onSwipeEnd;
+  final VoidCallback? onSwipeCancel;
 
   Future<void> _createAndOpen(
     BuildContext context,
@@ -301,7 +380,11 @@ class _TemplateColumnGrid extends ConsumerWidget {
         blocks: blocks,
         settings: settings,
         slotHeight: slotHeight,
-        showHourLabels: false,
+        showHourLabels: showHourLabels,
+        onSwipeStart: onSwipeStart,
+        onSwipeUpdate: onSwipeUpdate,
+        onSwipeEnd: onSwipeEnd,
+        onSwipeCancel: onSwipeCancel,
         onCreateBlock: ({required start, required end, required kind}) {
           unawaited(
             _createAndOpen(context, ref, start: start, end: end, kind: kind),

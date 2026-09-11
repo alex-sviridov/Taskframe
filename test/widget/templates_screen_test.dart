@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/template/widgets/templates_screen.dart';
 
 void _resizeViewport(WidgetTester tester, Size size) {
@@ -104,6 +105,35 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Template 1'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a horizontal fling on free grid space swipes to the next template',
+      (tester) async {
+        _resizeViewport(tester, const Size(500, 1000));
+        await _pump(tester);
+        await tester.tap(find.byTooltip('Add template'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add template'));
+        await tester.pumpAndSettle();
+        // Adding opens straight to the new template ("Template 2"); page
+        // back to "Template 1" first so there's somewhere to swipe
+        // forward to.
+        await tester.tap(find.byTooltip('Previous template'));
+        await tester.pumpAndSettle();
+        expect(find.text('Template 1'), findsOneWidget);
+
+        final gridTop = tester.getTopLeft(find.byType(DayGrid));
+        await tester.flingFrom(
+          gridTop + const Offset(50, 5),
+          const Offset(-300, 0),
+          1000,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Template 1'), findsNothing);
+        expect(find.text('Template 2'), findsOneWidget);
       },
     );
 

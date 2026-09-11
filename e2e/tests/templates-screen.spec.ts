@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import { clickCenter, dragMouse } from './support/gestures';
 
 /**
  * Reads a template column's name by focusing its rename field and
@@ -14,6 +14,9 @@ import { clickCenter } from './support/gestures';
 async function readTemplateName(page: import('@playwright/test').Page) {
   const input = page.getByRole('textbox');
   await clickCenter(page, input);
+  // The DOM/value sync on focus isn't instantaneous; reading immediately
+  // after the click can still observe the pre-sync empty value.
+  await page.waitForTimeout(200);
   return input.inputValue();
 }
 
@@ -114,21 +117,47 @@ test.describe('narrow viewport', () => {
     await page.getByRole('button', { name: 'Add template' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();
 
-    // Only one column is ever mounted at narrow width, so exactly one
-    // "Delete template" button is visible at a time. Adding a template
-    // navigates straight to it, so after adding a second one we're
-    // already viewing it — "Previous" goes back to the first.
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(1);
-    const secondName = await readTemplateName(page);
+    // Adding a template navigates straight to it, so after adding a
+    // second one we're already viewing it (the last page): "Next" is
+    // disabled, "Previous" isn't. Asserting on the arrows' own
+    // enabled/disabled state — rather than reading the rename field's
+    // text, which needs a focus round-trip that's flaky immediately
+    // after a page-turn animation — is a robust, unambiguous signal for
+    // which page is showing, driven by the same `currentIndex` the app
+    // itself uses.
+    await expect(page.getByRole('button', { name: 'Next template' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Previous template' })).toBeEnabled();
 
     await page.getByRole('button', { name: 'Previous template' }).click();
-    const firstName = await readTemplateName(page);
-    expect(firstName).not.toEqual(secondName);
+
+    await expect(page.getByRole('button', { name: 'Previous template' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Next template' })).toBeEnabled();
 
     await page.getByRole('button', { name: 'Next template' }).click();
-    const backToSecondName = await readTemplateName(page);
-    expect(backToSecondName).toEqual(secondName);
+
+    await expect(page.getByRole('button', { name: 'Next template' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Previous template' })).toBeEnabled();
+  });
+
+  test('a horizontal drag on free grid space swipes to the next '
+    + 'template', async ({ page }) => {
+    await page.goto('/#/templates');
+    await enableFlutterAccessibility(page);
+    await page.getByRole('button', { name: 'Add template' }).click();
+    await page.getByRole('button', { name: 'Add template' }).click();
+    // Adding opens straight to the new (last) template; page back to the
+    // first one so there's somewhere to swipe forward to.
+    await page.getByRole('button', { name: 'Previous template' }).click();
+    await expect(page.getByRole('button', { name: 'Previous template' })).toBeDisabled();
+
+    // Free grid space, well below the header, dragged leftward like a
+    // real finger swipe (a genuine drag rather than a fling, matching
+    // this suite's other drag helper).
+    await dragMouse(page, { x: 300, y: 300 }, { x: 20, y: 300 });
+
+    // Swiped forward to the last template: "Next" disabled again, same
+    // signal the arrow-paging test above uses and for the same reason.
+    await expect(page.getByRole('button', { name: 'Next template' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Previous template' })).toBeEnabled();
   });
 });

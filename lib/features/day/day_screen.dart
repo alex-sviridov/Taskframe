@@ -4,7 +4,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/day/date_format.dart';
-import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_schedule_block_actions.dart';
 import 'package:taskframe/features/day/day_schedule_controller.dart';
@@ -17,27 +16,12 @@ import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
-import 'package:taskframe/features/day/widgets/hour_gutter.dart';
-
-/// Below this, a 15-minute slot stops being visually distinct, so the grid
-/// scrolls instead of shrinking further.
-const _minSlotHeight = 8.0;
+import 'package:taskframe/features/day/widgets/schedule_columns_page.dart';
 
 /// Half the page-index range paged over by [_DayScreenState._pageController],
 /// centered on the date shown when the screen first builds. Gives roughly
 /// 270 years of swiping in either direction.
 const _pageSpread = 100000;
-
-const _pageAnimationDuration = Duration(milliseconds: 250);
-const Curve _pageAnimationCurve = Curves.easeOut;
-
-/// Height of the date header row, shared by the fixed switch arrows and
-/// each page's date label(s) so they stay vertically aligned.
-const _headerHeight = 56.0;
-
-/// Width of the fade strip behind each switch arrow, wide enough to fully
-/// obscure the sliding date label before it reaches the arrow.
-const _edgeFadeWidth = 72.0;
 
 /// How long the drag pointer must stay in an edge zone before it pages to
 /// the adjacent day/week.
@@ -50,10 +34,6 @@ const _newBlockDuration = Duration(minutes: 60);
 /// Viewport width at/above which the schedule shows a full week (7 days)
 /// per page instead of a single day.
 const _weekBreakpoint = 900.0;
-
-/// Horizontal gap between adjacent day columns in week view, both in the
-/// grid and (as the divider's total width) in the header.
-const _columnGap = 8.0;
 
 int _daysPerPageFor(double width) => width >= _weekBreakpoint ? 7 : 1;
 
@@ -151,8 +131,8 @@ class _DayScreenState extends ConsumerState<DayScreen> {
     final page = (_pageController.page ?? _pageController.initialPage).round();
     await _pageController.animateToPage(
       page + units,
-      duration: _pageAnimationDuration,
-      curve: _pageAnimationCurve,
+      duration: schedulePageAnimationDuration,
+      curve: schedulePageAnimationCurve,
     );
   }
 
@@ -182,9 +162,9 @@ class _DayScreenState extends ConsumerState<DayScreen> {
     final localWidth = box.size.width;
     final localDx = box.globalToLocal(drag.pointerGlobalPosition).dx;
     int? direction;
-    if (localDx <= _edgeFadeWidth) {
+    if (localDx <= scheduleEdgeFadeWidth) {
       direction = -1;
-    } else if (localDx >= localWidth - _edgeFadeWidth) {
+    } else if (localDx >= localWidth - scheduleEdgeFadeWidth) {
       direction = 1;
     }
 
@@ -304,23 +284,23 @@ class _DayScreenState extends ConsumerState<DayScreen> {
               const Positioned(
                 top: 0,
                 left: 0,
-                width: _edgeFadeWidth,
-                height: _headerHeight,
-                child: IgnorePointer(child: _EdgeFade(alignLeft: true)),
+                width: scheduleEdgeFadeWidth,
+                height: scheduleHeaderHeight,
+                child: IgnorePointer(child: ScheduleEdgeFade(alignLeft: true)),
               ),
               const Positioned(
                 top: 0,
                 right: 0,
-                width: _edgeFadeWidth,
-                height: _headerHeight,
-                child: IgnorePointer(child: _EdgeFade(alignLeft: false)),
+                width: scheduleEdgeFadeWidth,
+                height: scheduleHeaderHeight,
+                child: IgnorePointer(child: ScheduleEdgeFade(alignLeft: false)),
               ),
               // Fixed in place (outside the PageView) so only the page
               // content slides.
               Positioned(
                 top: 0,
                 left: 8,
-                height: _headerHeight,
+                height: scheduleHeaderHeight,
                 child: IconButton(
                   tooltip: daysPerPage == 7 ? 'Previous week' : 'Previous day',
                   icon: const Icon(Icons.chevron_left),
@@ -334,7 +314,7 @@ class _DayScreenState extends ConsumerState<DayScreen> {
               Positioned(
                 top: 0,
                 right: 8,
-                height: _headerHeight,
+                height: scheduleHeaderHeight,
                 child: IconButton(
                   tooltip: daysPerPage == 7 ? 'Next week' : 'Next day',
                   icon: const Icon(Icons.chevron_right),
@@ -353,32 +333,9 @@ class _DayScreenState extends ConsumerState<DayScreen> {
   }
 }
 
-/// A gradient strip fading from transparent to the scaffold's background
-/// color, from the header's center-ward side toward the [alignLeft] or
-/// right screen edge, masking the sliding date label near a switch arrow.
-class _EdgeFade extends StatelessWidget {
-  const new({required this.alignLeft});
-
-  final bool alignLeft;
-
-  @override
-  Widget build(BuildContext context) {
-    final background = Theme.of(context).scaffoldBackgroundColor;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: alignLeft ? Alignment.centerRight : Alignment.centerLeft,
-          end: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
-          colors: [background.withValues(alpha: 0), background],
-        ),
-      ),
-    );
-  }
-}
-
 /// One page of [DayScreen]: [dayCount] day columns (1 in day view, 7 in
 /// week view) starting at [startDate], each with its own date header and
-/// [DayGrid].
+/// [DayGrid], laid out via the shared [ScheduleColumnsPage].
 ///
 /// The switch arrows are drawn separately, fixed in place outside the
 /// [PageView] this is built by.
@@ -401,8 +358,6 @@ class _SchedulePage extends ConsumerWidget {
   final GestureDragEndCallback onSwipeEnd;
   final VoidCallback onSwipeCancel;
 
-  bool get _showHourLabels => dayCount == 1;
-
   TextStyle? _headerStyle(BuildContext context, DateTime date) {
     final base = Theme.of(context).textTheme.titleMedium;
     if (!isSameDay(date, DateTime.now())) return base;
@@ -419,92 +374,28 @@ class _SchedulePage extends ConsumerWidget {
       (i) => DateTime(startDate.year, startDate.month, startDate.day + i),
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        children: [
-          SizedBox(
-            height: _headerHeight,
-            child: dayCount == 1
-                ? Center(
-                    child: Text(
-                      key: const Key('day-screen-date-label'),
-                      formatDayHeaderLabel(
-                        dates.first,
-                        showWeekday: true,
-                        pattern: settings.dateFormat,
-                      ),
-                      style: _headerStyle(context, dates.first),
-                    ),
-                  )
-                : Row(
-                    children: [
-                      const SizedBox(width: HourGutter.width),
-                      for (var i = 0; i < dates.length; i++) ...[
-                        if (i > 0)
-                          VerticalDivider(
-                            width: _columnGap,
-                            thickness: 1,
-                            indent: _headerHeight / 4,
-                            endIndent: _headerHeight / 4,
-                            color: Theme.of(context).colorScheme.outlineVariant,
-                          ),
-                        Expanded(
-                          child: Center(
-                            child: Semantics(
-                              header: true,
-                              container: true,
-                              child: Text(
-                                key: Key(
-                                  'day-screen-date-label-'
-                                  '${dates[i].toIso8601String()}',
-                                ),
-                                formatDayHeaderLabel(
-                                  dates[i],
-                                  showWeekday: false,
-                                  pattern: settings.dateFormat,
-                                ),
-                                style: _headerStyle(context, dates[i]),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(width: HourGutter.width),
-                    ],
-                  ),
+    return ScheduleColumnsPage(
+      columnCount: dayCount,
+      settings: settings,
+      headerBuilder: (context, i) {
+        final date = dates[i];
+        final label = Text(
+          key: dayCount == 1
+              ? const Key('day-screen-date-label')
+              : Key('day-screen-date-label-${date.toIso8601String()}'),
+          formatDayHeaderLabel(
+            date,
+            showWeekday: dayCount == 1,
+            pattern: settings.dateFormat,
           ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final slotCount =
-                    (settings.dayEndHour - settings.dayStartHour) * 4;
-                final slotHeight = resolveSlotHeight(
-                  availableHeight: constraints.maxHeight,
-                  slotCount: slotCount,
-                  minSlotHeight: _minSlotHeight,
-                );
-
-                return SingleChildScrollView(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!_showHourLabels)
-                        HourGutter(settings: settings, slotHeight: slotHeight),
-                      for (var i = 0; i < dates.length; i++) ...[
-                        if (i > 0) const SizedBox(width: _columnGap),
-                        _buildColumn(context, ref, dates[i], slotHeight),
-                      ],
-                      if (!_showHourLabels)
-                        HourGutter(settings: settings, slotHeight: slotHeight),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+          style: _headerStyle(context, date),
+        );
+        return dayCount == 1
+            ? label
+            : Semantics(header: true, container: true, child: label);
+      },
+      gridBuilder: (context, i, slotHeight, showHourLabels) =>
+          _buildColumn(context, ref, dates[i], slotHeight, showHourLabels),
     );
   }
 
@@ -513,6 +404,7 @@ class _SchedulePage extends ConsumerWidget {
     WidgetRef ref,
     DateTime date,
     double slotHeight,
+    bool showHourLabels,
   ) {
     final blocksAsync = ref.watch(dayBlocksProvider(date));
 
@@ -529,7 +421,7 @@ class _SchedulePage extends ConsumerWidget {
           blocks: blocks,
           settings: settings,
           slotHeight: slotHeight,
-          showHourLabels: _showHourLabels,
+          showHourLabels: showHourLabels,
           onSwipeStart: onSwipeStart,
           onSwipeUpdate: onSwipeUpdate,
           onSwipeEnd: onSwipeEnd,
