@@ -198,9 +198,18 @@ typedef DragTargetResolver =
 /// widget-local recognizers therefore only detect the *start* of a drag;
 /// all update/end/cancel handling happens here.
 class DragNotifier extends Notifier<DragState?> {
+  /// The pointer id this notifier currently owns a global route for.
   int? _pointer;
+
+  /// The registered global route, kept so it can be removed again — a
+  /// leaked route would misfire on the next gesture that recycles the same
+  /// pointer id.
   PointerRoute? _globalRoute;
+
   DragTargetResolver? _resolveTarget;
+
+  /// The controller every read/move of the in-flight drag goes through,
+  /// matching [DragState.originalColumn]'s variant. Set by [start].
   ScheduleController? _controller;
 
   @override
@@ -222,7 +231,6 @@ class DragNotifier extends Notifier<DragState?> {
     int? pointer,
     DragTargetResolver? resolveTarget,
   }) {
-    _controller = controller;
     state = DragState(
       block: block,
       originalColumn: originalColumn,
@@ -231,6 +239,9 @@ class DragNotifier extends Notifier<DragState?> {
       pointerGlobalPosition: pointerGlobalPosition,
     );
     _takePointer(pointer, resolveTarget);
+    // After [_takePointer], not before: it releases any previous gesture
+    // first, and that teardown clears [_controller] along with the rest.
+    _controller = controller;
   }
 
   /// Updates the dragging pointer's position and its landzone.
@@ -318,6 +329,8 @@ class DragNotifier extends Notifier<DragState?> {
     _releasePointer();
   }
 
+  /// Registers a global pointer route for [pointer], replacing any route
+  /// this notifier already held.
   void _takePointer(int? pointer, DragTargetResolver? resolveTarget) {
     _releasePointer();
     if (pointer == null) return;
@@ -328,6 +341,13 @@ class DragNotifier extends Notifier<DragState?> {
     GestureBinding.instance.pointerRouter.addGlobalRoute(route);
   }
 
+  /// Removes the global route, if any, and drops everything that belonged
+  /// to the finished gesture. Safe to call repeatedly, and never touches
+  /// [GestureBinding] unless a route was actually registered (so
+  /// binding-free unit tests can use this notifier).
+  ///
+  /// Removing the route is the part that matters: a leaked route would
+  /// misfire on the next gesture that recycles the same pointer id.
   void _releasePointer() {
     final route = _globalRoute;
     if (route != null) {
@@ -336,8 +356,11 @@ class DragNotifier extends Notifier<DragState?> {
     _globalRoute = null;
     _pointer = null;
     _resolveTarget = null;
+    _controller = null;
   }
 
+  /// Drives the whole in-flight drag from raw pointer events, independent
+  /// of whether the block's own widget is still mounted.
   void _handlePointerEvent(PointerEvent event) {
     if (event.pointer != _pointer) return;
     final current = state;

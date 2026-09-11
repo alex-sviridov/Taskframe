@@ -32,16 +32,23 @@ class TemplatesScreen extends ConsumerStatefulWidget {
 class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
   int _pageIndex = 0;
 
+  /// The next default name's number. Only ever increases, so deleting
+  /// "Template 1" and adding again yields "Template 3" rather than a
+  /// second "Template 2" — a count-based name collides after any delete.
+  int _nextTemplateNumber = 1;
+
   Future<void> _addTemplate() async {
     final templates = ref.read(templateListProvider).value ?? const [];
-    final name = 'Template ${templates.length + 1}';
+    final name = 'Template ${_nextTemplateNumber++}';
     await ref.read(templateListProvider.notifier).addTemplate(name: name);
+    if (!mounted) return;
     setState(() => _pageIndex = templates.length);
   }
 
   Future<void> _deleteTemplate(Template template) async {
     final templates = ref.read(templateListProvider).value ?? const [];
     await ref.read(templateListProvider.notifier).deleteTemplate(template);
+    if (!mounted) return;
     final remaining = templates.length - 1;
     if (_pageIndex >= remaining && remaining > 0) {
       setState(() => _pageIndex = remaining - 1);
@@ -94,6 +101,11 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                             if (i > 0)
                               const VerticalDivider(width: _columnGap, thickness: 1),
                             Expanded(child: _ColumnHeader(
+                              // Positional matching alone would re-parent a
+                              // deleted column's _ColumnHeaderState (and its
+                              // TextEditingController) onto the next
+                              // template's data.
+                              key: ValueKey(visible[i].id),
                               template: visible[i],
                               onDelete: () => unawaited(_deleteTemplate(visible[i])),
                             )),
@@ -173,7 +185,11 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
 }
 
 class _ColumnHeader extends StatefulWidget {
-  const _ColumnHeader({required this.template, required this.onDelete});
+  const _ColumnHeader({
+    required this.template,
+    required this.onDelete,
+    super.key,
+  });
 
   final Template template;
   final VoidCallback onDelete;

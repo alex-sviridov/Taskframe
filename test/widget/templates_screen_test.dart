@@ -50,6 +50,29 @@ void main() {
       expect(find.text('Template 2'), findsOneWidget);
     });
 
+    testWidgets(
+      'adding after a delete does not reuse a name already in use '
+      '(regression: the default name was derived from the template count, '
+      'so add/add/delete-first/add produced two "Template 2"s)',
+      (tester) async {
+        _resizeViewport(tester, const Size(1200, 1000));
+        await _pump(tester);
+        await tester.tap(find.byTooltip('Add template'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add template'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('Delete template').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add template'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Template 1'), findsNothing);
+        expect(find.text('Template 2'), findsOneWidget);
+        expect(find.text('Template 3'), findsOneWidget);
+      },
+    );
+
     testWidgets('the delete action on a column removes that template', (tester) async {
       _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);

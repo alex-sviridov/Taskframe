@@ -540,7 +540,7 @@ Future<void> showBlockEditModal({
 class BlockEditModal extends ConsumerStatefulWidget {
   /// Creates a [BlockEditModal] for the block identified by
   /// [initialBlock]'s id, belonging to [column].
-  const BlockEditModal({
+  const new({
     required this.column,
     required this.actions,
     required this.initialBlock,

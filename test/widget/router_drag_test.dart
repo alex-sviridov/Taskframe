@@ -74,8 +74,8 @@ void main() {
   group('dragging through the real appRouter with both branches built', () {
     testWidgets(
       'a template block resolves a TemplateColumn target, never the Day '
-      "branch's offstage DayColumn (regression: StatefulShellRoute."
-      'indexedStack lays out every branch even while offstage, so a rect '
+      "branch's offstage DayColumn (regression: an indexedStack shell "
+      'lays out every branch even while offstage, so a rect '
       'test alone matched a DayColumn and crashed the cast in '
       'TemplateScheduleController)',
       (tester) async {
