@@ -61,7 +61,7 @@ build-apk:
 	flutter build apk --release
 
 build-web:
-	flutter build web --release
+	flutter build web --release --pwa-strategy=offline-first
 
 build-ios:
 	@echo "build-ios is unavailable locally: requires macOS + Xcode. Added later via a macos-latest CI runner."
