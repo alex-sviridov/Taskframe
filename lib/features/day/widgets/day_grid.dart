@@ -8,13 +8,16 @@ import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/schedule_controller.dart';
 import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
+import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
 
 /// The 15-minute-aligned timeline: an hour grid with [blocks] drawn on top.
 ///
@@ -27,6 +30,9 @@ class DayGrid extends ConsumerStatefulWidget {
   /// and day end, with each 15-minute slot [slotHeight] pixels tall.
   const new({
     required this.date,
+    required this.column,
+    required this.controller,
+    required this.actions,
     required this.blocks,
     required this.settings,
     required this.slotHeight,
@@ -39,8 +45,23 @@ class DayGrid extends ConsumerStatefulWidget {
     super.key,
   });
 
-  /// The date this grid shows, used to resolve tap positions into times.
+  /// The date this grid shows, used to resolve tap positions into times
+  /// and to drive the "now" line — for a template column this is always
+  /// [templateAnchorDate], so the "now" line never applies.
   final DateTime date;
+
+  /// This grid's column identity — used for provider/key lookups and as
+  /// the drag/resize origin, independent of [date].
+  final ScheduleColumn column;
+
+  /// Reads/moves this column's blocks during a drag or resize, supplied
+  /// by the caller (`DayScreen` or `TemplatesScreen`) so this widget never
+  /// needs to know which feature it's showing.
+  final ScheduleController controller;
+
+  /// Supplies the block-edit modal's read/write access to this column's
+  /// blocks, supplied by the same caller as [controller].
+  final ScheduleBlockActions actions;
 
   /// The blocks to draw on the grid.
   final List<TimeObject> blocks;
@@ -229,7 +250,12 @@ class _DayGridState extends ConsumerState<DayGrid> {
 
   void _openEditModal(TimeObject block) {
     unawaited(
-      showBlockEditModal(context: context, date: widget.date, block: block),
+      showBlockEditModal(
+        context: context,
+        column: widget.column,
+        actions: widget.actions,
+        block: block,
+      ),
     );
   }
 
@@ -247,30 +273,32 @@ class _DayGridState extends ConsumerState<DayGrid> {
     // Selected rather than watched outright: a plain `ref.watch` here would
     // rebuild every visible `DayGrid` column on every pointer move of a drag
     // or resize happening on some other day (most columns, in week view).
-    // `dragStateForDate`/`resizeStateForDate` collapse to `null` for a date
-    // the in-flight gesture doesn't touch, and `null == null`, so `select`
-    // skips the rebuild there entirely.
+    // `dragStateForColumn`/`resizeStateForColumn` collapse to `null` for a
+    // column the in-flight gesture doesn't touch, and `null == null`, so
+    // `select` skips the rebuild there entirely.
     final dragState = ref.watch(
-      dragStateProvider.select((state) => dragStateForDate(state, widget.date)),
+      dragStateProvider.select(
+        (state) => dragStateForColumn(state, widget.column),
+      ),
     );
     final resizeState = ref.watch(
       resizeStateProvider.select(
-        (state) => resizeStateForDate(state, widget.date),
+        (state) => resizeStateForColumn(state, widget.column),
       ),
     );
     final hiddenBlockId =
-        dragState != null && dragState.originalDate == widget.date
+        dragState != null && dragState.originalColumn == widget.column
         ? dragState.block.id
-        : resizeState != null && resizeState.date == widget.date
+        : resizeState != null && resizeState.column == widget.column
         ? resizeState.block.id
         : null;
-    // `dragState.targetDate`/`targetStart` fall back to the block's own
-    // original date/time whenever the pointer is over no valid column (see
-    // DragNotifier._handlePointerEvent), so the shadow previews the
+    // `dragState.targetColumn`/`targetStart` fall back to the block's own
+    // original column/time whenever the pointer is over no valid column
+    // (see DragNotifier._handlePointerEvent), so the shadow previews the
     // snap-back on the origin column instead of vanishing — releasing there
     // still cancels the move, this just shows where the block would land.
     final landzoneStart =
-        dragState != null && dragState.targetDate == widget.date
+        dragState != null && dragState.targetColumn == widget.column
         ? dragState.targetStart
         : null;
     final nowOffset = _isToday ? _offsetFor(DateTime.now()) : null;
@@ -351,6 +379,8 @@ class _DayGridState extends ConsumerState<DayGrid> {
               // no-ops through _dismissDraft.
               child: _DraggableBlock(
                 block: block,
+                column: widget.column,
+                controller: widget.controller,
                 date: widget.date,
                 settings: widget.settings,
                 slotHeight: widget.slotHeight,
@@ -429,7 +459,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
               trueHeight: _landzoneHeightFor(landzoneStart, dragState.block),
             ),
           ],
-          if (resizeState != null && resizeState.date == widget.date) ...[
+          if (resizeState != null && resizeState.column == widget.column) ...[
             Positioned(
               key: const Key('day-grid-resize-draft'),
               top: _offsetFor(resizeState.draftStart),
@@ -546,6 +576,8 @@ Map<String, ({double top, double bottom})> resizeBleedForBlocks({
 class _DraggableBlock extends ConsumerStatefulWidget {
   const _DraggableBlock({
     required this.block,
+    required this.column,
+    required this.controller,
     required this.date,
     required this.settings,
     required this.slotHeight,
@@ -557,6 +589,8 @@ class _DraggableBlock extends ConsumerStatefulWidget {
   });
 
   final TimeObject block;
+  final ScheduleColumn column;
+  final ScheduleController controller;
   final DateTime date;
   final DaySettings settings;
   final double slotHeight;
@@ -608,13 +642,15 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     // it keeps being called after a page turn unmounts this widget.
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
+    final controller = widget.controller;
     final blockDuration = widget.block.end.difference(widget.block.start);
 
     ref
         .read(dragStateProvider.notifier)
         .start(
           block: widget.block,
-          originalDate: widget.date,
+          originalColumn: widget.column,
+          controller: controller,
           pointerGlobalPosition: globalPosition,
           pointer: _pointer,
           resolveTarget: (position) => resolveDragTarget(
@@ -629,7 +665,12 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
   void _startResize(ResizeEdge edge) {
     ref
         .read(resizeStateProvider.notifier)
-        .start(block: widget.block, date: widget.date, edge: edge);
+        .start(
+          block: widget.block,
+          column: widget.column,
+          controller: widget.controller,
+          edge: edge,
+        );
   }
 
   void _updateResize(Offset globalPosition) {
@@ -640,7 +681,9 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
 
-    final renderObject = dayGridKeyFor(date).currentContext?.findRenderObject();
+    final renderObject = scheduleGridKeyFor(
+      widget.column,
+    ).currentContext?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.attached) return;
     final gridTop = renderObject.localToGlobal(Offset.zero).dy;
     // Clamps to the day's exact start/end rather than `slotStartForOffset`'s

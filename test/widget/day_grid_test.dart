@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
+import 'package:taskframe/features/day/day_schedule_block_actions.dart';
+import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
@@ -42,8 +45,11 @@ Future<void> _pump(
     child: MaterialApp(
       home: Scaffold(
         body: DayGrid(
-          key: dayGridKeyFor(_date),
+          key: scheduleGridKeyFor(DayColumn(_date)),
           date: _date,
+          column: DayColumn(_date),
+          controller: const DayScheduleController(),
+          actions: dayScheduleBlockActions,
           blocks: blocks,
           settings: _settings,
           slotHeight: _slotHeight,
@@ -284,6 +290,9 @@ void main() {
               home: Scaffold(
                 body: DayGrid(
                   date: _date,
+                  column: DayColumn(_date),
+                  controller: const DayScheduleController(),
+                  actions: dayScheduleBlockActions,
                   blocks: [
                     TimeObject(
                       id: 'a',
@@ -345,6 +354,9 @@ void main() {
               home: Scaffold(
                 body: DayGrid(
                   date: _date,
+                  column: DayColumn(_date),
+                  controller: const DayScheduleController(),
+                  actions: dayScheduleBlockActions,
                   blocks: [tiny],
                   settings: _settings,
                   slotHeight: 8,
@@ -385,6 +397,9 @@ void main() {
             home: Scaffold(
               body: DayGrid(
                 date: _date,
+                column: DayColumn(_date),
+                controller: const DayScheduleController(),
+                actions: dayScheduleBlockActions,
                 blocks: [tiny],
                 settings: _settings,
                 slotHeight: 8,
@@ -439,7 +454,8 @@ void main() {
               .read(dragStateProvider.notifier)
               .start(
                 block: tiny,
-                originalDate: _date,
+                originalColumn: DayColumn(_date),
+                controller: const DayScheduleController(),
                 pointerGlobalPosition: Offset.zero,
               );
 
@@ -475,7 +491,12 @@ void main() {
         addTearDown(container.dispose);
         container
             .read(resizeStateProvider.notifier)
-            .start(block: tiny, date: _date, edge: ResizeEdge.end);
+            .start(
+              block: tiny,
+              column: DayColumn(_date),
+              controller: const DayScheduleController(),
+              edge: ResizeEdge.end,
+            );
 
         await _pump(tester, [tiny], container: container);
 
@@ -579,6 +600,9 @@ void main() {
             home: Scaffold(
               body: DayGrid(
                 date: _date,
+                column: DayColumn(_date),
+                controller: const DayScheduleController(),
+                actions: dayScheduleBlockActions,
                 blocks: const [],
                 settings: _settings,
                 slotHeight: 8,
@@ -608,6 +632,9 @@ void main() {
             home: Scaffold(
               body: DayGrid(
                 date: _date,
+                column: DayColumn(_date),
+                controller: const DayScheduleController(),
+                actions: dayScheduleBlockActions,
                 blocks: [_workBlock],
                 settings: _settings,
                 slotHeight: _slotHeight,
@@ -810,14 +837,15 @@ void main() {
             .read(dragStateProvider.notifier)
             .start(
               block: _workBlock,
-              originalDate: _date,
+              originalColumn: DayColumn(_date),
+              controller: const DayScheduleController(),
               pointerGlobalPosition: const Offset(0, 0),
             );
         container
             .read(dragStateProvider.notifier)
             .updatePointer(
               const Offset(0, 0),
-              targetDate: _date,
+              targetColumn: DayColumn(_date),
               targetStart: DateTime(2026, 9, 9, 11),
             );
 
@@ -856,14 +884,15 @@ void main() {
             .read(dragStateProvider.notifier)
             .start(
               block: _workBlock,
-              originalDate: _date,
+              originalColumn: DayColumn(_date),
+              controller: const DayScheduleController(),
               pointerGlobalPosition: const Offset(0, 0),
             );
         container
             .read(dragStateProvider.notifier)
             .updatePointer(
               const Offset(0, 0),
-              targetDate: DateTime(2026, 9, 10),
+              targetColumn: DayColumn(DateTime(2026, 9, 10)),
               targetStart: DateTime(2026, 9, 10, 11),
             );
 
@@ -880,7 +909,8 @@ void main() {
             .read(dragStateProvider.notifier)
             .start(
               block: _workBlock,
-              originalDate: _date,
+              originalColumn: DayColumn(_date),
+              controller: const DayScheduleController(),
               pointerGlobalPosition: const Offset(0, 0),
             );
 
@@ -1267,8 +1297,11 @@ void main() {
             child: MaterialApp(
               home: Scaffold(
                 body: DayGrid(
-                  key: dayGridKeyFor(_date),
+                  key: scheduleGridKeyFor(DayColumn(_date)),
                   date: _date,
+                  column: DayColumn(_date),
+                  controller: const DayScheduleController(),
+                  actions: dayScheduleBlockActions,
                   blocks: [tiny],
                   settings: _settings,
                   slotHeight: 8,
