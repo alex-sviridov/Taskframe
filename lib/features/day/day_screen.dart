@@ -394,12 +394,31 @@ class _SchedulePage extends ConsumerWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );
+        final trailingCluster = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 4),
+            ApplyTemplateButton(date: date, alwaysVisible: dayCount == 1),
+          ],
+        );
+        // A plain Row would center the label-plus-button pair as a
+        // whole, pushing the date text itself off-center by roughly
+        // half the button's width. Mirroring an identically-sized,
+        // invisible copy of the trailing button cluster on the leading
+        // side keeps the whole row symmetric around the label, so the
+        // label itself lands back on the header's true center.
         final content = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Visibility(
+              visible: false,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: trailingCluster,
+            ),
             Flexible(child: label),
-            const SizedBox(width: 4),
-            ApplyTemplateButton(date: date, alwaysVisible: dayCount == 1),
+            trailingCluster,
           ],
         );
         return dayCount == 1
