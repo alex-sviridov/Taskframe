@@ -21,7 +21,14 @@
   <meta name="description" content="Taskframe - a smoke test of the Flutter + Riverpod + go_router stack.">
 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0175C2">
+  <!--
+    Matches the app's actual Material 3 AppBar background (ColorScheme.
+    fromSeed(seedColor: Colors.teal).surface for each brightness — see
+    lib/core/theme.dart), not Flutter's scaffold-default blue, so the OS
+    status bar / browser chrome reads as part of the same UI as the navbar.
+  -->
+  <meta name="theme-color" content="#f4fbf8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e1513" media="(prefers-color-scheme: dark)">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
