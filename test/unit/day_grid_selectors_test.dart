@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 
@@ -14,78 +15,99 @@ TimeObject _block() => TimeObject(
 );
 
 void main() {
-  group('dragStateForDate', () {
+  group('dragStateForColumn', () {
     test('returns null when there is no drag', () {
-      expect(dragStateForDate(null, DateTime(2026, 9, 9)), isNull);
+      expect(dragStateForColumn(null, DayColumn(DateTime(2026, 9, 9))), isNull);
     });
 
-    test('returns the state when the date is the drag origin', () {
+    test('returns the state when the column is the drag origin', () {
       final state = DragState(
         block: _block(),
-        originalDate: DateTime(2026, 9, 9),
-        targetDate: DateTime(2026, 9, 10),
+        originalColumn: DayColumn(DateTime(2026, 9, 9)),
+        targetColumn: DayColumn(DateTime(2026, 9, 10)),
         targetStart: DateTime(2026, 9, 10, 9),
         pointerGlobalPosition: Offset.zero,
       );
 
-      expect(dragStateForDate(state, DateTime(2026, 9, 9)), same(state));
-    });
-
-    test('returns the state when the date is the current landzone target', () {
-      final state = DragState(
-        block: _block(),
-        originalDate: DateTime(2026, 9, 9),
-        targetDate: DateTime(2026, 9, 10),
-        targetStart: DateTime(2026, 9, 10, 9),
-        pointerGlobalPosition: Offset.zero,
+      expect(
+        dragStateForColumn(state, DayColumn(DateTime(2026, 9, 9))),
+        same(state),
       );
-
-      expect(dragStateForDate(state, DateTime(2026, 9, 10)), same(state));
     });
 
     test(
-      'returns null for a date that is neither the origin nor the target',
+      'returns the state when the column is the current landzone target',
       () {
         final state = DragState(
           block: _block(),
-          originalDate: DateTime(2026, 9, 9),
-          targetDate: DateTime(2026, 9, 10),
+          originalColumn: DayColumn(DateTime(2026, 9, 9)),
+          targetColumn: DayColumn(DateTime(2026, 9, 10)),
           targetStart: DateTime(2026, 9, 10, 9),
           pointerGlobalPosition: Offset.zero,
         );
 
-        expect(dragStateForDate(state, DateTime(2026, 9, 11)), isNull);
+        expect(
+          dragStateForColumn(state, DayColumn(DateTime(2026, 9, 10))),
+          same(state),
+        );
+      },
+    );
+
+    test(
+      'returns null for a column that is neither the origin nor the target',
+      () {
+        final state = DragState(
+          block: _block(),
+          originalColumn: DayColumn(DateTime(2026, 9, 9)),
+          targetColumn: DayColumn(DateTime(2026, 9, 10)),
+          targetStart: DateTime(2026, 9, 10, 9),
+          pointerGlobalPosition: Offset.zero,
+        );
+
+        expect(
+          dragStateForColumn(state, DayColumn(DateTime(2026, 9, 11))),
+          isNull,
+        );
       },
     );
   });
 
-  group('resizeStateForDate', () {
+  group('resizeStateForColumn', () {
     test('returns null when there is no resize', () {
-      expect(resizeStateForDate(null, DateTime(2026, 9, 9)), isNull);
+      expect(
+        resizeStateForColumn(null, DayColumn(DateTime(2026, 9, 9))),
+        isNull,
+      );
     });
 
-    test('returns the state when the date matches', () {
+    test('returns the state when the column matches', () {
       final state = ResizeState(
         block: _block(),
-        date: DateTime(2026, 9, 9),
+        column: DayColumn(DateTime(2026, 9, 9)),
         edge: ResizeEdge.end,
         draftStart: DateTime(2026, 9, 9, 9),
         draftEnd: DateTime(2026, 9, 9, 9, 30),
       );
 
-      expect(resizeStateForDate(state, DateTime(2026, 9, 9)), same(state));
+      expect(
+        resizeStateForColumn(state, DayColumn(DateTime(2026, 9, 9))),
+        same(state),
+      );
     });
 
-    test('returns null for a different date', () {
+    test('returns null for a different column', () {
       final state = ResizeState(
         block: _block(),
-        date: DateTime(2026, 9, 9),
+        column: DayColumn(DateTime(2026, 9, 9)),
         edge: ResizeEdge.end,
         draftStart: DateTime(2026, 9, 9, 9),
         draftEnd: DateTime(2026, 9, 9, 9, 30),
       );
 
-      expect(resizeStateForDate(state, DateTime(2026, 9, 10)), isNull);
+      expect(
+        resizeStateForColumn(state, DayColumn(DateTime(2026, 9, 10))),
+        isNull,
+      );
     });
   });
 }
