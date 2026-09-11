@@ -304,6 +304,10 @@ void main() {
         }
 
         // Also assert left-to-right order matches the expected sequence.
+        // `.last` picks the outermost matching `Row` (the header row laid
+        // out by `ScheduleColumnsPage`) — the label's nearest `Row`
+        // ancestor is now the header content row wrapping the apply-
+        // template button alongside it.
         final headerRow = tester.widget<Row>(
           find
               .ancestor(
@@ -315,7 +319,7 @@ void main() {
                 ),
                 matching: find.byType(Row),
               )
-              .first,
+              .last,
         );
         final labelKeys = headerRow.children
             .whereType<Expanded>()
@@ -324,6 +328,10 @@ void main() {
             .map((center) => center.child)
             .whereType<Semantics>()
             .map((semantics) => semantics.child)
+            .whereType<Row>()
+            .map((row) => row.children.first)
+            .whereType<Flexible>()
+            .map((flexible) => flexible.child)
             .whereType<Text>()
             .map((text) => text.key)
             .toList();

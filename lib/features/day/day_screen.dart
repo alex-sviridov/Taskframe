@@ -12,7 +12,9 @@ import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/template_apply_effects.dart';
 import 'package:taskframe/features/day/week_utils.dart';
+import 'package:taskframe/features/day/widgets/apply_template_button.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
@@ -389,10 +391,20 @@ class _SchedulePage extends ConsumerWidget {
             pattern: settings.dateFormat,
           ),
           style: _headerStyle(context, date),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+        final content = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: label),
+            const SizedBox(width: 4),
+            ApplyTemplateButton(date: date, alwaysVisible: dayCount == 1),
+          ],
         );
         return dayCount == 1
-            ? label
-            : Semantics(header: true, container: true, child: label);
+            ? content
+            : Semantics(header: true, container: true, child: content);
       },
       gridBuilder: (context, i, slotHeight, showHourLabels) =>
           _buildColumn(context, ref, dates[i], slotHeight, showHourLabels),
@@ -407,6 +419,10 @@ class _SchedulePage extends ConsumerWidget {
     bool showHourLabels,
   ) {
     final blocksAsync = ref.watch(dayBlocksProvider(date));
+    final applyEffects = ref.watch(templateApplyEffectsProvider(date));
+    final applyEffectsNotifier = ref.read(
+      templateApplyEffectsProvider(date).notifier,
+    );
 
     return Expanded(
       child: blocksAsync.when(
@@ -426,6 +442,10 @@ class _SchedulePage extends ConsumerWidget {
           onSwipeUpdate: onSwipeUpdate,
           onSwipeEnd: onSwipeEnd,
           onSwipeCancel: onSwipeCancel,
+          highlightedBlockIds: applyEffects.highlightedIds,
+          ghosts: applyEffects.ghosts,
+          onHighlightAnimationEnd: applyEffectsNotifier.removeHighlight,
+          onGhostAnimationEnd: applyEffectsNotifier.removeGhost,
           onCreateBlock: ({required start, required end, required kind}) {
             unawaited(
               _createAndOpen(

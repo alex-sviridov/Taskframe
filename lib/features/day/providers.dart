@@ -10,6 +10,8 @@ import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/schedule_controller.dart';
+import 'package:taskframe/features/day/template_apply.dart';
+import 'package:taskframe/features/template/providers.dart';
 
 /// The shortest duration a block can be resized down to.
 const _minBlockDuration = Duration(minutes: 15);
@@ -153,6 +155,36 @@ class DayBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
           title: block.title,
           categoryId: block.categoryId,
         );
+  }
+
+  /// Applies [templateId]'s blocks to [date]: each is rebased onto this
+  /// day's time-of-day and added unless it overlaps an existing block (or
+  /// another template block already accepted in this same apply), per
+  /// [resolveTemplateApply]. Partial — a conflicting block is skipped
+  /// rather than aborting the whole apply.
+  Future<TemplateApplyResult> applyTemplate(String templateId) async {
+    final templateBlocks = await ref.read(
+      templateBlocksProvider(templateId).future,
+    );
+    final resolved = resolveTemplateApply(
+      templateBlocks: templateBlocks,
+      dayBlocks: state.value ?? [],
+      date: date,
+    );
+
+    final addedIds = <String>[];
+    for (final block in resolved.toAdd) {
+      final created = await addBlock(
+        start: block.start,
+        end: block.end,
+        kind: block.kind,
+        title: block.title,
+        categoryId: block.categoryId,
+      );
+      addedIds.add(created.id);
+    }
+
+    return (addedIds: addedIds, skipped: resolved.skipped);
   }
 }
 

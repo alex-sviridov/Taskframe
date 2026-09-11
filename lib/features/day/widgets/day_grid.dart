@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/schedule_controller.dart';
+import 'package:taskframe/features/day/template_apply_effects.dart';
 import 'package:taskframe/features/day/week_utils.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
@@ -42,6 +44,10 @@ class DayGrid extends ConsumerStatefulWidget {
     this.onSwipeUpdate,
     this.onSwipeEnd,
     this.onSwipeCancel,
+    this.highlightedBlockIds = const {},
+    this.ghosts = const [],
+    this.onHighlightAnimationEnd,
+    this.onGhostAnimationEnd,
     super.key,
   });
 
@@ -100,6 +106,23 @@ class DayGrid extends ConsumerStatefulWidget {
 
   /// See [onSwipeStart].
   final VoidCallback? onSwipeCancel;
+
+  /// Ids of [blocks] currently playing their newly-applied-template border
+  /// pulse — see `template_apply_effects.dart`. Empty for any grid not
+  /// driven by a template apply (e.g. every `TemplatesScreen` column).
+  final Set<String> highlightedBlockIds;
+
+  /// Skipped template events currently playing their "not applied" ghost
+  /// animation at their would-be slot.
+  final List<TemplateApplyGhost> ghosts;
+
+  /// Called once a highlighted block's pulse animation finishes, so the
+  /// caller can drop it from [highlightedBlockIds].
+  final void Function(String blockId)? onHighlightAnimationEnd;
+
+  /// Called once a ghost's animation finishes, so the caller can drop it
+  /// from [ghosts].
+  final void Function(int ghostId)? onGhostAnimationEnd;
 
   @override
   ConsumerState<DayGrid> createState() => _DayGridState();
@@ -265,6 +288,17 @@ class _DayGridState extends ConsumerState<DayGrid> {
     setState(() => _draft = null);
   }
 
+  /// Wraps [child] in the newly-applied-template border pulse when [block]
+  /// is one of [DayGrid.highlightedBlockIds], otherwise returns it as-is.
+  Widget _maybeHighlighted({required TimeObject block, required Widget child}) {
+    if (!widget.highlightedBlockIds.contains(block.id)) return child;
+    return _TemplateHighlightPulse(
+      key: Key('day-grid-highlight-${block.id}'),
+      onDone: () => widget.onHighlightAnimationEnd?.call(block.id),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -390,13 +424,16 @@ class _DayGridState extends ConsumerState<DayGrid> {
                 onOpenEdit: _openEditModal,
                 child: block.id == hiddenBlockId
                     ? const SizedBox.shrink()
-                    : Container(
-                        color: scheme.surface,
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: BlockView(
-                          block: block,
-                          showTitle: false,
-                          category: _categoryFor(block),
+                    : _maybeHighlighted(
+                        block: block,
+                        child: Container(
+                          color: scheme.surface,
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: BlockView(
+                            block: block,
+                            showTitle: false,
+                            category: _categoryFor(block),
+                          ),
                         ),
                       ),
               ),
@@ -498,8 +535,141 @@ class _DayGridState extends ConsumerState<DayGrid> {
                 child: CustomPaint(painter: _NowLinePainter(y: nowLineY)),
               ),
             ),
+          for (final ghost in widget.ghosts)
+            Positioned(
+              key: Key('day-grid-ghost-${ghost.id}'),
+              top: _offsetFor(ghost.start),
+              left: _gridLeft,
+              right: 0,
+              height: _offsetFor(ghost.end) - _offsetFor(ghost.start),
+              child: IgnorePointer(
+                child: _TemplateGhostOverlay(
+                  onDone: () => widget.onGhostAnimationEnd?.call(ghost.id),
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// A short border-color pulse shown around a block just added by applying
+/// a template — fades from [ColorScheme.primary] back to nothing over
+/// [templateApplyHighlightDuration], then calls [onDone].
+class _TemplateHighlightPulse extends StatefulWidget {
+  const _TemplateHighlightPulse({
+    required this.onDone,
+    required this.child,
+    super.key,
+  });
+
+  final VoidCallback onDone;
+  final Widget child;
+
+  @override
+  State<_TemplateHighlightPulse> createState() =>
+      _TemplateHighlightPulseState();
+}
+
+class _TemplateHighlightPulseState extends State<_TemplateHighlightPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(
+            vsync: this,
+            duration: templateApplyHighlightDuration,
+          )
+          ..addStatusListener(_handleStatus)
+          ..forward();
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) widget.onDone();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final opacity = 1 - _controller.value;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withValues(alpha: opacity), width: 2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// A brief fading, side-to-side-shaking dashed outline shown at a template
+/// event's would-be slot when it was skipped for overlapping an existing
+/// block — plays for [templateApplyGhostDuration], then calls [onDone].
+class _TemplateGhostOverlay extends StatefulWidget {
+  const _TemplateGhostOverlay({required this.onDone});
+
+  final VoidCallback onDone;
+
+  @override
+  State<_TemplateGhostOverlay> createState() => _TemplateGhostOverlayState();
+}
+
+class _TemplateGhostOverlayState extends State<_TemplateGhostOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: templateApplyGhostDuration)
+          ..addStatusListener(_handleStatus)
+          ..forward();
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) widget.onDone();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        final opacity = (t < 0.5 ? t * 2 : (1 - t) * 2).clamp(0.0, 1.0);
+        final dx = math.sin(t * math.pi * 6) * 4 * (1 - t);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(dx, 0),
+            child: CustomPaint(painter: _DashedBorderPainter(color: color)),
+          ),
+        );
+      },
     );
   }
 }
