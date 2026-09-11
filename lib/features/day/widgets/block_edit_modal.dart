@@ -9,9 +9,11 @@ import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
+import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
 
 /// A small color dot for [category] followed by its emoji-prefixed name,
 /// used for every row of [BlockCategoryPicker] — the closed field, its
@@ -487,12 +489,14 @@ class _BlockDeleteButtonState extends State<BlockDeleteButton> {
   }
 }
 
-/// Opens the block edit modal for [block] (which belongs to [date]):
-/// title, start/end, copy-to-next-day and delete. Near-fullscreen on a
-/// narrow (mobile) width, a centered fixed-width dialog on a wide one.
+/// Opens the block edit modal for [block] (which belongs to [column]):
+/// title, start/end, and delete — plus, for a [DayColumn], copy-to-next-day
+/// and a date row. Near-fullscreen on a narrow (mobile) width, a centered
+/// fixed-width dialog on a wide one.
 Future<void> showBlockEditModal({
   required BuildContext context,
-  required DateTime date,
+  required ScheduleColumn column,
+  required ScheduleBlockActions actions,
   required TimeObject block,
 }) {
   if (isNarrow(context)) {
@@ -503,7 +507,11 @@ Future<void> showBlockEditModal({
       isDismissible: false,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.95,
-        child: BlockEditModal(date: date, initialBlock: block),
+        child: BlockEditModal(
+          column: column,
+          actions: actions,
+          initialBlock: block,
+        ),
       ),
     );
   }
@@ -513,7 +521,11 @@ Future<void> showBlockEditModal({
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
-        child: BlockEditModal(date: date, initialBlock: block),
+        child: BlockEditModal(
+          column: column,
+          actions: actions,
+          initialBlock: block,
+        ),
       ),
     ),
   );
@@ -521,17 +533,25 @@ Future<void> showBlockEditModal({
 
 /// The block edit modal's content: title, category picker, start/end
 /// rows, and copy/delete actions. Reads the live block from
-/// `dayBlocksProvider(date)` by [initialBlock]'s id on every rebuild —
-/// [initialBlock] itself is only the optimistic value shown before that
-/// provider's first load completes. Closes itself if the block disappears
-/// from a loaded list (e.g. deleted from elsewhere).
+/// [ScheduleBlockActions.watchBlocks] by [initialBlock]'s id on every
+/// rebuild — [initialBlock] itself is only the optimistic value shown
+/// before that provider's first load completes. Closes itself if the
+/// block disappears from a loaded list (e.g. deleted from elsewhere).
 class BlockEditModal extends ConsumerStatefulWidget {
   /// Creates a [BlockEditModal] for the block identified by
-  /// [initialBlock]'s id, belonging to [date].
-  const new({required this.date, required this.initialBlock, super.key});
+  /// [initialBlock]'s id, belonging to [column].
+  const BlockEditModal({
+    required this.column,
+    required this.actions,
+    required this.initialBlock,
+    super.key,
+  });
 
-  /// The date [initialBlock] belongs to.
-  final DateTime date;
+  /// The column [initialBlock] belongs to.
+  final ScheduleColumn column;
+
+  /// Reads/writes [initialBlock]'s title/category/kind/start/end/delete.
+  final ScheduleBlockActions actions;
 
   /// The block as known when the modal was opened.
   final TimeObject initialBlock;
@@ -550,12 +570,13 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   TimeObject? _currentBlock;
   _TimeField? _expandedField;
 
-  /// The date whose provider this modal currently watches/writes through.
-  /// Starts at [BlockEditModal.date] (a `final` constructor param that
-  /// can't itself change) and is reassigned by [_changeDate] after a
-  /// cross-day move, so the modal keeps showing the same block on its new
-  /// date instead of the move looking like the block was deleted.
-  late DateTime _currentDate;
+  /// The column whose provider this modal currently watches/writes
+  /// through. Starts at [BlockEditModal.column] (a `final` constructor
+  /// param that can't itself change) and is reassigned by [_changeDate]
+  /// after a cross-day move (day columns only), so the modal keeps
+  /// showing the same block on its new date instead of the move looking
+  /// like the block was deleted.
+  late ScheduleColumn _currentColumn;
 
   @override
   void initState() {
@@ -563,7 +584,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     _titleController = TextEditingController(text: widget.initialBlock.title);
     _titleFocus = FocusNode()..addListener(_handleFocusChange);
     _autofocusTitle = widget.initialBlock.title.trim().isEmpty;
-    _currentDate = widget.date;
+    _currentColumn = widget.column;
   }
 
   @override
@@ -595,9 +616,12 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
       return;
     }
     if (value != block.title) {
-      await ref
-          .read(dayBlocksProvider(_currentDate).notifier)
-          .updateBlock(block, title: value);
+      await widget.actions.updateBlock(
+        ref,
+        _currentColumn,
+        block,
+        title: value,
+      );
     }
   }
 
@@ -617,29 +641,27 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   /// Opens the standard Material date picker and, if a different date is
-  /// picked, moves [block] there via the repository — the same
-  /// move-and-refresh pattern [DragNotifier.drop] uses for a drag-and-drop
-  /// move — then switches [_currentDate] to it. Only the calendar itself
-  /// closes; the modal stays open, now reading/writing through the new
-  /// date's provider.
+  /// picked, moves [block] there directly via the day repository (this is
+  /// only ever reachable when [widget.column] is a [DayColumn] — see the
+  /// date row's guard in `build`) — the same move-and-refresh pattern
+  /// `DragNotifier.drop` uses for a drag-and-drop move — then switches
+  /// [_currentColumn] to the new date. Only the calendar itself closes;
+  /// the modal stays open, now reading/writing through the new date's
+  /// provider.
   Future<void> _changeDate(TimeObject block) async {
     await _commitTitle(block);
     if (!mounted) return;
+    final currentDate = (_currentColumn as DayColumn).date;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _currentDate,
-      firstDate: DateTime(_currentDate.year - 5),
-      lastDate: DateTime(_currentDate.year + 5),
+      initialDate: currentDate,
+      firstDate: DateTime(currentDate.year - 5),
+      lastDate: DateTime(currentDate.year + 5),
     );
     if (picked == null || !mounted) return;
 
     final newDate = DateTime(picked.year, picked.month, picked.day);
-    final oldDate = DateTime(
-      _currentDate.year,
-      _currentDate.month,
-      _currentDate.day,
-    );
-    if (newDate == oldDate) return;
+    if (newDate == currentDate) return;
 
     final duration = block.end.difference(block.start);
     final newStart = DateTime(
@@ -652,18 +674,18 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     final repository = ref.read(dayBlocksRepositoryProvider);
     await repository.move(
       block,
-      fromDate: oldDate,
+      fromDate: currentDate,
       toDate: newDate,
       newStart: newStart,
       newEnd: newStart.add(duration),
     );
 
-    ref.invalidate(dayBlocksProvider(oldDate));
+    ref.invalidate(dayBlocksProvider(currentDate));
     ref.invalidate(dayBlocksProvider(newDate));
-    await ref.read(dayBlocksProvider(oldDate).future);
+    await ref.read(dayBlocksProvider(currentDate).future);
     await ref.read(dayBlocksProvider(newDate).future);
     if (!mounted) return;
-    setState(() => _currentDate = newDate);
+    setState(() => _currentColumn = DayColumn(newDate));
   }
 
   Future<void> _confirmTime(
@@ -671,41 +693,43 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     _TimeField field,
     DateTime picked,
   ) async {
-    await ref
-        .read(dayBlocksProvider(_currentDate).notifier)
-        .updateBlock(
-          block,
-          start: field == _TimeField.start ? picked : null,
-          end: field == _TimeField.end ? picked : null,
-        );
+    await widget.actions.updateBlock(
+      ref,
+      _currentColumn,
+      block,
+      start: field == _TimeField.start ? picked : null,
+      end: field == _TimeField.end ? picked : null,
+    );
   }
 
   Future<void> _setKind(TimeObject block, BlockKind kind) async {
     if (kind == block.kind) return;
-    await ref
-        .read(dayBlocksProvider(_currentDate).notifier)
-        .updateBlock(block, kind: kind);
+    await widget.actions.updateBlock(ref, _currentColumn, block, kind: kind);
   }
 
   Future<void> _setCategory(TimeObject block, String categoryId) async {
     if (categoryId == block.categoryId) return;
-    await ref
-        .read(dayBlocksProvider(_currentDate).notifier)
-        .updateBlock(block, categoryId: categoryId);
+    await widget.actions.updateBlock(
+      ref,
+      _currentColumn,
+      block,
+      categoryId: categoryId,
+    );
   }
 
+  /// Copies [block] to the following calendar day. Only ever reachable
+  /// when [widget.column] is a [DayColumn] — see the copy button's guard
+  /// in `build`.
   Future<void> _copyToNextDay(TimeObject block) async {
     await _commitTitle(block);
     if (!mounted) return;
-    // copyToNextDay reads block.title directly, so a just-committed rename
-    // must be picked up here — re-fetch by id rather than reusing the
-    // pre-commit `block`, whose title field is now stale.
-    final blocks = ref.read(dayBlocksProvider(_currentDate)).value;
+    final currentDate = (_currentColumn as DayColumn).date;
+    final blocks = ref.read(dayBlocksProvider(currentDate)).value;
     final toCopy = blocks == null
         ? block
         : (_findById(blocks, block.id) ?? block);
     await ref
-        .read(dayBlocksProvider(_currentDate).notifier)
+        .read(dayBlocksProvider(currentDate).notifier)
         .copyToNextDay(toCopy);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -713,7 +737,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   Future<void> _delete(TimeObject block) async {
-    await ref.read(dayBlocksProvider(_currentDate).notifier).deleteBlock(block);
+    await widget.actions.deleteBlock(ref, _currentColumn, block);
     _currentBlock = null;
     if (mounted) Navigator.of(context).pop();
   }
@@ -727,7 +751,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   @override
   Widget build(BuildContext context) {
-    final blocks = ref.watch(dayBlocksProvider(_currentDate)).value;
+    final blocks = widget.actions.watchBlocks(ref, _currentColumn);
     final block = blocks == null
         ? widget.initialBlock
         : _findById(blocks, widget.initialBlock.id);
@@ -749,19 +773,24 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     }
 
     final settings = ref.watch(daySettingsProvider);
-    final nextDate = DateTime(
-      _currentDate.year,
-      _currentDate.month,
-      _currentDate.day + 1,
-    );
-    final nextDayBlocks = ref.watch(dayBlocksProvider(nextDate)).value;
-    final canCopy =
-        nextDayBlocks != null &&
-        !copyToNextDayWouldOverlap(
-          block: current,
-          nextDate: nextDate,
-          nextDayBlocks: nextDayBlocks,
-        );
+    final isDayColumn = widget.column is DayColumn;
+    bool canCopy = false;
+    if (isDayColumn) {
+      final currentDate = (_currentColumn as DayColumn).date;
+      final nextDate = DateTime(
+        currentDate.year,
+        currentDate.month,
+        currentDate.day + 1,
+      );
+      final nextDayBlocks = ref.watch(dayBlocksProvider(nextDate)).value;
+      canCopy =
+          nextDayBlocks != null &&
+          !copyToNextDayWouldOverlap(
+            block: current,
+            nextDate: nextDate,
+            nextDayBlocks: nextDayBlocks,
+          );
+    }
     final others = (blocks ?? const <TimeObject>[])
         .where((b) => b.id != current.id)
         .toList();
@@ -803,11 +832,18 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                 onSelected: (categoryId) => _setCategory(current, categoryId),
               ),
               const SizedBox(height: 12),
-              ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: Text(formatDate(_currentDate, settings.dateFormat)),
-                onTap: () => _changeDate(current),
-              ),
+              if (isDayColumn) ...[
+                ListTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(
+                    formatDate(
+                      (_currentColumn as DayColumn).date,
+                      settings.dateFormat,
+                    ),
+                  ),
+                  onTap: () => _changeDate(current),
+                ),
+              ],
               if (isNarrow(context)) ...[
                 BlockTimeRow(
                   label: 'Starts',
@@ -821,7 +857,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                     range: validEditRange(
                       block: current,
                       editingStart: true,
-                      day: _currentDate,
+                      day: anchorDateFor(_currentColumn),
                       settings: settings,
                       others: others,
                     ),
@@ -840,7 +876,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                     range: validEditRange(
                       block: current,
                       editingStart: false,
-                      day: _currentDate,
+                      day: anchorDateFor(_currentColumn),
                       settings: settings,
                       others: others,
                     ),
@@ -857,7 +893,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                   range: validEditRange(
                     block: current,
                     editingStart: true,
-                    day: _currentDate,
+                    day: anchorDateFor(_currentColumn),
                     settings: settings,
                     others: others,
                   ),
@@ -871,7 +907,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                   range: validEditRange(
                     block: current,
                     editingStart: false,
-                    day: _currentDate,
+                    day: anchorDateFor(_currentColumn),
                     settings: settings,
                     others: others,
                   ),
@@ -899,11 +935,12 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  IconButton(
-                    tooltip: 'Copy to next day',
-                    icon: const Icon(Icons.content_copy),
-                    onPressed: canCopy ? () => _copyToNextDay(current) : null,
-                  ),
+                  if (isDayColumn)
+                    IconButton(
+                      tooltip: 'Copy to next day',
+                      icon: const Icon(Icons.content_copy),
+                      onPressed: canCopy ? () => _copyToNextDay(current) : null,
+                    ),
                   BlockDeleteButton(onConfirmed: () => _delete(current)),
                 ],
               ),

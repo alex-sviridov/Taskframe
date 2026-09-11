@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/date_format.dart';
+import 'package:taskframe/features/day/day_schedule_block_actions.dart';
 import 'package:taskframe/features/day/day_settings.dart';
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_edit_modal.dart';
@@ -57,8 +59,12 @@ Future<void> _pumpOpenButton(
       home: Scaffold(
         body: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () =>
-                showBlockEditModal(context: context, date: _date, block: block),
+            onPressed: () => showBlockEditModal(
+              context: context,
+              column: DayColumn(_date),
+              actions: dayScheduleBlockActions,
+              block: block,
+            ),
             child: const Text('Open'),
           ),
         ),
