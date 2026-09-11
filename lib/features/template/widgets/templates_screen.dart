@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
-import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/day_grid_sizing.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
@@ -18,7 +17,6 @@ import 'package:taskframe/features/template/providers.dart';
 const _minSlotHeight = 8.0;
 const _headerHeight = 56.0;
 const _columnGap = 8.0;
-const _newBlockDuration = Duration(minutes: 60);
 
 /// The templates screen: a set of named templates, each with its own
 /// full schedule editor reusing `DayGrid`. Narrow widths show one
@@ -50,31 +48,6 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     } else if (remaining == 0) {
       setState(() => _pageIndex = 0);
     }
-  }
-
-  Future<void> _createViaButton(BuildContext context, Template template) async {
-    final settings = ref.read(daySettingsProvider);
-    final existingBlocks = ref.read(templateBlocksProvider(template.id)).value ?? [];
-    final start = findNextFreeSlot(
-      day: templateAnchorDate,
-      existingBlocks: existingBlocks,
-      settings: settings,
-      duration: _newBlockDuration,
-    );
-    final end = dayEndFor(templateAnchorDate, settings).isBefore(start.add(_newBlockDuration))
-        ? dayEndFor(templateAnchorDate, settings)
-        : start.add(_newBlockDuration);
-
-    final created = await ref
-        .read(templateBlocksProvider(template.id).notifier)
-        .addBlock(start: start, end: end, kind: BlockKind.anchor);
-    if (!context.mounted) return;
-    await showBlockEditModal(
-      context: context,
-      column: TemplateColumn(template.id),
-      actions: templateScheduleBlockActions,
-      block: created,
-    );
   }
 
   @override
@@ -152,8 +125,6 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                                       template: visible[i],
                                       settings: settings,
                                       slotHeight: slotHeight,
-                                      onCreateViaButton: () =>
-                                          unawaited(_createViaButton(context, visible[i])),
                                     ),
                                   ),
                                 ],
@@ -274,13 +245,30 @@ class _TemplateColumnGrid extends ConsumerWidget {
     required this.template,
     required this.settings,
     required this.slotHeight,
-    required this.onCreateViaButton,
   });
 
   final Template template;
   final DaySettings settings;
   final double slotHeight;
-  final VoidCallback onCreateViaButton;
+
+  Future<void> _createAndOpen(
+    BuildContext context,
+    WidgetRef ref, {
+    required DateTime start,
+    required DateTime end,
+    required BlockKind kind,
+  }) async {
+    final created = await ref
+        .read(templateBlocksProvider(template.id).notifier)
+        .addBlock(start: start, end: end, kind: kind);
+    if (!context.mounted) return;
+    await showBlockEditModal(
+      context: context,
+      column: TemplateColumn(template.id),
+      actions: templateScheduleBlockActions,
+      block: created,
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -300,15 +288,7 @@ class _TemplateColumnGrid extends ConsumerWidget {
         showHourLabels: false,
         onCreateBlock: ({required start, required end, required kind}) {
           unawaited(
-            ref
-                .read(templateBlocksProvider(template.id).notifier)
-                .addBlock(start: start, end: end, kind: kind)
-                .then((created) => showBlockEditModal(
-                      context: context,
-                      column: TemplateColumn(template.id),
-                      actions: templateScheduleBlockActions,
-                      block: created,
-                    )),
+            _createAndOpen(context, ref, start: start, end: end, kind: kind),
           );
         },
       ),
