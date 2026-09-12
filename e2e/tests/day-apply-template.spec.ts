@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, clickUntilVisible, openDraftWithRetry } from './support/gestures';
+import {
+  clickCenter,
+  clickUntilVisible,
+  fillTextboxUntilSet,
+  gotoAndWaitForBoot,
+  openDraftWithRetry,
+} from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -48,15 +54,13 @@ async function addTemplateWithEventAt(
 
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
-  await page.getByRole('textbox').first().fill(title);
-  await page.getByRole('textbox').first().press('Enter');
+  await fillTextboxUntilSet(page.getByRole('textbox').first(), title);
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(title)).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/#/templates');
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  await gotoAndWaitForBoot(page, '/#/templates');
 });
 
 test('applying a template with no conflicts adds its event to the day', async ({
@@ -73,6 +77,10 @@ test('applying a template with no conflicts adds its event to the day', async ({
     page.getByRole('heading', { name: 'Day Frame' }),
   );
   await page.getByRole('button', { name: 'Next day' }).click();
+  // The outgoing day's transition-out animation can briefly leave its
+  // "Apply template" button mounted alongside the incoming day's, making
+  // `getByRole` match two — wait for exactly one before clicking.
+  await expect(page.getByRole('button', { name: 'Apply template' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Apply template' }).click();
   await clickCenter(page, page.getByText('Template 1'));
@@ -93,6 +101,8 @@ test('an overlapping template event is skipped, leaving the existing '
     page.getByRole('heading', { name: 'Day Frame' }),
   );
   await page.getByRole('button', { name: 'Next day' }).click();
+  // Same transition-overlap race as the other test above.
+  await expect(page.getByRole('button', { name: 'Add block' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Add block' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();

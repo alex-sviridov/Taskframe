@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, openDraftWithRetry } from './support/gestures';
+import { clickCenter, gotoAndWaitForBoot, openDraftWithRetry } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -50,8 +50,7 @@ async function addTemplateAndOpenDraft(page: import('@playwright/test').Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/#/templates');
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  await gotoAndWaitForBoot(page, '/#/templates');
 });
 
 test('creating an event adds a block titled "title" and opens its edit '

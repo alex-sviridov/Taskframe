@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import { clickCenter, gotoAndWaitForBoot } from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -14,7 +14,7 @@ import { clickCenter } from './support/gestures';
  * way every other control in this suite is.
  */
 async function addCategoryAndGoToDay(page: Page, name: string): Promise<void> {
-  await page.goto('/#/categories');
+  await gotoAndWaitForBoot(page, '/#/categories');
   await enableFlutterAccessibility(page);
 
   await page.getByRole('button', { name: 'Add category' }).click();

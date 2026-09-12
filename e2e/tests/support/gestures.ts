@@ -23,6 +23,33 @@ export async function doubleClickFreeSpace(
 }
 
 /**
+ * Fills [textbox] with [value] and presses Enter, retrying if it didn't
+ * stick. Under CI load, the synthetic `fill`/`press('Enter')` pair
+ * occasionally lands on the field without the app's text-editing client
+ * actually picking it up — confirmed by tracing a failure where the block
+ * kept its default "title" text after this ran and the modal was closed —
+ * so it's read back via `inputValue()` and reissued rather than trusted
+ * blind. A short pause precedes each read: Flutter web only syncs a text
+ * field's DOM value once its editing client has attached, which lags one
+ * beat behind the field visibly accepting focus.
+ */
+export async function fillTextboxUntilSet(
+  textbox: Locator,
+  value: string,
+  attempts = 3,
+): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    await textbox.fill(value);
+    await textbox.press('Enter');
+    await textbox.page().waitForTimeout(100);
+    if ((await textbox.inputValue().catch(() => '')) === value) return;
+    if (attempt === attempts) {
+      throw new Error(`Textbox never settled on "${value}" after ${attempts} attempts`);
+    }
+  }
+}
+
+/**
  * Clicks [point] and confirms it took effect by waiting for [marker] to
  * become visible, retrying the raw click itself (not just polling
  * afterwards) if it doesn't. Flutter web's canvas hit-testing occasionally
@@ -98,6 +125,26 @@ export async function openDraftWithRetry(
 async function reloadAndWaitForBoot(page: Page): Promise<void> {
   await page.reload();
   await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+}
+
+/**
+ * Navigates to [path] and waits for Flutter to finish booting (the
+ * `flt-semantics-placeholder` it injects once ready for input), retrying
+ * once via a full reload if the first boot hangs. Weaker/busier CI runners
+ * occasionally serve a page that never finishes booting on the very first
+ * load — confirmed by a CI run where a `beforeEach`'s plain `goto` +
+ * `waitFor` exceeded a 60s test timeout — and a fresh reload reliably
+ * recovers where waiting longer on the same load does not.
+ */
+export async function gotoAndWaitForBoot(page: Page, path: string): Promise<void> {
+  await page.goto(path);
+  const booted = await page
+    .locator('flt-semantics-placeholder')
+    .waitFor({ state: 'attached', timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (booted) return;
+  await reloadAndWaitForBoot(page);
 }
 
 /**

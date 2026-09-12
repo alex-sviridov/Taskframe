@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { doubleClickFreeSpace, openDraftWithRetry } from './support/gestures';
+import { doubleClickFreeSpace, gotoAndWaitForBoot, openDraftWithRetry } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -10,10 +10,9 @@ test.use({ viewport: { width: 800, height: 720 } });
 const freeSpace = { x: 300, y: 650 } as const;
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  // Wait for Flutter to finish booting before sending raw pointer events;
-  // it injects this placeholder once the app is ready to receive input.
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  // Waits for Flutter to finish booting before sending raw pointer events;
+  // it injects a placeholder once the app is ready to receive input.
+  await gotoAndWaitForBoot(page, '/');
 });
 
 /**

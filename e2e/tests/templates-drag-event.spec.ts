@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { dragMouseUntilMoved, openDraftWithRetry, waitForBoundingBox } from './support/gestures';
+import { dragMouseUntilMoved, gotoAndWaitForBoot, openDraftWithRetry, waitForBoundingBox } from './support/gestures';
 
 /**
  * Adds a template (raw click — see the comment in
@@ -41,8 +41,7 @@ test.describe('single template', () => {
   const blockPosition = { x: 300, y: 300 } as const;
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
   });
 
   test('dragging a block to a new time moves it there', async ({ page }) => {
@@ -72,8 +71,7 @@ test.describe('two templates side by side', () => {
   const rightColumnX = 900;
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
   });
 
   test('dragging a block across the gap moves it into the other '
@@ -126,8 +124,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     const pageErrors: Error[] = [];
     page.on('pageerror', (error) => pageErrors.push(error));
 
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
     await addTemplateWithBlock(page, addTemplateButton, blockPosition);
 
     // Hash-only navigation to Day and back — both branches' widget

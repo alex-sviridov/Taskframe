@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, dragMouse } from './support/gestures';
+import { clickCenter, dragMouse, gotoAndWaitForBoot } from './support/gestures';
 
 /**
  * Reads a template column's name by focusing its rename field and
@@ -24,7 +24,7 @@ test.describe('wide viewport', () => {
   test.use({ viewport: { width: 800, height: 720 } });
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/#/templates');
+    await gotoAndWaitForBoot(page, '/#/templates');
     await enableFlutterAccessibility(page);
   });
 
@@ -84,7 +84,7 @@ test.describe('wide viewport with two templates', () => {
   test('a second added template shows as a second column', async ({
     page,
   }) => {
-    await page.goto('/#/templates');
+    await gotoAndWaitForBoot(page, '/#/templates');
     await enableFlutterAccessibility(page);
 
     await page.getByRole('button', { name: 'Add template' }).click();
@@ -100,7 +100,7 @@ test.describe('narrow viewport', () => {
   test.use({ viewport: { width: 500, height: 800 } });
 
   test('with one template there is no paging arrow', async ({ page }) => {
-    await page.goto('/#/templates');
+    await gotoAndWaitForBoot(page, '/#/templates');
     await enableFlutterAccessibility(page);
     await page.getByRole('button', { name: 'Add template' }).click();
 
@@ -112,7 +112,7 @@ test.describe('narrow viewport', () => {
   test('the next-template arrow pages to the second template and back', async ({
     page,
   }) => {
-    await page.goto('/#/templates');
+    await gotoAndWaitForBoot(page, '/#/templates');
     await enableFlutterAccessibility(page);
     await page.getByRole('button', { name: 'Add template' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();
@@ -141,7 +141,7 @@ test.describe('narrow viewport', () => {
 
   test('a horizontal drag on free grid space swipes to the next '
     + 'template', async ({ page }) => {
-    await page.goto('/#/templates');
+    await gotoAndWaitForBoot(page, '/#/templates');
     await enableFlutterAccessibility(page);
     await page.getByRole('button', { name: 'Add template' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();

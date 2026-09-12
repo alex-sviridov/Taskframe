@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { dragMouse } from './support/gestures';
+import { dragMouse, gotoAndWaitForBoot } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  await gotoAndWaitForBoot(page, '/');
   await enableFlutterAccessibility(page);
 });
 
