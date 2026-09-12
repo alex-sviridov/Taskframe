@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import { clickCenter, openDraftWithRetry } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -32,15 +32,21 @@ const freeSpace = { x: 300, y: 300 } as const;
  * double-click that follows.
  */
 async function addTemplateAndOpenDraft(page: import('@playwright/test').Page) {
-  await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
-  await page.waitForTimeout(300);
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.waitForTimeout(300);
 
-  await page.mouse.click(freeSpace.x, freeSpace.y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(freeSpace.x, freeSpace.y);
-  await page.waitForTimeout(200);
+      await page.mouse.click(freeSpace.x, freeSpace.y);
+      await page.waitForTimeout(60);
+      await page.mouse.click(freeSpace.x, freeSpace.y);
+      await page.waitForTimeout(200);
 
-  await enableFlutterAccessibility(page);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
 }
 
 test.beforeEach(async ({ page }) => {

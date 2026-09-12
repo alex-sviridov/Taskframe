@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import { clickCenter, clickUntilVisible, openDraftWithRetry } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -30,15 +30,21 @@ async function addTemplateWithEventAt(
   y: number,
   title: string,
 ) {
-  await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
-  await page.waitForTimeout(300);
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.waitForTimeout(300);
 
-  await page.mouse.click(300, y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(300, y);
-  await page.waitForTimeout(200);
+      await page.mouse.click(300, y);
+      await page.waitForTimeout(60);
+      await page.mouse.click(300, y);
+      await page.waitForTimeout(200);
 
-  await enableFlutterAccessibility(page);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
 
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
@@ -61,8 +67,11 @@ test('applying a template with no conflicts adds its event to the day', async ({
   // Switch to the day screen, then page to a day with no seeded blocks
   // (only "today" is seeded), so nothing here could conflict with
   // "Standup" regardless of what time it landed on.
-  await page.mouse.click(dayDestination.x, dayDestination.y);
-  await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
   await page.getByRole('button', { name: 'Next day' }).click();
 
   await page.getByRole('button', { name: 'Apply template' }).click();
@@ -78,8 +87,11 @@ test('an overlapping template event is skipped, leaving the existing '
   // "Add block" button places its first block on an empty day.
   await addTemplateWithEventAt(page, 126, 'Conflict');
 
-  await page.mouse.click(dayDestination.x, dayDestination.y);
-  await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
   await page.getByRole('button', { name: 'Next day' }).click();
 
   await page.getByRole('button', { name: 'Add block' }).click();
@@ -97,8 +109,12 @@ test('an overlapping template event is skipped, leaving the existing '
 test('the apply-template button is disabled when there are no templates', async ({
   page,
 }) => {
-  await page.mouse.click(dayDestination.x, dayDestination.y);
   await enableFlutterAccessibility(page);
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
 
   await expect(page.getByRole('button', { name: 'Apply template' })).toBeDisabled();
 });
