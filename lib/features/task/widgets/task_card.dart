@@ -44,6 +44,7 @@ class TaskCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(8),
         child: ListTile(
           leading: Checkbox(
+            shape: const CircleBorder(),
             value: task.closed,
             onChanged: (value) => ref
                 .read(taskListProvider.notifier)

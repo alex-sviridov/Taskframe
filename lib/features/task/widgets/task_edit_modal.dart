@@ -157,6 +157,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
             Row(
               children: [
                 Checkbox(
+                  shape: const CircleBorder(),
                   value: _closed,
                   onChanged: (value) => _onClosedChanged(value ?? !_closed),
                 ),
