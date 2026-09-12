@@ -21,6 +21,7 @@ const _destinations = [
   _Destination(icon: Icons.calendar_today, label: 'Day'),
   _Destination(icon: Icons.dashboard_customize, label: 'Templates'),
   _Destination(icon: Icons.category, label: 'Categories'),
+  _Destination(icon: Icons.check_circle_outline, label: 'Tasks'),
 ];
 
 /// Width of the persistent (wide-width) sidebar — 30% narrower than

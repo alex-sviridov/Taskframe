@@ -5,6 +5,8 @@ import 'package:taskframe/features/category/data/sembast_category_repository.dar
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
 import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/task/data/sembast_task_repository.dart';
+import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/template/data/sembast_template_repository.dart';
 import 'package:taskframe/features/template/providers.dart';
 
@@ -22,4 +24,5 @@ List<Override> sembastOverrides(Database db) => [
   appSettingsRepositoryProvider.overrideWithValue(
     SembastAppSettingsRepository(db),
   ),
+  taskRepositoryProvider.overrideWithValue(SembastTaskRepository(db)),
 ];
