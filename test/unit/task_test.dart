@@ -1,0 +1,69 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/task/models/task.dart';
+
+void main() {
+  group('Task', () {
+    test('closed defaults to false', () {
+      const task = Task(id: 'task-1', title: 'Buy milk');
+
+      expect(task.closed, isFalse);
+    });
+
+    test('categoryId defaults to Category.defaultId', () {
+      const task = Task(id: 'task-1', title: 'Buy milk');
+
+      expect(task.categoryId, Category.defaultId);
+    });
+
+    test('copyWith replaces only the given fields', () {
+      const task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: false,
+        categoryId: 'category-1',
+      );
+
+      final updated = task.copyWith(title: 'Buy oat milk', closed: true);
+
+      expect(updated.id, 'task-1');
+      expect(updated.title, 'Buy oat milk');
+      expect(updated.closed, isTrue);
+      expect(updated.categoryId, 'category-1');
+    });
+
+    test('copyWith with no arguments returns equivalent fields', () {
+      const task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: true,
+        categoryId: 'category-1',
+      );
+
+      final copy = task.copyWith();
+
+      expect(copy.id, task.id);
+      expect(copy.title, task.title);
+      expect(copy.closed, task.closed);
+      expect(copy.categoryId, task.categoryId);
+    });
+  });
+
+  group('toMap/fromMap', () {
+    test('fromMap(toMap()) round-trips every field', () {
+      const task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: true,
+        categoryId: 'category-1',
+      );
+
+      final restored = Task.fromMap(task.toMap());
+
+      expect(restored.id, task.id);
+      expect(restored.title, task.title);
+      expect(restored.closed, task.closed);
+      expect(restored.categoryId, task.categoryId);
+    });
+  });
+}
