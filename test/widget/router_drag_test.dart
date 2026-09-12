@@ -120,9 +120,9 @@ void main() {
           tester,
           container,
         );
-        final before =
-            (await container.read(templateBlocksProvider(template.id).future))
-                .single;
+        final before = (await container.read(
+          templateBlocksProvider(template.id).future,
+        )).single;
 
         final start = tester.getCenter(find.text('Template block'));
         final gesture = await _startTouchDrag(tester, start);
@@ -135,9 +135,9 @@ void main() {
         // `(column as TemplateColumn)`; pumpAndSettle would have rethrown it.
         expect(tester.takeException(), isNull);
 
-        final after =
-            (await container.read(templateBlocksProvider(template.id).future))
-                .single;
+        final after = (await container.read(
+          templateBlocksProvider(template.id).future,
+        )).single;
         expect(after.id, before.id);
         expect(
           after.start.isAfter(before.start),

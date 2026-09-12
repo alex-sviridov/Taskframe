@@ -18,7 +18,8 @@ final templateRepositoryProvider = Provider<TemplateRepository>(
 /// and lets consumers add/rename/delete them.
 class TemplateListNotifier extends AsyncNotifier<List<Template>> {
   @override
-  Future<List<Template>> build() => ref.watch(templateRepositoryProvider).load();
+  Future<List<Template>> build() =>
+      ref.watch(templateRepositoryProvider).load();
 
   /// Creates a new template named [name], adds it to the current state,
   /// and returns it.
@@ -154,9 +155,11 @@ class TemplateBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
 
 /// The timeline blocks for a given template.
 final templateBlocksProvider =
-    AsyncNotifierProvider.family<TemplateBlocksNotifier, List<TimeObject>, String>(
-      TemplateBlocksNotifier.new,
-    );
+    AsyncNotifierProvider.family<
+      TemplateBlocksNotifier,
+      List<TimeObject>,
+      String
+    >(TemplateBlocksNotifier.new);
 
 /// A [ScheduleController] backed by [templateBlocksProvider]/
 /// [templateBlocksRepositoryProvider]. Every [ScheduleColumn] it's given
@@ -198,7 +201,8 @@ class TemplateScheduleController extends ScheduleController {
 /// [ScheduleColumn] variant — everything in this file is template-only, and
 /// a foreign column reaching here means a caller resolved the wrong grid,
 /// which is worth failing loudly over rather than silently mishandling.
-String _idOfColumn(ScheduleColumn column) => (column as TemplateColumn).templateId;
+String _idOfColumn(ScheduleColumn column) =>
+    (column as TemplateColumn).templateId;
 
 List<TimeObject>? _watchTemplateBlocks(WidgetRef ref, ScheduleColumn column) =>
     ref.watch(templateBlocksProvider(_idOfColumn(column))).value;
@@ -227,7 +231,9 @@ Future<void> _deleteTemplateBlock(
   WidgetRef ref,
   ScheduleColumn column,
   TimeObject block,
-) => ref.read(templateBlocksProvider(_idOfColumn(column)).notifier).deleteBlock(block);
+) => ref
+    .read(templateBlocksProvider(_idOfColumn(column)).notifier)
+    .deleteBlock(block);
 
 /// The [ScheduleBlockActions] `BlockEditModal` uses when editing a
 /// template block. Every [ScheduleColumn] passed to it must be a

@@ -12,9 +12,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp.router(routerConfig: appRouter),
-        ),
+        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
       );
       await tester.pump();
 
@@ -24,13 +22,9 @@ void main() {
       expect(shell.navigationShell.currentIndex, 0);
     });
 
-    testWidgets('tapping Categories navigates to /categories', (
-      tester,
-    ) async {
+    testWidgets('tapping Categories navigates to /categories', (tester) async {
       await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp.router(routerConfig: appRouter),
-        ),
+        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
       );
       await tester.pump();
 
@@ -45,9 +39,7 @@ void main() {
 
     testWidgets('tapping Templates navigates to /templates', (tester) async {
       await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp.router(routerConfig: appRouter),
-        ),
+        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
       );
       await tester.pump();
 
@@ -63,9 +55,7 @@ void main() {
       "DayScreen's paged-forward state survives switching branches and back",
       (tester) async {
         await tester.pumpWidget(
-          ProviderScope(
-            child: MaterialApp.router(routerConfig: appRouter),
-          ),
+          ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
         );
         await tester.pump();
 

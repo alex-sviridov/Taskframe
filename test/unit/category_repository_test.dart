@@ -35,19 +35,25 @@ void main() {
       expect(added.emoji, '💼');
     });
 
-    test('an added category shows up in a later load, after the default', () async {
-      await repository.add(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+    test(
+      'an added category shows up in a later load, after the default',
+      () async {
+        await repository.add(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
 
-      final categories = await repository.load();
+        final categories = await repository.load();
 
-      expect(categories, hasLength(2));
-      expect(categories.first.isDefault, isTrue);
-      expect(categories.last.name, 'Work');
-    });
+        expect(categories, hasLength(2));
+        expect(categories.first.isDefault, isTrue);
+        expect(categories.last.name, 'Work');
+      },
+    );
 
     test('two added categories get distinct, non-default ids', () async {
       final first = await repository.add(name: 'Work', colorValue: 0xFF2196F3);
-      final second = await repository.add(name: 'Health', colorValue: 0xFF4CAF50);
+      final second = await repository.add(
+        name: 'Health',
+        colorValue: 0xFF4CAF50,
+      );
 
       expect(first.id, isNot(equals(second.id)));
       expect(first.id, isNot(Category.defaultId));
@@ -92,20 +98,23 @@ void main() {
       expect(categories.singleWhere((c) => c.id == added.id).name, 'Career');
     });
 
-    test('updating the default category only applies the color change', () async {
-      final defaultCategory = (await repository.load()).single;
+    test(
+      'updating the default category only applies the color change',
+      () async {
+        final defaultCategory = (await repository.load()).single;
 
-      final updated = await repository.update(
-        defaultCategory,
-        name: 'Renamed',
-        colorValue: 0xFFFF0000,
-        emoji: '🔥',
-      );
+        final updated = await repository.update(
+          defaultCategory,
+          name: 'Renamed',
+          colorValue: 0xFFFF0000,
+          emoji: '🔥',
+        );
 
-      expect(updated.name, 'Default');
-      expect(updated.emoji, isNull);
-      expect(updated.colorValue, 0xFFFF0000);
-    });
+        expect(updated.name, 'Default');
+        expect(updated.emoji, isNull);
+        expect(updated.colorValue, 0xFFFF0000);
+      },
+    );
 
     test('delete removes an added category from a later load', () async {
       final added = await repository.add(name: 'Work', colorValue: 0xFF2196F3);

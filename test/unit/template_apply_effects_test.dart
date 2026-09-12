@@ -49,16 +49,12 @@ void main() {
       ]);
 
       expect(added.map((g) => g.id).toSet().length, 2);
-      expect(
-        container.read(templateApplyEffectsProvider(date)).ghosts,
-        added,
-      );
+      expect(container.read(templateApplyEffectsProvider(date)).ghosts, added);
 
       notifier.removeGhost(added.first.id);
-      expect(
-        container.read(templateApplyEffectsProvider(date)).ghosts,
-        [added.last],
-      );
+      expect(container.read(templateApplyEffectsProvider(date)).ghosts, [
+        added.last,
+      ]);
     });
 
     test('effects for different dates are independent', () {
@@ -66,9 +62,9 @@ void main() {
       addTearDown(container.dispose);
       final otherDate = DateTime(2026, 9, 15);
 
-      container
-          .read(templateApplyEffectsProvider(date).notifier)
-          .addHighlights(['a']);
+      container.read(templateApplyEffectsProvider(date).notifier).addHighlights(
+        ['a'],
+      );
 
       expect(
         container.read(templateApplyEffectsProvider(otherDate)).highlightedIds,

@@ -45,9 +45,9 @@ class SembastAppSettingsRepository implements AppSettingsRepository {
 
   @override
   Future<void> setInstallHintDismissedAt(DateTime time) async {
-    await settingsStore
-        .record(_key)
-        .put(_db, {'value': time.toIso8601String()});
+    await settingsStore.record(_key).put(_db, {
+      'value': time.toIso8601String(),
+    });
   }
 }
 

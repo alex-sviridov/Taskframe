@@ -93,7 +93,11 @@ class TemplateApplyEffectsNotifier extends Notifier<TemplateApplyEffectsState> {
   List<TemplateApplyGhost> addGhosts(Iterable<TemplateApplySkip> skips) {
     final added = [
       for (final skip in skips)
-        TemplateApplyGhost(id: _nextGhostId++, start: skip.start, end: skip.end),
+        TemplateApplyGhost(
+          id: _nextGhostId++,
+          start: skip.start,
+          end: skip.end,
+        ),
     ];
     state = TemplateApplyEffectsState(
       highlightedIds: state.highlightedIds,
@@ -114,6 +118,8 @@ class TemplateApplyEffectsNotifier extends Notifier<TemplateApplyEffectsState> {
 
 /// The in-flight template-apply animation state for a given date.
 final templateApplyEffectsProvider =
-    NotifierProvider.family<TemplateApplyEffectsNotifier, TemplateApplyEffectsState, DateTime>(
-      TemplateApplyEffectsNotifier.new,
-    );
+    NotifierProvider.family<
+      TemplateApplyEffectsNotifier,
+      TemplateApplyEffectsState,
+      DateTime
+    >(TemplateApplyEffectsNotifier.new);

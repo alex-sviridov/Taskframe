@@ -11,22 +11,19 @@ const _settings = DaySettings(
 );
 
 void main() {
-  testWidgets(
-    'HourGutter sizes itself to span day-start through day-end',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: HourGutter(settings: _settings, slotHeight: 16),
-          ),
-        ),
-      );
+  testWidgets('HourGutter sizes itself to span day-start through day-end', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: HourGutter(settings: _settings, slotHeight: 16)),
+      ),
+    );
 
-      final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+    final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
 
-      // 6:00 to 23:00 is 17 hours = 68 slots.
-      expect(sizedBox.height, 68 * 16.0);
-      expect(sizedBox.width, HourGutter.width);
-    },
-  );
+    // 6:00 to 23:00 is 17 hours = 68 slots.
+    expect(sizedBox.height, 68 * 16.0);
+    expect(sizedBox.width, HourGutter.width);
+  });
 }

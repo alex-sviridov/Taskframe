@@ -38,9 +38,8 @@ class ApplyTemplateButton extends ConsumerWidget {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
       onPressed: hasTemplates
-          ? () => unawaited(
-              showApplyTemplateModal(context: context, date: date),
-            )
+          ? () =>
+                unawaited(showApplyTemplateModal(context: context, date: date))
           : null,
     );
 

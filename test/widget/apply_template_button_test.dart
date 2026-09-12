@@ -68,9 +68,7 @@ void main() {
       Opacity opacityOf() => tester.widget<Opacity>(find.byType(Opacity));
       expect(opacityOf().opacity, 0);
 
-      final gesture = await tester.createGesture(
-        kind: PointerDeviceKind.mouse,
-      );
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
       addTearDown(gesture.removePointer);
       await tester.pump();

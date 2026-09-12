@@ -11,7 +11,8 @@ class Template {
   final String name;
 
   /// Returns a copy of this template with [name] replaced.
-  Template copyWith({String? name}) => Template(id: id, name: name ?? this.name);
+  Template copyWith({String? name}) =>
+      Template(id: id, name: name ?? this.name);
 
   /// This template's field values as a JSON-safe map, for storage.
   Map<String, Object?> toMap() => {'id': id, 'name': name};

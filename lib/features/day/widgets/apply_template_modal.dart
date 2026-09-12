@@ -91,8 +91,7 @@ class ApplyTemplateModal extends ConsumerWidget {
                       ListTile(
                         key: ValueKey('apply-template-option-${template.id}'),
                         title: Text(template.name),
-                        onTap: () =>
-                            unawaited(_apply(context, ref, template)),
+                        onTap: () => unawaited(_apply(context, ref, template)),
                       ),
                   ],
                 ),

@@ -74,23 +74,22 @@ void main() {
       expect(find.text(template.name), findsOneWidget);
     });
 
-    testWidgets(
-      'tapping a template applies its blocks to the day and closes',
-      (tester) async {
-        final (container, template) = await _seededContainer();
-        addTearDown(container.dispose);
-        await _pumpOpenButton(tester, container);
+    testWidgets('tapping a template applies its blocks to the day and closes', (
+      tester,
+    ) async {
+      final (container, template) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container);
 
-        await tester.tap(find.text('Open'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(template.name));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(template.name));
+      await tester.pumpAndSettle();
 
-        expect(find.text(template.name), findsNothing);
-        final dayBlocks = container.read(dayBlocksProvider(_date)).value!;
-        expect(dayBlocks.map((b) => b.title), contains('Breakfast'));
-      },
-    );
+      expect(find.text(template.name), findsNothing);
+      final dayBlocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(dayBlocks.map((b) => b.title), contains('Breakfast'));
+    });
 
     testWidgets('highlights the newly added block after applying', (
       tester,
@@ -104,11 +103,7 @@ void main() {
       await tester.tap(find.text(template.name));
       await tester.pumpAndSettle();
 
-      final addedId = container
-          .read(dayBlocksProvider(_date))
-          .value!
-          .single
-          .id;
+      final addedId = container.read(dayBlocksProvider(_date)).value!.single.id;
       expect(
         container.read(templateApplyEffectsProvider(_date)).highlightedIds,
         {addedId},

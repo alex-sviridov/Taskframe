@@ -607,7 +607,10 @@ class _TemplateHighlightPulseState extends State<_TemplateHighlightPulse>
         final opacity = 1 - _controller.value;
         return DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.all(color: color.withValues(alpha: opacity), width: 2),
+            border: Border.all(
+              color: color.withValues(alpha: opacity),
+              width: 2,
+            ),
             borderRadius: BorderRadius.circular(4),
           ),
           child: child,
@@ -853,9 +856,8 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
 
-    final renderObject = scheduleGridKeyFor(
-      widget.column,
-    ).currentContext?.findRenderObject();
+    final renderObject = scheduleGridKeyFor(widget.column).currentContext
+        ?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.attached) return;
     final gridTop = renderObject.localToGlobal(Offset.zero).dy;
     // Clamps to the day's exact start/end rather than `slotStartForOffset`'s

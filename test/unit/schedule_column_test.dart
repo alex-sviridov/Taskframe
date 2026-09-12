@@ -12,8 +12,7 @@ void main() {
 
     test('not equal on a different calendar day', () {
       expect(
-        DayColumn(DateTime(2026, 9, 9)) ==
-            DayColumn(DateTime(2026, 9, 10)),
+        DayColumn(DateTime(2026, 9, 9)) == DayColumn(DateTime(2026, 9, 10)),
         isFalse,
       );
     });
@@ -38,8 +37,7 @@ void main() {
 
   test('a DayColumn is never equal to a TemplateColumn', () {
     expect(
-      DayColumn(DateTime(2026, 9, 9)) ==
-          const TemplateColumn('2026-09-09'),
+      DayColumn(DateTime(2026, 9, 9)) == const TemplateColumn('2026-09-09'),
       isFalse,
     );
   });
