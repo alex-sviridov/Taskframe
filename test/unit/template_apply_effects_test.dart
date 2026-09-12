@@ -16,20 +16,25 @@ void main() {
       expect(state.ghosts, isEmpty);
     });
 
-    test('addHighlights adds ids, removeHighlight removes one', () {
+    test('addHighlights adds ids', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final notifier = container.read(
-        templateApplyEffectsProvider(date).notifier,
+      container.read(templateApplyEffectsProvider(date).notifier).addHighlights(
+        ['a', 'b'],
       );
 
-      notifier.addHighlights(['a', 'b']);
       expect(
         container.read(templateApplyEffectsProvider(date)).highlightedIds,
         {'a', 'b'},
       );
+    });
 
-      notifier.removeHighlight('a');
+    test('removeHighlight removes one', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(templateApplyEffectsProvider(date).notifier)
+        ..addHighlights(['a', 'b'])
+        ..removeHighlight('a');
       expect(
         container.read(templateApplyEffectsProvider(date)).highlightedIds,
         {'b'},
