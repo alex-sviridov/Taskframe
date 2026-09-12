@@ -27,10 +27,8 @@ Future<void> _pumpOpenButton(
       home: Scaffold(
         body: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () => showCategoryEditSheet(
-              context: context,
-              category: category,
-            ),
+            onPressed: () =>
+                showCategoryEditSheet(context: context, category: category),
             child: const Text('Open'),
           ),
         ),
@@ -85,8 +83,14 @@ void main() {
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('categoryEditSheet.colorSwatch')), findsOneWidget);
-      expect(find.byKey(const Key('categoryEditSheet.emojiButton')), findsOneWidget);
+      expect(
+        find.byKey(const Key('categoryEditSheet.colorSwatch')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('categoryEditSheet.emojiButton')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('edit mode: pre-fills the name field with the category name', (
@@ -188,36 +192,33 @@ void main() {
       expect(categories.where((c) => c.name == 'Work'), isEmpty);
     });
 
-    testWidgets(
-      'color picker: picking a new color and saving persists it',
-      (tester) async {
-        final container = await _seededContainer();
-        addTearDown(container.dispose);
-        final created = await container
-            .read(categoryListProvider.notifier)
-            .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
-        await _pumpOpenButton(tester, container, category: created);
+    testWidgets('color picker: picking a new color and saving persists it', (
+      tester,
+    ) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final created = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF2196F3, emoji: '💼');
+      await _pumpOpenButton(tester, container, category: created);
 
-        await tester.tap(find.text('Open'));
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.byKey(const Key('categoryEditSheet.colorSwatch')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('categoryEditSheet.colorSwatch')));
+      await tester.pumpAndSettle();
 
-        final redSwatch = find.byWidgetPredicate(_isRedSwatch);
-        expect(redSwatch, findsOneWidget);
-        await tester.tap(redSwatch);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Done'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Save'));
-        await tester.pumpAndSettle();
+      final redSwatch = find.byWidgetPredicate(_isRedSwatch);
+      expect(redSwatch, findsOneWidget);
+      await tester.tap(redSwatch);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
 
-        final categories = container.read(categoryListProvider).value!;
-        final updated = categories.singleWhere((c) => c.id == created.id);
-        expect(updated.colorValue, Colors.red.toARGB32());
-      },
-    );
+      final categories = container.read(categoryListProvider).value!;
+      final updated = categories.singleWhere((c) => c.id == created.id);
+      expect(updated.colorValue, Colors.red.toARGB32());
+    });
   });
 }

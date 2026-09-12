@@ -118,10 +118,10 @@ void main() {
       );
     });
 
-    test('copyToNextDay carries over the block\'s categoryId', () async {
+    test("copyToNextDay carries over the block's categoryId", () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final date = DateTime(2000, 1, 1);
+      final date = DateTime(2000);
       final nextDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(date).future);
       final created = await container
@@ -251,7 +251,7 @@ void main() {
       // blocks for whatever date happens to be "today", so a target date
       // must never risk coinciding with the real calendar date the test
       // suite runs on.
-      final date = DateTime(2000, 1, 1);
+      final date = DateTime(2000);
       final nextDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(date).future);
       final created = await container

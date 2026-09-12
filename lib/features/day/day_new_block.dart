@@ -46,8 +46,9 @@ DateTime dayEndFor(DateTime day, DaySettings settings) =>
 /// like [slotStartForOffset] but clamped to the day's own start/end instead
 /// of returning `null` there.
 ///
-/// A new block's start must fall strictly within the grid — [slotStartForOffset]
-/// rejects the day's exact end because nothing could start there. A resize's
+/// A new block's start must fall strictly within the grid —
+/// [slotStartForOffset] rejects the day's exact end because nothing could
+/// start there. A resize's
 /// dragged edge has no such restriction: the block's end (or start) should be
 /// able to reach the day's exact boundary, not stop one 15-minute slot short
 /// of it.

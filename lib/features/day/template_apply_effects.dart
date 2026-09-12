@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show NotifierProviderFamily;
+import 'package:meta/meta.dart';
 import 'package:taskframe/features/day/template_apply.dart';
 
 /// How long a newly-applied block's border pulse animation runs.
@@ -10,13 +12,10 @@ const templateApplyGhostDuration = Duration(milliseconds: 700);
 /// A skipped template block rendered transiently at its would-be slot,
 /// identified by [id] so its animation's completion can remove exactly
 /// this ghost (and no other queued at the same time) from state.
+@immutable
 class TemplateApplyGhost {
   /// Creates a [TemplateApplyGhost].
-  const TemplateApplyGhost({
-    required this.id,
-    required this.start,
-    required this.end,
-  });
+  const new({required this.id, required this.start, required this.end});
 
   /// Unique within a single [TemplateApplyEffectsNotifier]'s lifetime.
   final int id;
@@ -43,10 +42,7 @@ class TemplateApplyGhost {
 /// template events should show a ghost.
 class TemplateApplyEffectsState {
   /// Creates a [TemplateApplyEffectsState].
-  const TemplateApplyEffectsState({
-    this.highlightedIds = const {},
-    this.ghosts = const [],
-  });
+  const new({this.highlightedIds = const {}, this.ghosts = const []});
 
   /// Ids of blocks currently playing their newly-applied border pulse.
   final Set<String> highlightedIds;
@@ -60,7 +56,7 @@ class TemplateApplyEffectsState {
 /// widget finishes and calls [removeHighlight]/[removeGhost].
 class TemplateApplyEffectsNotifier extends Notifier<TemplateApplyEffectsState> {
   /// Creates a [TemplateApplyEffectsNotifier] for [date].
-  TemplateApplyEffectsNotifier(this.date);
+  new(this.date);
 
   /// The date this notifier's effects belong to.
   final DateTime date;
@@ -93,7 +89,11 @@ class TemplateApplyEffectsNotifier extends Notifier<TemplateApplyEffectsState> {
   List<TemplateApplyGhost> addGhosts(Iterable<TemplateApplySkip> skips) {
     final added = [
       for (final skip in skips)
-        TemplateApplyGhost(id: _nextGhostId++, start: skip.start, end: skip.end),
+        TemplateApplyGhost(
+          id: _nextGhostId++,
+          start: skip.start,
+          end: skip.end,
+        ),
     ];
     state = TemplateApplyEffectsState(
       highlightedIds: state.highlightedIds,
@@ -113,7 +113,14 @@ class TemplateApplyEffectsNotifier extends Notifier<TemplateApplyEffectsState> {
 }
 
 /// The in-flight template-apply animation state for a given date.
-final templateApplyEffectsProvider =
-    NotifierProvider.family<TemplateApplyEffectsNotifier, TemplateApplyEffectsState, DateTime>(
-      TemplateApplyEffectsNotifier.new,
-    );
+final NotifierProviderFamily<
+  TemplateApplyEffectsNotifier,
+  TemplateApplyEffectsState,
+  DateTime
+>
+templateApplyEffectsProvider =
+    NotifierProvider.family<
+      TemplateApplyEffectsNotifier,
+      TemplateApplyEffectsState,
+      DateTime
+    >(TemplateApplyEffectsNotifier.new);

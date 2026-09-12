@@ -1,15 +1,15 @@
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 /// One template block rebased onto a target day, ready to pass to
 /// `DayBlocksNotifier.addBlock`.
-typedef TemplateApplyBlock =
-    ({
-      DateTime start,
-      DateTime end,
-      BlockKind kind,
-      String title,
-      String categoryId,
-    });
+typedef TemplateApplyBlock = ({
+  DateTime start,
+  DateTime end,
+  BlockKind kind,
+  String title,
+  String categoryId,
+});
 
 /// The half-open `[start, end)` range a skipped template block would have
 /// occupied on the target day, for driving its "not applied" animation.
@@ -17,14 +17,16 @@ typedef TemplateApplySkip = ({DateTime start, DateTime end});
 
 /// The outcome of applying a template to a day: the ids of the blocks
 /// actually added, and the ranges of any skipped (overlapping) ones.
-typedef TemplateApplyResult =
-    ({List<String> addedIds, List<TemplateApplySkip> skipped});
+typedef TemplateApplyResult = ({
+  List<String> addedIds,
+  List<TemplateApplySkip> skipped,
+});
 
 /// Resolves applying [templateBlocks] (a template's own timeline, dated on
 /// [templateAnchorDate]) onto [date]: each block's time-of-day is rebased
-/// onto [date], then accepted into [toAdd] unless it overlaps [dayBlocks]
+/// onto [date], then accepted into `toAdd` unless it overlaps [dayBlocks]
 /// or a block already accepted earlier in this same batch, in which case
-/// its rebased range is recorded in [skipped] instead.
+/// its rebased range is recorded in `skipped` instead.
 ///
 /// Partial application — one conflicting block never blocks the rest of
 /// the template from being applied.

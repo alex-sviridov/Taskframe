@@ -152,7 +152,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
     super.dispose();
   }
 
-  /// Redraws once a minute while [widget.date] is today, so the
+  /// Redraws once a minute while `widget.date` is today, so the
   /// current-time marker line keeps moving; does nothing otherwise.
   void _scheduleNowTimer() {
     _nowTimer?.cancel();
@@ -558,11 +558,7 @@ class _DayGridState extends ConsumerState<DayGrid> {
 /// a template — fades from [ColorScheme.primary] back to nothing over
 /// [templateApplyHighlightDuration], then calls [onDone].
 class _TemplateHighlightPulse extends StatefulWidget {
-  const _TemplateHighlightPulse({
-    required this.onDone,
-    required this.child,
-    super.key,
-  });
+  const new({required this.onDone, required this.child, super.key});
 
   final VoidCallback onDone;
   final Widget child;
@@ -607,7 +603,10 @@ class _TemplateHighlightPulseState extends State<_TemplateHighlightPulse>
         final opacity = 1 - _controller.value;
         return DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.all(color: color.withValues(alpha: opacity), width: 2),
+            border: Border.all(
+              color: color.withValues(alpha: opacity),
+              width: 2,
+            ),
             borderRadius: BorderRadius.circular(4),
           ),
           child: child,
@@ -622,7 +621,7 @@ class _TemplateHighlightPulseState extends State<_TemplateHighlightPulse>
 /// event's would-be slot when it was skipped for overlapping an existing
 /// block — plays for [templateApplyGhostDuration], then calls [onDone].
 class _TemplateGhostOverlay extends StatefulWidget {
-  const _TemplateGhostOverlay({required this.onDone});
+  const new({required this.onDone});
 
   final VoidCallback onDone;
 
@@ -676,7 +675,7 @@ class _TemplateGhostOverlayState extends State<_TemplateGhostOverlay>
 
 /// Wraps one rendered block with the gestures that *start* a drag: a
 /// long-press on touch, an immediate pan on mouse/trackpad, and a plain tap
-/// (forwarded to [onDismissDraft]) on any device. Locked blocks only get
+/// (forwarded to `onDismissDraft`) on any device. Locked blocks only get
 /// the tap handler.
 ///
 /// Deliberately handles only the start. Once a drag begins, [DragNotifier]
@@ -706,7 +705,7 @@ ResizeEdge resizeEdgeForLocalY({
 /// let one block's hit region silently steal pointer events meant for a
 /// neighbor sitting right next to it — most visible in a densely-packed
 /// part of the day, where many blocks are back-to-back or nearly so.
-/// [blocks] need not be pre-sorted; this sorts its own copy by [start] to
+/// [blocks] need not be pre-sorted; this sorts its own copy by `start` to
 /// find each block's true time-adjacent neighbors, independent of
 /// whatever order the caller's list happens to be in.
 Map<String, ({double top, double bottom})> resizeBleedForBlocks({
@@ -744,7 +743,7 @@ Map<String, ({double top, double bottom})> resizeBleedForBlocks({
 }
 
 class _DraggableBlock extends ConsumerStatefulWidget {
-  const _DraggableBlock({
+  const new({
     required this.block,
     required this.column,
     required this.controller,
@@ -853,9 +852,8 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
     final settings = widget.settings;
     final slotHeight = widget.slotHeight;
 
-    final renderObject = scheduleGridKeyFor(
-      widget.column,
-    ).currentContext?.findRenderObject();
+    final renderObject = scheduleGridKeyFor(widget.column).currentContext
+        ?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.attached) return;
     final gridTop = renderObject.localToGlobal(Offset.zero).dy;
     // Clamps to the day's exact start/end rather than `slotStartForOffset`'s
@@ -957,7 +955,7 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
           );
         }
 
-        final halfStrip = _mouseStripHeight / 2;
+        const halfStrip = _mouseStripHeight / 2;
         final midpoint = blockHeight / 2;
         // Clamped to the true midpoint so the two mouse strips never
         // overlap each other even on a block shorter than the strip
@@ -1030,26 +1028,30 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
                             VerticalDragGestureRecognizer()
                               ..supportedDevices = {PointerDeviceKind.touch},
                         (recognizer) {
-                          recognizer.onStart = (details) {
-                            final edge = resizeEdgeForLocalY(
-                              localY: details.localPosition.dy - topBleed,
-                              blockHeight: blockHeight,
-                            );
-                            _startResize(edge);
-                            // The arena can resolve mid-gesture rather than
-                            // at pointer-down when racing against
-                            // `LongPressGestureRecognizer` (see the class
-                            // docs on the touch zone above), in which case
-                            // `onStart` already carries the full movement
-                            // and no `onUpdate` ever follows for a single
-                            // quick drag. Applying the position here too
-                            // keeps both cases correct.
-                            _updateResize(details.globalPosition);
-                          };
-                          recognizer.onUpdate = (details) =>
+                          recognizer
+                            ..onStart = (details) {
+                              final edge = resizeEdgeForLocalY(
+                                localY: details.localPosition.dy - topBleed,
+                                blockHeight: blockHeight,
+                              );
+                              _startResize(edge);
+                              // The arena can resolve mid-gesture rather than
+                              // at pointer-down when racing against
+                              // `LongPressGestureRecognizer` (see the class
+                              // docs on the touch zone above), in which case
+                              // `onStart` already carries the full movement
+                              // and no `onUpdate` ever follows for a single
+                              // quick drag. Applying the position here too
+                              // keeps both cases correct.
                               _updateResize(details.globalPosition);
-                          recognizer.onEnd = (_) => _endResize();
-                          recognizer.onCancel = _cancelResize;
+                            }
+                            ..onUpdate = (details) {
+                              _updateResize(details.globalPosition);
+                            }
+                            ..onEnd = (_) {
+                              _endResize();
+                            }
+                            ..onCancel = _cancelResize;
                         },
                       ),
                 },
@@ -1088,18 +1090,22 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
                               PointerDeviceKind.trackpad,
                             },
                           (recognizer) {
-                            recognizer.onStart = (details) {
-                              _startResize(ResizeEdge.start);
-                              // See the touch zone's matching comment: the
-                              // arena can resolve mid-gesture, in which
-                              // case `onStart` already carries the full
-                              // movement and no `onUpdate` follows.
-                              _updateResize(details.globalPosition);
-                            };
-                            recognizer.onUpdate = (details) =>
+                            recognizer
+                              ..onStart = (details) {
+                                _startResize(ResizeEdge.start);
+                                // See the touch zone's matching comment: the
+                                // arena can resolve mid-gesture, in which
+                                // case `onStart` already carries the full
+                                // movement and no `onUpdate` follows.
                                 _updateResize(details.globalPosition);
-                            recognizer.onEnd = (_) => _endResize();
-                            recognizer.onCancel = _cancelResize;
+                              }
+                              ..onUpdate = (details) {
+                                _updateResize(details.globalPosition);
+                              }
+                              ..onEnd = (_) {
+                                _endResize();
+                              }
+                              ..onCancel = _cancelResize;
                           },
                         ),
                   },
@@ -1134,18 +1140,22 @@ class _DraggableBlockState extends ConsumerState<_DraggableBlock> {
                               PointerDeviceKind.trackpad,
                             },
                           (recognizer) {
-                            recognizer.onStart = (details) {
-                              _startResize(ResizeEdge.end);
-                              // See the touch zone's matching comment: the
-                              // arena can resolve mid-gesture, in which
-                              // case `onStart` already carries the full
-                              // movement and no `onUpdate` follows.
-                              _updateResize(details.globalPosition);
-                            };
-                            recognizer.onUpdate = (details) =>
+                            recognizer
+                              ..onStart = (details) {
+                                _startResize(ResizeEdge.end);
+                                // See the touch zone's matching comment: the
+                                // arena can resolve mid-gesture, in which
+                                // case `onStart` already carries the full
+                                // movement and no `onUpdate` follows.
                                 _updateResize(details.globalPosition);
-                            recognizer.onEnd = (_) => _endResize();
-                            recognizer.onCancel = _cancelResize;
+                              }
+                              ..onUpdate = (details) {
+                                _updateResize(details.globalPosition);
+                              }
+                              ..onEnd = (_) {
+                                _endResize();
+                              }
+                              ..onCancel = _cancelResize;
                           },
                         ),
                   },

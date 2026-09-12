@@ -35,9 +35,14 @@ void main() {
           .read(templateListProvider.notifier)
           .addTemplate(name: 'Weekday');
 
-      await container.read(templateListProvider.notifier).renameTemplate(added, name: 'Renamed');
+      await container
+          .read(templateListProvider.notifier)
+          .renameTemplate(added, name: 'Renamed');
 
-      expect(container.read(templateListProvider).value!.single.name, 'Renamed');
+      expect(
+        container.read(templateListProvider).value!.single.name,
+        'Renamed',
+      );
     });
 
     test('deleteTemplate removes the template', () async {
@@ -53,35 +58,30 @@ void main() {
       expect(container.read(templateListProvider).value, isEmpty);
     });
 
-    test(
-      'deleteTemplate also clears that template\'s blocks, so a later '
-      'template reusing the id cannot inherit them',
-      () async {
-        final container = ProviderContainer();
-        addTearDown(container.dispose);
-        await container.read(templateListProvider.future);
-        final added = await container
-            .read(templateListProvider.notifier)
-            .addTemplate(name: 'Weekday');
-        await container.read(templateBlocksProvider(added.id).future);
-        await container
-            .read(templateBlocksProvider(added.id).notifier)
-            .addBlock(
-              start: DateTime(2000, 1, 1, 9),
-              end: DateTime(2000, 1, 1, 9, 30),
-              kind: BlockKind.anchor,
-            );
+    test("deleteTemplate also clears that template's blocks, so a later "
+        'template reusing the id cannot inherit them', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(templateListProvider.future);
+      final added = await container
+          .read(templateListProvider.notifier)
+          .addTemplate(name: 'Weekday');
+      await container.read(templateBlocksProvider(added.id).future);
+      await container
+          .read(templateBlocksProvider(added.id).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 9),
+            end: DateTime(2000, 1, 1, 9, 30),
+            kind: BlockKind.anchor,
+          );
 
-        await container
-            .read(templateListProvider.notifier)
-            .deleteTemplate(added);
+      await container.read(templateListProvider.notifier).deleteTemplate(added);
 
-        expect(
-          await container.read(templateBlocksProvider(added.id).future),
-          isEmpty,
-        );
-      },
-    );
+      expect(
+        await container.read(templateBlocksProvider(added.id).future),
+        isEmpty,
+      );
+    });
   });
 
   group('templateBlocksProvider', () {
@@ -140,22 +140,27 @@ void main() {
             kind: BlockKind.anchor,
           );
 
-      await container.read(templateBlocksProvider('t1').notifier).deleteBlock(created);
+      await container
+          .read(templateBlocksProvider('t1').notifier)
+          .deleteBlock(created);
 
       expect(container.read(templateBlocksProvider('t1')).value, isEmpty);
     });
   });
 
   group('TemplateScheduleController', () {
-    test('blocksOf reads templateBlocksProvider for the column\'s templateId', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final ref = container.read(_refProvider);
-      const controller = TemplateScheduleController();
-      await container.read(templateBlocksProvider('t1').future);
+    test(
+      "blocksOf reads templateBlocksProvider for the column's templateId",
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final ref = container.read(_refProvider);
+        const controller = TemplateScheduleController();
+        await container.read(templateBlocksProvider('t1').future);
 
-      expect(controller.blocksOf(ref, const TemplateColumn('t1')), isEmpty);
-    });
+        expect(controller.blocksOf(ref, const TemplateColumn('t1')), isEmpty);
+      },
+    );
 
     test('moveBlock moves a block between two templateIds', () async {
       final container = ProviderContainer();
@@ -181,12 +186,15 @@ void main() {
       );
 
       expect(container.read(templateBlocksProvider('t1')).value, isEmpty);
-      expect(container.read(templateBlocksProvider('t2')).value!.single.id, added.id);
+      expect(
+        container.read(templateBlocksProvider('t2')).value!.single.id,
+        added.id,
+      );
     });
 
     test(
       'rejects a non-template column rather than silently mishandling it '
-      '(the invariant the drag resolver\'s variant scoping upholds)',
+      "(the invariant the drag resolver's variant scoping upholds)",
       () async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
@@ -194,10 +202,7 @@ void main() {
         const controller = TemplateScheduleController();
         final day = DayColumn(DateTime(2026, 9, 9));
 
-        expect(
-          () => controller.blocksOf(ref, day),
-          throwsA(isA<TypeError>()),
-        );
+        expect(() => controller.blocksOf(ref, day), throwsA(isA<TypeError>()));
         expect(
           () => controller.moveBlock(
             ref,

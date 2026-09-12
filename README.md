@@ -6,3 +6,5 @@ formatting, tests) meant to be built on.
 
 Run `make help` to see the available development commands (setup, format,
 analyze, test, build, etc.) — see the `Makefile` for the full list.
+
+<!-- CI flow verification: 2026-09-12T06:17:39Z -->

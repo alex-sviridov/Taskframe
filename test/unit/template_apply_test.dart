@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
+import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/template_apply.dart';
 
 TimeObject _block({
@@ -28,8 +28,18 @@ void main() {
       _block(
         id: 't1',
         title: 'Breakfast',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 9),
+        start: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          8,
+        ),
+        end: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          9,
+        ),
         categoryId: 'food',
       ),
     ];
@@ -53,12 +63,26 @@ void main() {
     final templateBlocks = [
       _block(
         id: 't1',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 9),
+        start: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          8,
+        ),
+        end: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          9,
+        ),
       ),
     ];
     final dayBlocks = [
-      _block(id: 'd1', start: DateTime(2026, 9, 14, 8, 30), end: DateTime(2026, 9, 14, 9, 30)),
+      _block(
+        id: 'd1',
+        start: DateTime(2026, 9, 14, 8, 30),
+        end: DateTime(2026, 9, 14, 9, 30),
+      ),
     ];
 
     final result = resolveTemplateApply(
@@ -68,51 +92,105 @@ void main() {
     );
 
     expect(result.toAdd, isEmpty);
-    expect(result.skipped, [(start: DateTime(2026, 9, 14, 8), end: DateTime(2026, 9, 14, 9))]);
+    expect(result.skipped, [
+      (start: DateTime(2026, 9, 14, 8), end: DateTime(2026, 9, 14, 9)),
+    ]);
   });
 
-  test('adds non-overlapping blocks while skipping only the conflicting one', () {
-    final templateBlocks = [
-      _block(
-        id: 't1',
-        title: 'Free',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 7),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8),
-      ),
-      _block(
-        id: 't2',
-        title: 'Conflicting',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 9),
-      ),
-    ];
-    final dayBlocks = [
-      _block(id: 'd1', start: DateTime(2026, 9, 14, 8, 30), end: DateTime(2026, 9, 14, 9, 30)),
-    ];
+  test(
+    'adds non-overlapping blocks while skipping only the conflicting one',
+    () {
+      final templateBlocks = [
+        _block(
+          id: 't1',
+          title: 'Free',
+          start: DateTime(
+            templateAnchorDate.year,
+            templateAnchorDate.month,
+            templateAnchorDate.day,
+            7,
+          ),
+          end: DateTime(
+            templateAnchorDate.year,
+            templateAnchorDate.month,
+            templateAnchorDate.day,
+            8,
+          ),
+        ),
+        _block(
+          id: 't2',
+          title: 'Conflicting',
+          start: DateTime(
+            templateAnchorDate.year,
+            templateAnchorDate.month,
+            templateAnchorDate.day,
+            8,
+          ),
+          end: DateTime(
+            templateAnchorDate.year,
+            templateAnchorDate.month,
+            templateAnchorDate.day,
+            9,
+          ),
+        ),
+      ];
+      final dayBlocks = [
+        _block(
+          id: 'd1',
+          start: DateTime(2026, 9, 14, 8, 30),
+          end: DateTime(2026, 9, 14, 9, 30),
+        ),
+      ];
 
-    final result = resolveTemplateApply(
-      templateBlocks: templateBlocks,
-      dayBlocks: dayBlocks,
-      date: date,
-    );
+      final result = resolveTemplateApply(
+        templateBlocks: templateBlocks,
+        dayBlocks: dayBlocks,
+        date: date,
+      );
 
-    expect(result.toAdd.map((b) => b.title), ['Free']);
-    expect(result.skipped, [(start: DateTime(2026, 9, 14, 8), end: DateTime(2026, 9, 14, 9))]);
-  });
+      expect(result.toAdd.map((b) => b.title), ['Free']);
+      expect(result.skipped, [
+        (start: DateTime(2026, 9, 14, 8), end: DateTime(2026, 9, 14, 9)),
+      ]);
+    },
+  );
 
-  test('skips a template block that would overlap another already-accepted template block', () {
+  test('skips a template block that would overlap another already-accepted '
+      'template block', () {
     final templateBlocks = [
       _block(
         id: 't1',
         title: 'First',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 9),
+        start: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          8,
+        ),
+        end: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          9,
+        ),
       ),
       _block(
         id: 't2',
         title: 'Overlapping',
-        start: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 8, 30),
-        end: DateTime(templateAnchorDate.year, templateAnchorDate.month, templateAnchorDate.day, 9, 30),
+        start: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          8,
+          30,
+        ),
+        end: DateTime(
+          templateAnchorDate.year,
+          templateAnchorDate.month,
+          templateAnchorDate.day,
+          9,
+          30,
+        ),
       ),
     ];
 

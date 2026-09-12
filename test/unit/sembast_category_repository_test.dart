@@ -55,7 +55,7 @@ void main() {
       expect(categories[2].name, 'Second');
     });
 
-    test('update changes an added category\'s name, color and emoji', () async {
+    test("update changes an added category's name, color and emoji", () async {
       final added = await repository.add(name: 'Work', colorValue: 0xFF2196F3);
 
       final updated = await repository.update(
@@ -93,20 +93,23 @@ void main() {
       expect(categories.singleWhere((c) => c.id == added.id).name, 'Career');
     });
 
-    test('updating the default category only applies the color change', () async {
-      final defaultCategory = (await repository.load()).single;
+    test(
+      'updating the default category only applies the color change',
+      () async {
+        final defaultCategory = (await repository.load()).single;
 
-      final updated = await repository.update(
-        defaultCategory,
-        name: 'Renamed',
-        colorValue: 0xFFFF0000,
-        emoji: '🔥',
-      );
+        final updated = await repository.update(
+          defaultCategory,
+          name: 'Renamed',
+          colorValue: 0xFFFF0000,
+          emoji: '🔥',
+        );
 
-      expect(updated.name, 'Default');
-      expect(updated.emoji, isNull);
-      expect(updated.colorValue, 0xFFFF0000);
-    });
+        expect(updated.name, 'Default');
+        expect(updated.emoji, isNull);
+        expect(updated.colorValue, 0xFFFF0000);
+      },
+    );
 
     test('delete removes an added category from a later load', () async {
       final added = await repository.add(name: 'Work', colorValue: 0xFF2196F3);

@@ -1,10 +1,11 @@
 import 'package:sembast/sembast.dart';
-import 'package:uuid/uuid.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/template/data/template_repository.dart';
 import 'package:taskframe/features/template/models/template.dart';
+import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
@@ -13,8 +14,8 @@ const _uuid = Uuid();
 /// `order` field (set once at creation, preserved on rename) keeps
 /// `load` in creation order.
 class SembastTemplateRepository implements TemplateRepository {
-  /// Creates a [SembastTemplateRepository] reading/writing [db].
-  SembastTemplateRepository(this._db);
+  /// Creates a [SembastTemplateRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 
@@ -60,8 +61,8 @@ class SembastTemplateRepository implements TemplateRepository {
 /// block id, mirroring [SembastDayBlocksRepository] but with a
 /// `templateId` field instead of a `dateKey`.
 class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
-  /// Creates a [SembastTemplateBlocksRepository] reading/writing [db].
-  SembastTemplateBlocksRepository(this._db);
+  /// Creates a [SembastTemplateBlocksRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 

@@ -29,8 +29,8 @@ class InMemoryAppSettingsRepository implements AppSettingsRepository {
 /// An [AppSettingsRepository] backed by a sembast [Database], persisting
 /// the dismissal time across restarts.
 class SembastAppSettingsRepository implements AppSettingsRepository {
-  /// Creates a [SembastAppSettingsRepository] reading/writing [db].
-  SembastAppSettingsRepository(this._db);
+  /// Creates a [SembastAppSettingsRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 
@@ -45,9 +45,9 @@ class SembastAppSettingsRepository implements AppSettingsRepository {
 
   @override
   Future<void> setInstallHintDismissedAt(DateTime time) async {
-    await settingsStore
-        .record(_key)
-        .put(_db, {'value': time.toIso8601String()});
+    await settingsStore.record(_key).put(_db, {
+      'value': time.toIso8601String(),
+    });
   }
 }
 

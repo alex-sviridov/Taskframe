@@ -12,44 +12,53 @@ final _refProvider = Provider<Ref>((ref) => ref);
 
 void main() {
   group('DayScheduleController', () {
-    test('blocksOf reads the day blocks provider for the column\'s date', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final ref = container.read(_refProvider);
-      const controller = DayScheduleController();
-      final date = DateTime(2026, 9, 9);
-      await container.read(dayBlocksProvider(date).future);
-      final added = await container
-          .read(dayBlocksProvider(date).notifier)
-          .addBlock(
-            start: DateTime(2026, 9, 9, 10),
-            end: DateTime(2026, 9, 9, 10, 30),
-            kind: BlockKind.anchor,
-          );
+    test(
+      "blocksOf reads the day blocks provider for the column's date",
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final ref = container.read(_refProvider);
+        const controller = DayScheduleController();
+        final date = DateTime(2026, 9, 9);
+        await container.read(dayBlocksProvider(date).future);
+        final added = await container
+            .read(dayBlocksProvider(date).notifier)
+            .addBlock(
+              start: DateTime(2026, 9, 9, 10),
+              end: DateTime(2026, 9, 9, 10, 30),
+              kind: BlockKind.anchor,
+            );
 
-      final blocks = controller.blocksOf(ref, DayColumn(date));
+        final blocks = controller.blocksOf(ref, DayColumn(date));
 
-      expect(blocks, isNotNull);
-      expect(blocks!.map((b) => b.id), contains(added.id));
-    });
+        expect(blocks, isNotNull);
+        expect(blocks!.map((b) => b.id), contains(added.id));
+      },
+    );
 
-    test('blocksOf returns null while the column\'s blocks are still loading', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final ref = container.read(_refProvider);
-      const controller = DayScheduleController();
+    test(
+      "blocksOf returns null while the column's blocks are still loading",
+      () {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        final ref = container.read(_refProvider);
+        const controller = DayScheduleController();
 
-      final blocks = controller.blocksOf(ref, DayColumn(DateTime(2026, 9, 9)));
+        final blocks = controller.blocksOf(
+          ref,
+          DayColumn(DateTime(2026, 9, 9)),
+        );
 
-      expect(blocks, isNull);
-    });
+        expect(blocks, isNull);
+      },
+    );
 
     test('moveBlock moves the block and refreshes both columns', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final ref = container.read(_refProvider);
       const controller = DayScheduleController();
-      final fromDate = DateTime(2000, 1, 1);
+      final fromDate = DateTime(2000);
       final toDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(fromDate).future);
       final added = await container

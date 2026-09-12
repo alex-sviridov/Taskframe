@@ -1,19 +1,19 @@
 import 'package:sembast/sembast.dart';
-import 'package:uuid/uuid.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/core/storage/date_key.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
+import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
 /// A [DayBlocksRepository] backed by a sembast [Database], persisting
-/// blocks across restarts. Each record's key is the block's own [id];
+/// blocks across restarts. Each record's key is the block's own `id`;
 /// `load` filters records by a stored `dateKey` field (see [dateKeyFor]).
 class SembastDayBlocksRepository implements DayBlocksRepository {
-  /// Creates a [SembastDayBlocksRepository] reading/writing [db].
-  SembastDayBlocksRepository(this._db);
+  /// Creates a [SembastDayBlocksRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 

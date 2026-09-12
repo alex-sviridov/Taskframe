@@ -10,7 +10,7 @@ import 'package:web/web.dart' as web;
 Future<void> requestPersistentStorage() async {
   try {
     await web.window.navigator.storage.persist().toDart;
-  } catch (_) {
+  } on Object catch (_) {
     // Best-effort only.
   }
 }

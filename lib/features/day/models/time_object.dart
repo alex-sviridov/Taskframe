@@ -31,6 +31,17 @@ class TimeObject {
        assert(_isOnGrid(end), 'end must be on the 15-minute grid'),
        assert(end.isAfter(start), 'end must be after start');
 
+  /// Reconstructs a [TimeObject] from a map produced by [toMap].
+  factory fromMap(Map<String, Object?> map) => TimeObject(
+    id: map['id']! as String,
+    title: map['title']! as String,
+    start: DateTime.parse(map['start']! as String),
+    end: DateTime.parse(map['end']! as String),
+    kind: BlockKind.values.byName(map['kind']! as String),
+    locked: map['locked']! as bool,
+    categoryId: map['categoryId']! as String,
+  );
+
   /// Unique identifier for this block.
   final String id;
 
@@ -74,15 +85,4 @@ class TimeObject {
     'locked': locked,
     'categoryId': categoryId,
   };
-
-  /// Reconstructs a [TimeObject] from a map produced by [toMap].
-  factory TimeObject.fromMap(Map<String, Object?> map) => TimeObject(
-    id: map['id']! as String,
-    title: map['title']! as String,
-    start: DateTime.parse(map['start']! as String),
-    end: DateTime.parse(map['end']! as String),
-    kind: BlockKind.values.byName(map['kind']! as String),
-    locked: map['locked']! as bool,
-    categoryId: map['categoryId']! as String,
-  );
 }

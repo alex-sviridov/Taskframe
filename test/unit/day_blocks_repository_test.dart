@@ -89,7 +89,7 @@ void main() {
       expect(first.id, isNot(equals(second.id)));
     });
 
-    test('move updates an added block\'s start, end and date', () async {
+    test("move updates an added block's start, end and date", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final laterDate = date.add(const Duration(days: 1));
       final added = await repository.add(
@@ -206,7 +206,7 @@ void main() {
       );
     });
 
-    test('move within the same date just updates the block\'s time', () async {
+    test("move within the same date just updates the block's time", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final added = await repository.add(
         date,
@@ -258,7 +258,7 @@ void main() {
       expect(added.categoryId, 'category-1');
     });
 
-    test('move preserves the block\'s categoryId', () async {
+    test("move preserves the block's categoryId", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final laterDate = date.add(const Duration(days: 1));
       final added = await repository.add(
@@ -286,7 +286,7 @@ void main() {
       expect(moved.categoryId, 'category-1');
     });
 
-    test('update changes an added block\'s categoryId', () async {
+    test("update changes an added block's categoryId", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final added = await repository.add(
         date,
@@ -337,7 +337,7 @@ void main() {
       expect(added.title, 'Gym');
     });
 
-    test('update changes an added block\'s title, start and end', () async {
+    test("update changes an added block's title, start and end", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final added = await repository.add(
         date,
@@ -360,7 +360,7 @@ void main() {
       expect(updated.end, DateTime(date.year, date.month, date.day, 11, 30));
     });
 
-    test('update changes an added block\'s kind', () async {
+    test("update changes an added block's kind", () async {
       final date = DateTime.now().add(const Duration(days: 3));
       final added = await repository.add(
         date,

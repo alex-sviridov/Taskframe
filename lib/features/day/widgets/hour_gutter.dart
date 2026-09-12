@@ -5,14 +5,19 @@ import 'package:taskframe/features/day/day_settings.dart';
 /// multiple days share one page (week view). Draws only the hour labels
 /// that `DayGrid` would otherwise draw itself in single-day mode.
 class HourGutter extends StatelessWidget {
+  /// Creates an [HourGutter].
   const new({required this.settings, required this.slotHeight, super.key});
 
   /// Matches `DayGrid`'s own label-gutter width, so day columns' grid
   /// lines still start at the same x whether or not they draw their own
   /// labels.
-  static const double width = 34.0;
+  static const double width = 34;
 
+  /// The day's start/end hours, used to compute how many hour labels to
+  /// draw.
   final DaySettings settings;
+
+  /// The pixel height of one 15-minute grid slot.
   final double slotHeight;
 
   @override

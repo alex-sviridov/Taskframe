@@ -106,8 +106,8 @@ int scheduleGridKeyCacheSizeForTest() => _scheduleGridKeys.length;
   for (final column in columns) {
     if (!_sameVariant(column, origin)) continue;
 
-    final renderObject =
-        scheduleGridKeyFor(column).currentContext?.findRenderObject();
+    final renderObject = scheduleGridKeyFor(column).currentContext
+        ?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.attached) continue;
 
     final topLeft = renderObject.localToGlobal(Offset.zero);

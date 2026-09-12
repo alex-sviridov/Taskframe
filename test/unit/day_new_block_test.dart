@@ -198,7 +198,7 @@ void main() {
       expect(valid, isFalse);
     });
 
-    test('rejects a start before the day\'s own start hour', () {
+    test("rejects a start before the day's own start hour", () {
       final valid = isValidBlockEdit(
         start: DateTime(2026, 9, 9, 5, 45),
         end: DateTime(2026, 9, 9, 6, 15),
@@ -210,7 +210,7 @@ void main() {
       expect(valid, isFalse);
     });
 
-    test('rejects an end after the day\'s own end hour', () {
+    test("rejects an end after the day's own end hour", () {
       final valid = isValidBlockEdit(
         start: DateTime(2026, 9, 9, 22, 45),
         end: DateTime(2026, 9, 9, 23, 15),

@@ -816,10 +816,7 @@ void main() {
         dragStateOverHeader.targetColumn,
         dragStateOverHeader.originalColumn,
       );
-      expect(
-        dragStateOverHeader.targetStart,
-        dragStateOverHeader.block.start,
-      );
+      expect(dragStateOverHeader.targetStart, dragStateOverHeader.block.start);
       expect(find.byKey(const Key('day-grid-landzone')), findsOneWidget);
 
       await gesture.up();

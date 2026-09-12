@@ -67,9 +67,9 @@ class ScheduleColumnsPage extends StatelessWidget {
   final Widget Function(
     BuildContext context,
     int index,
-    double slotHeight,
-    bool showHourLabels,
-  )
+    double slotHeight, {
+    required bool showHourLabels,
+  })
   gridBuilder;
 
   bool get _showHourLabels => columnCount == 1;
@@ -123,7 +123,12 @@ class ScheduleColumnsPage extends StatelessWidget {
                         HourGutter(settings: settings, slotHeight: slotHeight),
                       for (var i = 0; i < columnCount; i++) ...[
                         if (i > 0) const SizedBox(width: _columnGap),
-                        gridBuilder(context, i, slotHeight, _showHourLabels),
+                        gridBuilder(
+                          context,
+                          i,
+                          slotHeight,
+                          showHourLabels: _showHourLabels,
+                        ),
                       ],
                       if (!_showHourLabels)
                         HourGutter(settings: settings, slotHeight: slotHeight),

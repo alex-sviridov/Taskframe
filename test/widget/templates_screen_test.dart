@@ -28,7 +28,9 @@ void main() {
       expect(find.byTooltip('Add template'), findsOneWidget);
     });
 
-    testWidgets('the add button creates a template named "Template 1"', (tester) async {
+    testWidgets('the add button creates a template named "Template 1"', (
+      tester,
+    ) async {
       _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
@@ -38,7 +40,9 @@ void main() {
       expect(find.text('Template 1'), findsOneWidget);
     });
 
-    testWidgets('a second added template is named "Template 2"', (tester) async {
+    testWidgets('a second added template is named "Template 2"', (
+      tester,
+    ) async {
       _resizeViewport(tester, const Size(1200, 1000));
       await _pump(tester);
 
@@ -51,30 +55,31 @@ void main() {
       expect(find.text('Template 2'), findsOneWidget);
     });
 
-    testWidgets(
-      'adding after a delete does not reuse a name already in use '
-      '(regression: the default name was derived from the template count, '
-      'so add/add/delete-first/add produced two "Template 2"s)',
-      (tester) async {
-        _resizeViewport(tester, const Size(1200, 1000));
-        await _pump(tester);
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
+    testWidgets('adding after a delete does not reuse a name already in use '
+        '(regression: the default name was derived from the template count, '
+        'so add/add/delete-first/add produced two "Template 2"s)', (
+      tester,
+    ) async {
+      _resizeViewport(tester, const Size(1200, 1000));
+      await _pump(tester);
+      await tester.tap(find.byTooltip('Add template'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add template'));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.byTooltip('Delete template').first);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Delete template').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add template'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Template 1'), findsNothing);
-        expect(find.text('Template 2'), findsOneWidget);
-        expect(find.text('Template 3'), findsOneWidget);
-      },
-    );
+      expect(find.text('Template 1'), findsNothing);
+      expect(find.text('Template 2'), findsOneWidget);
+      expect(find.text('Template 3'), findsOneWidget);
+    });
 
-    testWidgets('the delete action on a column removes that template', (tester) async {
+    testWidgets('the delete action on a column removes that template', (
+      tester,
+    ) async {
       _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
       await tester.tap(find.byTooltip('Add template'));
@@ -87,26 +92,23 @@ void main() {
       expect(find.byTooltip('Add template'), findsOneWidget);
     });
 
-    testWidgets(
-      'on a narrow width, adding two templates pages to the second '
-      'with the next-template arrow',
-      (tester) async {
-        _resizeViewport(tester, const Size(500, 1000));
-        await _pump(tester);
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
-        // Adding opens straight to the new template, so we're on
-        // "Template 2"; page back to confirm "Template 1" is reachable.
-        expect(find.byTooltip('Previous template'), findsOneWidget);
+    testWidgets('on a narrow width, adding two templates pages to the second '
+        'with the next-template arrow', (tester) async {
+      _resizeViewport(tester, const Size(500, 1000));
+      await _pump(tester);
+      await tester.tap(find.byTooltip('Add template'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add template'));
+      await tester.pumpAndSettle();
+      // Adding opens straight to the new template, so we're on
+      // "Template 2"; page back to confirm "Template 1" is reachable.
+      expect(find.byTooltip('Previous template'), findsOneWidget);
 
-        await tester.tap(find.byTooltip('Previous template'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Previous template'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Template 1'), findsOneWidget);
-      },
-    );
+      expect(find.text('Template 1'), findsOneWidget);
+    });
 
     testWidgets(
       'a horizontal fling on free grid space swipes to the next template',

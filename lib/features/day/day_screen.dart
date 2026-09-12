@@ -425,7 +425,7 @@ class _SchedulePage extends ConsumerWidget {
             ? content
             : Semantics(header: true, container: true, child: content);
       },
-      gridBuilder: (context, i, slotHeight, showHourLabels) =>
+      gridBuilder: (context, i, slotHeight, {required showHourLabels}) =>
           _buildColumn(context, ref, dates[i], slotHeight, showHourLabels),
     );
   }

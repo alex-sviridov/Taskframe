@@ -17,7 +17,7 @@ enum ResizeEdge {
 /// is in progress.
 class ResizeState {
   /// Creates a [ResizeState].
-  const ResizeState({
+  const new({
     required this.block,
     required this.column,
     required this.edge,

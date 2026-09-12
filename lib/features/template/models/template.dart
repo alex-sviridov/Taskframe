@@ -1,7 +1,15 @@
+import 'package:meta/meta.dart';
+
 /// One template: a named, reusable set of events, editable with the same
 /// schedule UI a real day uses (see `TemplatesScreen`).
+@immutable
 class Template {
-  const Template({required this.id, required this.name});
+  /// Creates a [Template].
+  const new({required this.id, required this.name});
+
+  /// Reconstructs a [Template] from a map produced by [toMap].
+  factory fromMap(Map<String, Object?> map) =>
+      Template(id: map['id']! as String, name: map['name']! as String);
 
   /// Unique identifier for this template — also its `TemplateColumn.
   /// templateId`.
@@ -11,14 +19,11 @@ class Template {
   final String name;
 
   /// Returns a copy of this template with [name] replaced.
-  Template copyWith({String? name}) => Template(id: id, name: name ?? this.name);
+  Template copyWith({String? name}) =>
+      Template(id: id, name: name ?? this.name);
 
   /// This template's field values as a JSON-safe map, for storage.
   Map<String, Object?> toMap() => {'id': id, 'name': name};
-
-  /// Reconstructs a [Template] from a map produced by [toMap].
-  factory Template.fromMap(Map<String, Object?> map) =>
-      Template(id: map['id']! as String, name: map['name']! as String);
 
   @override
   bool operator ==(Object other) =>

@@ -43,7 +43,7 @@ Future<void> showApplyTemplateModal({
 /// animations, then closes itself.
 class ApplyTemplateModal extends ConsumerWidget {
   /// Creates an [ApplyTemplateModal] for [date].
-  const ApplyTemplateModal({required this.date, super.key});
+  const new({required this.date, super.key});
 
   /// The day the chosen template is applied to.
   final DateTime date;
@@ -59,9 +59,9 @@ class ApplyTemplateModal extends ConsumerWidget {
     if (!context.mounted) return;
     Navigator.of(context).pop();
 
-    final effects = ref.read(templateApplyEffectsProvider(date).notifier);
-    effects.addHighlights(result.addedIds);
-    effects.addGhosts(result.skipped);
+    ref.read(templateApplyEffectsProvider(date).notifier)
+      ..addHighlights(result.addedIds)
+      ..addGhosts(result.skipped);
   }
 
   @override
@@ -91,8 +91,7 @@ class ApplyTemplateModal extends ConsumerWidget {
                       ListTile(
                         key: ValueKey('apply-template-option-${template.id}'),
                         title: Text(template.name),
-                        onTap: () =>
-                            unawaited(_apply(context, ref, template)),
+                        onTap: () => unawaited(_apply(context, ref, template)),
                       ),
                   ],
                 ),

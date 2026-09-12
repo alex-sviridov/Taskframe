@@ -41,7 +41,7 @@ void main() {
       expect(templates[1].name, 'Second');
     });
 
-    test('rename updates the template\'s name', () async {
+    test("rename updates the template's name", () async {
       final added = await repository.add(name: 'Weekday');
 
       final renamed = await repository.rename(added, name: 'Renamed');

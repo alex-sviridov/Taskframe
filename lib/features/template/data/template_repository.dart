@@ -108,8 +108,9 @@ class InMemoryTemplateBlocksRepository implements TemplateBlocksRepository {
   int _nextId = 0;
 
   @override
-  Future<List<TimeObject>> load(String templateId) async =>
-      [...?_blocks[templateId]];
+  Future<List<TimeObject>> load(String templateId) async => [
+    ...?_blocks[templateId],
+  ];
 
   @override
   Future<TimeObject> add(
@@ -143,7 +144,9 @@ class InMemoryTemplateBlocksRepository implements TemplateBlocksRepository {
   }) async {
     final fromList = _blocks[fromTemplateId];
     if (fromList != null) {
-      _blocks[fromTemplateId] = fromList.where((b) => b.id != block.id).toList();
+      _blocks[fromTemplateId] = fromList
+          .where((b) => b.id != block.id)
+          .toList();
     }
 
     final moved = TimeObject(

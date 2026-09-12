@@ -6,8 +6,7 @@ import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
 
 class _FakeAppSettingsRepository implements AppSettingsRepository {
-  _FakeAppSettingsRepository({DateTime? dismissedAt})
-    : _dismissedAt = dismissedAt;
+  new({this._dismissedAt});
   DateTime? _dismissedAt;
 
   @override

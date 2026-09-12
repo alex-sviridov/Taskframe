@@ -8,7 +8,8 @@ import 'package:taskframe/features/day/models/time_object.dart';
 /// drag/resize code in `providers.dart` — `DragNotifier`/`ResizeNotifier`
 /// never need to know which.
 abstract class ScheduleController {
-  const ScheduleController();
+  /// Const constructor for subclasses.
+  const new();
 
   /// The currently loaded blocks for [column], or `null` while still
   /// loading.

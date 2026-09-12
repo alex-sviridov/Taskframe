@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show AsyncNotifierProviderFamily;
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
@@ -18,7 +19,8 @@ final templateRepositoryProvider = Provider<TemplateRepository>(
 /// and lets consumers add/rename/delete them.
 class TemplateListNotifier extends AsyncNotifier<List<Template>> {
   @override
-  Future<List<Template>> build() => ref.watch(templateRepositoryProvider).load();
+  Future<List<Template>> build() =>
+      ref.watch(templateRepositoryProvider).load();
 
   /// Creates a new template named [name], adds it to the current state,
   /// and returns it.
@@ -72,7 +74,8 @@ final templateBlocksRepositoryProvider = Provider<TemplateBlocksRepository>(
 /// new ones — mirrors `DayBlocksNotifier`, minus `copyToNextDay`, which
 /// has no template equivalent.
 class TemplateBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
-  TemplateBlocksNotifier(this.templateId);
+  /// Creates a [TemplateBlocksNotifier] for [templateId].
+  new(this.templateId);
 
   /// The template these blocks belong to.
   final String templateId;
@@ -81,6 +84,7 @@ class TemplateBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
   Future<List<TimeObject>> build() =>
       ref.watch(templateBlocksRepositoryProvider).load(templateId);
 
+  /// Adds a new block to this template, persisting it via the repository.
   Future<TimeObject> addBlock({
     required DateTime start,
     required DateTime end,
@@ -142,6 +146,7 @@ class TemplateBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
     ]);
   }
 
+  /// Deletes [block] from this template, persisting via the repository.
   Future<void> deleteBlock(TimeObject block) async {
     final repository = ref.read(templateBlocksRepositoryProvider);
     await repository.delete(block, templateId: templateId);
@@ -153,16 +158,24 @@ class TemplateBlocksNotifier extends AsyncNotifier<List<TimeObject>> {
 }
 
 /// The timeline blocks for a given template.
-final templateBlocksProvider =
-    AsyncNotifierProvider.family<TemplateBlocksNotifier, List<TimeObject>, String>(
-      TemplateBlocksNotifier.new,
-    );
+final AsyncNotifierProviderFamily<
+  TemplateBlocksNotifier,
+  List<TimeObject>,
+  String
+>
+templateBlocksProvider =
+    AsyncNotifierProvider.family<
+      TemplateBlocksNotifier,
+      List<TimeObject>,
+      String
+    >(TemplateBlocksNotifier.new);
 
 /// A [ScheduleController] backed by [templateBlocksProvider]/
 /// [templateBlocksRepositoryProvider]. Every [ScheduleColumn] it's given
 /// must be a [TemplateColumn].
 class TemplateScheduleController extends ScheduleController {
-  const TemplateScheduleController();
+  /// Creates a [TemplateScheduleController].
+  const new();
 
   @override
   List<TimeObject>? blocksOf(Ref ref, ScheduleColumn column) =>
@@ -187,8 +200,9 @@ class TemplateScheduleController extends ScheduleController {
       newStart: newStart,
       newEnd: newEnd,
     );
-    ref.invalidate(templateBlocksProvider(fromId));
-    ref.invalidate(templateBlocksProvider(toId));
+    ref
+      ..invalidate(templateBlocksProvider(fromId))
+      ..invalidate(templateBlocksProvider(toId));
     await ref.read(templateBlocksProvider(fromId).future);
     await ref.read(templateBlocksProvider(toId).future);
   }
@@ -198,7 +212,8 @@ class TemplateScheduleController extends ScheduleController {
 /// [ScheduleColumn] variant — everything in this file is template-only, and
 /// a foreign column reaching here means a caller resolved the wrong grid,
 /// which is worth failing loudly over rather than silently mishandling.
-String _idOfColumn(ScheduleColumn column) => (column as TemplateColumn).templateId;
+String _idOfColumn(ScheduleColumn column) =>
+    (column as TemplateColumn).templateId;
 
 List<TimeObject>? _watchTemplateBlocks(WidgetRef ref, ScheduleColumn column) =>
     ref.watch(templateBlocksProvider(_idOfColumn(column))).value;
@@ -227,7 +242,9 @@ Future<void> _deleteTemplateBlock(
   WidgetRef ref,
   ScheduleColumn column,
   TimeObject block,
-) => ref.read(templateBlocksProvider(_idOfColumn(column)).notifier).deleteBlock(block);
+) => ref
+    .read(templateBlocksProvider(_idOfColumn(column)).notifier)
+    .deleteBlock(block);
 
 /// The [ScheduleBlockActions] `BlockEditModal` uses when editing a
 /// template block. Every [ScheduleColumn] passed to it must be a
