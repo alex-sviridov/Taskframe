@@ -81,6 +81,17 @@ void main() {
       expect(find.text('Delete'), findsNothing);
     });
 
+    testWidgets('create mode: shows no Closed switch', (tester) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Switch), findsNothing);
+    });
+
     testWidgets('edit mode: pre-fills the title field', (tester) async {
       final container = await _seededContainer();
       addTearDown(container.dispose);

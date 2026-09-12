@@ -41,6 +41,7 @@ class TaskCard extends ConsumerWidget {
       ),
       child: Material(
         color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
         child: ListTile(
           leading: Checkbox(
             value: task.closed,

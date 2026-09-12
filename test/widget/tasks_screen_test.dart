@@ -73,6 +73,24 @@ void main() {
       expect(find.text('Buy milk'), findsNothing);
     });
 
+    testWidgets('preserves list order across adds', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'First');
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Second');
+      await _pump(tester, container: container);
+
+      final firstY = tester.getTopLeft(find.text('First')).dy;
+      final secondY = tester.getTopLeft(find.text('Second')).dy;
+      expect(firstY, lessThan(secondY));
+    });
+
     testWidgets('toggling a card checkbox closes the task without opening '
         'the modal', (tester) async {
       final container = ProviderContainer();

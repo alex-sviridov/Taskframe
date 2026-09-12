@@ -122,13 +122,15 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
               selectedCategoryId: _categoryId,
               onSelected: (id) => setState(() => _categoryId = id),
             ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Closed'),
-              value: _closed,
-              onChanged: (value) => setState(() => _closed = value),
-            ),
+            if (widget.task != null) ...[
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Closed'),
+                value: _closed,
+                onChanged: (value) => setState(() => _closed = value),
+              ),
+            ],
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
