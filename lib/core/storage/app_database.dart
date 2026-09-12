@@ -12,6 +12,11 @@ final StoreRef<String, Map<String, Object?>> dayBlocksStore =
 final StoreRef<String, Map<String, Object?>> categoriesStore =
     stringMapStoreFactory.store('categories');
 
+/// Tasks, keyed by task id, each record carrying an `order` field that
+/// preserves creation order.
+final StoreRef<String, Map<String, Object?>> tasksStore =
+    stringMapStoreFactory.store('tasks');
+
 /// Templates, keyed by template id, each record carrying an `order`
 /// field that preserves creation order.
 final StoreRef<String, Map<String, Object?>> templatesStore =
