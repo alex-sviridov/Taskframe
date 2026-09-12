@@ -18,10 +18,21 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `flutter run -d web-server --web-port=${port} --release`,
+    // `flutter run -d web-server --release` starts accepting connections
+    // before the release build it's compiling in the background has
+    // finished writing `build/web/` — confirmed by a CI failure where the
+    // very first request 404'd on `build/web/index.html`, and reloading
+    // afterwards still didn't reliably boot Flutter (a stale/partial
+    // response can outlive the write race that produced it). Building
+    // first and only then serving the finished, static `build/web/`
+    // removes that race entirely: by the time anything is listening on
+    // the port, every asset is already complete.
+    command:
+      `flutter build web --release --pwa-strategy=offline-first`
+      + ` && python3 -m http.server ${port} --directory build/web`,
     url: `http://localhost:${port}`,
     reuseExistingServer: false,
-    timeout: 180_000,
+    timeout: 300_000,
     cwd: '..',
   },
 });

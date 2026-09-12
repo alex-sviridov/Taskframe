@@ -3,7 +3,7 @@ import { enableFlutterAccessibility } from './support/accessibility';
 import {
   clickCenter,
   clickUntilVisible,
-  fillTextboxUntilSet,
+  fillTextboxAndSubmit,
   gotoAndWaitForBoot,
   openDraftWithRetry,
 } from './support/gestures';
@@ -54,7 +54,7 @@ async function addTemplateWithEventAt(
 
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
-  await fillTextboxUntilSet(page.getByRole('textbox').first(), title);
+  await fillTextboxAndSubmit(page.getByRole('textbox').first(), title);
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(title)).toBeVisible();
 }

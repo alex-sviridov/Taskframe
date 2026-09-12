@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, gotoAndWaitForBoot, openDraftWithRetry } from './support/gestures';
+import {
+  clickCenter,
+  fillTextboxAndSubmit,
+  gotoAndWaitForBoot,
+  openDraftWithRetry,
+} from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -88,8 +93,7 @@ test('editing the title renames the block', async ({ page }) => {
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 
-  await page.getByRole('textbox').first().fill('Standup');
-  await page.getByRole('textbox').first().press('Enter');
+  await fillTextboxAndSubmit(page.getByRole('textbox').first(), 'Standup');
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.getByText('Standup')).toBeVisible();

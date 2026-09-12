@@ -23,15 +23,16 @@ export async function doubleClickFreeSpace(
 }
 
 /**
- * Fills [textbox] with [value] and presses Enter, retrying if it didn't
- * stick. Under CI load, the synthetic `fill`/`press('Enter')` pair
- * occasionally lands on the field without the app's text-editing client
- * actually picking it up — confirmed by tracing a failure where the block
- * kept its default "title" text after this ran and the modal was closed —
- * so it's read back via `inputValue()` and reissued rather than trusted
- * blind. A short pause precedes each read: Flutter web only syncs a text
- * field's DOM value once its editing client has attached, which lags one
- * beat behind the field visibly accepting focus.
+ * Fills [textbox] with [value], retrying if it didn't stick. Under CI
+ * load, a synthetic `fill()` occasionally lands on the field without the
+ * app's text-editing client actually picking it up — confirmed by tracing
+ * two separate failures: a renamed block that kept its default "title"
+ * text, and a "Save" button that stayed disabled forever because the
+ * field it validates never saw the new value — so the result is read back
+ * via `inputValue()` and the fill reissued rather than trusted blind. A
+ * short pause precedes each read: Flutter web only syncs a text field's
+ * DOM value once its editing client has attached, which lags one beat
+ * behind the field visibly accepting focus.
  */
 export async function fillTextboxUntilSet(
   textbox: Locator,
@@ -40,13 +41,25 @@ export async function fillTextboxUntilSet(
 ): Promise<void> {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     await textbox.fill(value);
-    await textbox.press('Enter');
     await textbox.page().waitForTimeout(100);
     if ((await textbox.inputValue().catch(() => '')) === value) return;
     if (attempt === attempts) {
       throw new Error(`Textbox never settled on "${value}" after ${attempts} attempts`);
     }
   }
+}
+
+/**
+ * {@link fillTextboxUntilSet}, then presses Enter — for the common case
+ * where the caller was going to submit the field that way regardless.
+ */
+export async function fillTextboxAndSubmit(
+  textbox: Locator,
+  value: string,
+  attempts = 3,
+): Promise<void> {
+  await fillTextboxUntilSet(textbox, value, attempts);
+  await textbox.press('Enter');
 }
 
 /**

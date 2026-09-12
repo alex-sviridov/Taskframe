@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, dragMouse, gotoAndWaitForBoot } from './support/gestures';
+import {
+  clickCenter,
+  dragMouse,
+  fillTextboxAndSubmit,
+  gotoAndWaitForBoot,
+} from './support/gestures';
 
 /**
  * Reads a template column's name by focusing its rename field and
@@ -53,8 +58,7 @@ test.describe('wide viewport', () => {
     const input = page.getByRole('textbox');
     await clickCenter(page, input);
 
-    await input.fill('Weekday');
-    await input.press('Enter');
+    await fillTextboxAndSubmit(input, 'Weekday');
 
     // Click elsewhere to drop focus, then refocus to confirm the new
     // name survived the round trip through the provider, not just the

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, gotoAndWaitForBoot } from './support/gestures';
+import { clickCenter, fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -18,7 +18,7 @@ async function addCategoryAndGoToDay(page: Page, name: string): Promise<void> {
   await enableFlutterAccessibility(page);
 
   await page.getByRole('button', { name: 'Add category' }).click();
-  await page.getByRole('textbox').fill(name);
+  await fillTextboxUntilSet(page.getByRole('textbox'), name);
   await page.getByRole('button', { name: 'Save' }).click();
   // The sheet's closing animation can transiently leave both its own
   // "Work" text field and the newly added list row matching `getByText`
