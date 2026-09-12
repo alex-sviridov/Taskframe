@@ -50,6 +50,13 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// this task, with no separate Save step.
   Task? _task;
 
+  /// The in-flight creation triggered by the first keystroke, set
+  /// synchronously (before awaiting it) so a keystroke arriving while it's
+  /// still pending waits on the same task instead of creating a second one
+  /// — real typing fires one `onChanged` per character, faster than a
+  /// single `addTask` round-trip resolves.
+  Future<Task>? _pendingCreate;
+
   @override
   void initState() {
     super.initState();
@@ -71,18 +78,26 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// every keystroke after that, in either mode, updates the existing task.
   Future<void> _onTitleChanged(String title) async {
     final notifier = ref.read(taskListProvider.notifier);
-    final task = _task;
-    if (task == null) {
-      if (title.isEmpty) return;
-      final created = await notifier.addTask(
-        title: title,
-        categoryId: _categoryId,
-      );
-      if (_closed) await notifier.updateTask(created, closed: true);
-      if (mounted) setState(() => _task = created);
-    } else {
-      await notifier.updateTask(task, title: title);
+    if (_task != null) {
+      await notifier.updateTask(_task!, title: title);
+      return;
     }
+    if (_pendingCreate != null) {
+      final created = await _pendingCreate!;
+      if (!mounted) return;
+      await notifier.updateTask(created, title: title);
+      return;
+    }
+    if (title.isEmpty) return;
+    final future = notifier.addTask(title: title, categoryId: _categoryId);
+    _pendingCreate = future;
+    final created = await future;
+    if (_closed) await notifier.updateTask(created, closed: true);
+    if (!mounted) return;
+    setState(() {
+      _task = created;
+      _pendingCreate = null;
+    });
   }
 
   Future<void> _onCategorySelected(String id) async {

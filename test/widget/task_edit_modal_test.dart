@@ -173,6 +173,36 @@ void main() {
         expect(tasks, hasLength(1));
         expect(tasks.single.title, 'Buy milk');
       });
+
+      testWidgets(
+        'rapid same-tick keystrokes (real typing, faster than one addTask '
+        'round-trip) still create only one task',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+
+          // enterText/pump always lets the prior onChanged's Future resolve
+          // first, so it can't reproduce the race a fast typist causes:
+          // several onChanged calls fired before the first addTask
+          // round-trip completes. Call the field's own onChanged directly,
+          // back-to-back with no await between calls, to reproduce that.
+          final onChanged = tester
+              .widget<TextField>(find.byType(TextField))
+              .onChanged!;
+          onChanged('B');
+          onChanged('Bu');
+          onChanged('Buy');
+          await tester.pumpAndSettle();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(tasks, hasLength(1));
+          expect(tasks.single.title, 'Buy');
+        },
+      );
     });
 
     group('edit mode', () {
