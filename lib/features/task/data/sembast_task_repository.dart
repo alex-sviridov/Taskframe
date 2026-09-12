@@ -45,7 +45,9 @@ class SembastTaskRepository implements TaskRepository {
     String? categoryId,
   }) async {
     final existingRecord = await tasksStore.record(task.id).get(_db);
-    final current = existingRecord == null ? task : Task.fromMap(existingRecord);
+    final current = existingRecord == null
+        ? task
+        : Task.fromMap(existingRecord);
     final updated = current.copyWith(
       title: title,
       closed: closed,

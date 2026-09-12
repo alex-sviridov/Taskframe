@@ -23,7 +23,9 @@ Future<void> _pumpCard(
   UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
-      home: Scaffold(body: TaskCard(task: task, onTap: onTap ?? () {})),
+      home: Scaffold(
+        body: TaskCard(task: task, onTap: onTap ?? () {}),
+      ),
     ),
   ),
 );

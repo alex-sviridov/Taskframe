@@ -43,7 +43,8 @@ class TasksScreen extends ConsumerWidget {
                 for (final task in value)
                   TaskCard(
                     task: task,
-                    onTap: () => showTaskEditModal(context: context, task: task),
+                    onTap: () =>
+                        showTaskEditModal(context: context, task: task),
                   ),
               ],
             );

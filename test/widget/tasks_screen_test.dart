@@ -38,21 +38,20 @@ void main() {
       expect(find.byTooltip('Add task'), findsOneWidget);
     });
 
-    testWidgets(
-      'adding a task via the app bar action shows it in the list',
-      (tester) async {
-        await _pump(tester);
+    testWidgets('adding a task via the app bar action shows it in the list', (
+      tester,
+    ) async {
+      await _pump(tester);
 
-        await tester.tap(find.byIcon(Icons.add));
-        await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy milk');
-        await tester.pump();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Buy milk');
+      await tester.pump();
 
-        // The modal stays open (no Save step to close it), so both its own
-        // title field and the card behind it now show "Buy milk".
-        expect(find.text('Buy milk'), findsWidgets);
-      },
-    );
+      // The modal stays open (no Save step to close it), so both its own
+      // title field and the card behind it now show "Buy milk".
+      expect(find.text('Buy milk'), findsWidgets);
+    });
 
     testWidgets('tapping a task card opens it in edit mode', (tester) async {
       final container = ProviderContainer();
@@ -78,12 +77,8 @@ void main() {
       addTearDown(container.dispose);
       await container.read(categoryListProvider.future);
       await container.read(taskListProvider.future);
-      await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'First');
-      await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'Second');
+      await container.read(taskListProvider.notifier).addTask(title: 'First');
+      await container.read(taskListProvider.notifier).addTask(title: 'Second');
       await _pump(tester, container: container);
 
       final firstY = tester.getTopLeft(find.text('First')).dy;
