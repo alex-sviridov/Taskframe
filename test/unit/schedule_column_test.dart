@@ -43,7 +43,7 @@ void main() {
   });
 
   group('anchorDateFor', () {
-    test('returns the DayColumn\'s own date', () {
+    test("returns the DayColumn's own date", () {
       final date = DateTime(2026, 9, 9);
       expect(anchorDateFor(DayColumn(date)), date);
     });

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
+import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/template_apply.dart';
 
 TimeObject _block({
@@ -155,7 +155,8 @@ void main() {
     },
   );
 
-  test('skips a template block that would overlap another already-accepted template block', () {
+  test('skips a template block that would overlap another already-accepted '
+      'template block', () {
     final templateBlocks = [
       _block(
         id: 't1',

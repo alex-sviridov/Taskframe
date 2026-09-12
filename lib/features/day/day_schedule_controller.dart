@@ -8,7 +8,8 @@ import 'package:taskframe/features/day/schedule_controller.dart';
 /// [dayBlocksRepositoryProvider]. Every [ScheduleColumn] it's given must
 /// be a [DayColumn].
 class DayScheduleController extends ScheduleController {
-  const DayScheduleController();
+  /// Creates a [DayScheduleController].
+  const new();
 
   DateTime _dateOf(ScheduleColumn column) => (column as DayColumn).date;
 
@@ -35,8 +36,9 @@ class DayScheduleController extends ScheduleController {
       newStart: newStart,
       newEnd: newEnd,
     );
-    ref.invalidate(dayBlocksProvider(fromDate));
-    ref.invalidate(dayBlocksProvider(toDate));
+    ref
+      ..invalidate(dayBlocksProvider(fromDate))
+      ..invalidate(dayBlocksProvider(toDate));
     await ref.read(dayBlocksProvider(fromDate).future);
     await ref.read(dayBlocksProvider(toDate).future);
   }

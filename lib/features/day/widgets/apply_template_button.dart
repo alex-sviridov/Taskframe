@@ -13,11 +13,7 @@ import 'package:taskframe/features/template/providers.dart';
 /// while the column is hovered, matching a desktop-only affordance.
 class ApplyTemplateButton extends ConsumerWidget {
   /// Creates an [ApplyTemplateButton] for [date].
-  const ApplyTemplateButton({
-    required this.date,
-    required this.alwaysVisible,
-    super.key,
-  });
+  const new({required this.date, required this.alwaysVisible, super.key});
 
   /// The day this button applies a template to.
   final DateTime date;
@@ -50,7 +46,7 @@ class ApplyTemplateButton extends ConsumerWidget {
 /// Shows [child] only while the pointer hovers over it; hidden (and
 /// non-interactive, via [IgnorePointer]) otherwise.
 class _HoverReveal extends StatefulWidget {
-  const _HoverReveal({required this.child});
+  const new({required this.child});
 
   final Widget child;
 

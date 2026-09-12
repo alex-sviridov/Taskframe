@@ -58,7 +58,7 @@ void main() {
       expect(container.read(templateListProvider).value, isEmpty);
     });
 
-    test('deleteTemplate also clears that template\'s blocks, so a later '
+    test("deleteTemplate also clears that template's blocks, so a later "
         'template reusing the id cannot inherit them', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -150,7 +150,7 @@ void main() {
 
   group('TemplateScheduleController', () {
     test(
-      'blocksOf reads templateBlocksProvider for the column\'s templateId',
+      "blocksOf reads templateBlocksProvider for the column's templateId",
       () async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
@@ -194,7 +194,7 @@ void main() {
 
     test(
       'rejects a non-template column rather than silently mishandling it '
-      '(the invariant the drag resolver\'s variant scoping upholds)',
+      "(the invariant the drag resolver's variant scoping upholds)",
       () async {
         final container = ProviderContainer();
         addTearDown(container.dispose);

@@ -8,7 +8,7 @@ import 'package:taskframe/features/day/models/time_object.dart';
 /// in progress.
 class DragState {
   /// Creates a [DragState].
-  const DragState({
+  const new({
     required this.block,
     required this.originalColumn,
     required this.targetColumn,

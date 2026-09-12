@@ -10,6 +10,14 @@ class Category {
     this.emoji,
   });
 
+  /// Reconstructs a [Category] from a map produced by [toMap].
+  factory fromMap(Map<String, Object?> map) => Category(
+    id: map['id']! as String,
+    name: map['name']! as String,
+    colorValue: map['colorValue']! as int,
+    emoji: map['emoji'] as String?,
+  );
+
   /// The id of the single, permanent default category. Identifying it by
   /// this constant (rather than a separate boolean flag) keeps "is this
   /// the default" a single source of truth.
@@ -51,12 +59,4 @@ class Category {
     'colorValue': colorValue,
     'emoji': emoji,
   };
-
-  /// Reconstructs a [Category] from a map produced by [toMap].
-  factory Category.fromMap(Map<String, Object?> map) => Category(
-    id: map['id']! as String,
-    name: map['name']! as String,
-    colorValue: map['colorValue']! as int,
-    emoji: map['emoji'] as String?,
-  );
 }

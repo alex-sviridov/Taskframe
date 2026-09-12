@@ -71,8 +71,9 @@ class InMemoryCategoryRepository implements CategoryRepository {
     String? emoji,
   }) async {
     if (category.isDefault) {
-      _defaultCategory = _defaultCategory.copyWith(colorValue: colorValue);
-      return _defaultCategory;
+      return _defaultCategory = _defaultCategory.copyWith(
+        colorValue: colorValue,
+      );
     }
 
     final index = _added.indexWhere((c) => c.id == category.id);

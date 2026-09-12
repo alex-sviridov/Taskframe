@@ -83,24 +83,21 @@ Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-/// Starts a touch drag on [block] within a single-column [_pump]ed grid,
+/// Starts a touch drag at [position] within a single-column `_pump`ed grid,
 /// waiting out the long-press timeout before the first move so the
 /// gesture arena has resolved in favor of the long-press recognizer.
 Future<TestGesture> _startTouchDrag(
   WidgetTester tester,
   Offset position,
 ) async {
-  final gesture = await tester.startGesture(
-    position,
-    kind: PointerDeviceKind.touch,
-  );
+  final gesture = await tester.startGesture(position);
   await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
   return gesture;
 }
 
 void main() {
   group('resizeEdgeForLocalY', () {
-    test('picks the start edge above the block\'s vertical midpoint', () {
+    test("picks the start edge above the block's vertical midpoint", () {
       expect(resizeEdgeForLocalY(localY: 0, blockHeight: 40), ResizeEdge.start);
       expect(
         resizeEdgeForLocalY(localY: 19, blockHeight: 40),
@@ -108,7 +105,7 @@ void main() {
       );
     });
 
-    test('picks the end edge at or below the block\'s vertical midpoint', () {
+    test("picks the end edge at or below the block's vertical midpoint", () {
       expect(resizeEdgeForLocalY(localY: 20, blockHeight: 40), ResizeEdge.end);
       expect(resizeEdgeForLocalY(localY: 40, blockHeight: 40), ResizeEdge.end);
     });
@@ -229,7 +226,7 @@ void main() {
       expect(find.text('Work'), findsOneWidget);
     });
 
-    testWidgets('passes each block\'s resolved category to its BlockView', (
+    testWidgets("passes each block's resolved category to its BlockView", (
       tester,
     ) async {
       final container = ProviderContainer();
@@ -839,12 +836,12 @@ void main() {
               block: _workBlock,
               originalColumn: DayColumn(_date),
               controller: const DayScheduleController(),
-              pointerGlobalPosition: const Offset(0, 0),
+              pointerGlobalPosition: Offset.zero,
             );
         container
             .read(dragStateProvider.notifier)
             .updatePointer(
-              const Offset(0, 0),
+              Offset.zero,
               targetColumn: DayColumn(_date),
               targetStart: DateTime(2026, 9, 9, 11),
             );
@@ -886,12 +883,12 @@ void main() {
               block: _workBlock,
               originalColumn: DayColumn(_date),
               controller: const DayScheduleController(),
-              pointerGlobalPosition: const Offset(0, 0),
+              pointerGlobalPosition: Offset.zero,
             );
         container
             .read(dragStateProvider.notifier)
             .updatePointer(
-              const Offset(0, 0),
+              Offset.zero,
               targetColumn: DayColumn(DateTime(2026, 9, 10)),
               targetStart: DateTime(2026, 9, 10, 11),
             );
@@ -911,7 +908,7 @@ void main() {
               block: _workBlock,
               originalColumn: DayColumn(_date),
               controller: const DayScheduleController(),
-              pointerGlobalPosition: const Offset(0, 0),
+              pointerGlobalPosition: Offset.zero,
             );
 
         await _pump(tester, [_workBlock], container: container);
@@ -950,10 +947,7 @@ void main() {
         addTearDown(container.dispose);
         await _pump(tester, [_workBlock], container: container);
 
-        final gesture = await tester.startGesture(
-          const Offset(200, 300),
-          kind: PointerDeviceKind.touch,
-        );
+        final gesture = await tester.startGesture(const Offset(200, 300));
         await gesture.moveBy(const Offset(0, 20));
         await tester.pump();
 
@@ -1205,10 +1199,7 @@ void main() {
           await _pump(tester, [_workBlock], container: container);
 
           // Work's bottom edge is at y=448.
-          final gesture = await tester.startGesture(
-            const Offset(200, 445),
-            kind: PointerDeviceKind.touch,
-          );
+          final gesture = await tester.startGesture(const Offset(200, 445));
           await gesture.moveBy(const Offset(0, 20));
           await tester.pump();
 
@@ -1400,7 +1391,7 @@ void main() {
       });
 
       testWidgets(
-        'resizing a block\'s end all the way down reaches the exact day '
+        "resizing a block's end all the way down reaches the exact day "
         'end, not one slot short',
         (tester) async {
           // 22:30 is 16h30m after the 6:00 day start = 66 slots * 16px =

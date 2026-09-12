@@ -9,7 +9,7 @@ import 'package:taskframe/features/day/providers.dart';
 // Fixed, far-past date: InMemoryDayBlocksRepository seeds hardcoded blocks
 // for whatever date happens to be the real wall-clock "today", so tests must
 // never risk a date coinciding with it.
-final _date = DateTime(2000, 1, 1);
+final _date = DateTime(2000);
 
 void main() {
   group('resizeStateProvider', () {
@@ -20,7 +20,7 @@ void main() {
       expect(container.read(resizeStateProvider), isNull);
     });
 
-    test('start sets block, date, edge and initial draft to the block\'s '
+    test("start sets block, date, edge and initial draft to the block's "
         'own start/end', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

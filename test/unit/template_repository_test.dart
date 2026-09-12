@@ -17,7 +17,7 @@ void main() {
       expect(await repository.load(), [added]);
     });
 
-    test('rename updates the template\'s name', () async {
+    test("rename updates the template's name", () async {
       final repository = InMemoryTemplateRepository();
       final added = await repository.add(name: 'Weekday');
       final renamed = await repository.rename(added, name: 'Renamed');
@@ -27,7 +27,7 @@ void main() {
 
     test('rename throws StateError if template not found', () async {
       final repository = InMemoryTemplateRepository();
-      final missingTemplate = const Template(id: 't-missing', name: 'Weekday');
+      const missingTemplate = Template(id: 't-missing', name: 'Weekday');
       expect(
         () => repository.rename(missingTemplate, name: 'Renamed'),
         throwsA(isA<StateError>()),

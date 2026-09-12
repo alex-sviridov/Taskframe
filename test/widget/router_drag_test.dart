@@ -25,10 +25,7 @@ Future<TestGesture> _startTouchDrag(
   WidgetTester tester,
   Offset position,
 ) async {
-  final gesture = await tester.startGesture(
-    position,
-    kind: PointerDeviceKind.touch,
-  );
+  final gesture = await tester.startGesture(position);
   await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
   return gesture;
 }

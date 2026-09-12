@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/day_schedule_controller.dart';
@@ -25,7 +24,7 @@ void main() {
     });
 
     test('start sets block, originalDate and initial target to the '
-        'block\'s own start', () {
+        "block's own start", () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final block = _block();
@@ -206,10 +205,10 @@ void main() {
         // blocks for whatever date happens to be "today", so a target date
         // must never risk coinciding with the real calendar date the test
         // suite runs on.
-        final originalDate = DateTime(2000, 1, 1);
+        final originalDate = DateTime(2000);
         final targetDate = DateTime(2000, 1, 2);
         await container.read(dayBlocksProvider(originalDate).future);
-        final added = await container
+        await container
             .read(dayBlocksProvider(originalDate).notifier)
             .addBlock(
               start: DateTime(2000, 1, 1, 10),

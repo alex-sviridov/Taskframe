@@ -1,3 +1,4 @@
+import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 /// One template block rebased onto a target day, ready to pass to
@@ -23,9 +24,9 @@ typedef TemplateApplyResult = ({
 
 /// Resolves applying [templateBlocks] (a template's own timeline, dated on
 /// [templateAnchorDate]) onto [date]: each block's time-of-day is rebased
-/// onto [date], then accepted into [toAdd] unless it overlaps [dayBlocks]
+/// onto [date], then accepted into `toAdd` unless it overlaps [dayBlocks]
 /// or a block already accepted earlier in this same batch, in which case
-/// its rebased range is recorded in [skipped] instead.
+/// its rebased range is recorded in `skipped` instead.
 ///
 /// Partial application — one conflicting block never blocks the rest of
 /// the template from being applied.

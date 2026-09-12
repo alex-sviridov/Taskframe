@@ -13,7 +13,7 @@ final _refProvider = Provider<Ref>((ref) => ref);
 void main() {
   group('DayScheduleController', () {
     test(
-      'blocksOf reads the day blocks provider for the column\'s date',
+      "blocksOf reads the day blocks provider for the column's date",
       () async {
         final container = ProviderContainer();
         addTearDown(container.dispose);
@@ -37,7 +37,7 @@ void main() {
     );
 
     test(
-      'blocksOf returns null while the column\'s blocks are still loading',
+      "blocksOf returns null while the column's blocks are still loading",
       () {
         final container = ProviderContainer();
         addTearDown(container.dispose);
@@ -58,7 +58,7 @@ void main() {
       addTearDown(container.dispose);
       final ref = container.read(_refProvider);
       const controller = DayScheduleController();
-      final fromDate = DateTime(2000, 1, 1);
+      final fromDate = DateTime(2000);
       final toDate = DateTime(2000, 1, 2);
       await container.read(dayBlocksProvider(fromDate).future);
       final added = await container

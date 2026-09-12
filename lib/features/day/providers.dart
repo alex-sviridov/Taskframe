@@ -253,7 +253,7 @@ class DragNotifier extends Notifier<DragState?> {
   /// Begins dragging [block], which belonged to [originalColumn]. The
   /// landzone starts at the block's own current column/time. [controller]
   /// is used for every subsequent read/move this drag makes, so it must
-  /// match [originalColumn]'s kind (a [DayScheduleController] for a
+  /// match [originalColumn]'s kind (a `DayScheduleController` for a
   /// [DayColumn], and so on).
   void start({
     required TimeObject block,

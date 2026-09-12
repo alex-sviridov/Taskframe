@@ -39,7 +39,7 @@ final installHintVisibleProvider = FutureProvider<bool>((ref) async {
 /// is the only way users learn about Share → Add to Home Screen.
 class IosInstallHintBanner extends ConsumerWidget {
   /// Creates an [IosInstallHintBanner].
-  const IosInstallHintBanner({super.key});
+  const new({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

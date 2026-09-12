@@ -11,7 +11,7 @@ void main() {
 
     test('setInstallHintDismissedAt is read back by get', () async {
       final repository = InMemoryAppSettingsRepository();
-      final time = DateTime(2030, 1, 1);
+      final time = DateTime(2030);
 
       await repository.setInstallHintDismissedAt(time);
 

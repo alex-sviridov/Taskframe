@@ -9,7 +9,7 @@ import 'package:taskframe/features/template/data/sembast_template_repository.dar
 import 'package:taskframe/features/template/providers.dart';
 
 /// The provider overrides that point every repository at sembast-backed
-/// storage in [db], used at the app's composition root ([main.dart]).
+/// storage in [db], used at the app's composition root (`main.dart`).
 /// Kept as a standalone, testable list so a new repository provider added
 /// without an entry here doesn't silently ship without persistence.
 List<Override> sembastOverrides(Database db) => [

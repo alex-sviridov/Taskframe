@@ -55,7 +55,7 @@ void main() {
       expect(categories[2].name, 'Second');
     });
 
-    test('update changes an added category\'s name, color and emoji', () async {
+    test("update changes an added category's name, color and emoji", () async {
       final added = await repository.add(name: 'Work', colorValue: 0xFF2196F3);
 
       final updated = await repository.update(

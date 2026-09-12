@@ -1,8 +1,8 @@
 import 'package:sembast/sembast.dart';
-import 'package:uuid/uuid.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/data/category_repository.dart';
 import 'package:taskframe/features/category/models/category.dart';
+import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
@@ -15,8 +15,8 @@ const _uuid = Uuid();
 /// first-run seeding — but [load] synthesizes one in memory if it's ever
 /// missing, so callers always get it first regardless.
 class SembastCategoryRepository implements CategoryRepository {
-  /// Creates a [SembastCategoryRepository] reading/writing [db].
-  SembastCategoryRepository(this._db);
+  /// Creates a [SembastCategoryRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 

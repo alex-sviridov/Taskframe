@@ -29,8 +29,8 @@ class InMemoryAppSettingsRepository implements AppSettingsRepository {
 /// An [AppSettingsRepository] backed by a sembast [Database], persisting
 /// the dismissal time across restarts.
 class SembastAppSettingsRepository implements AppSettingsRepository {
-  /// Creates a [SembastAppSettingsRepository] reading/writing [db].
-  SembastAppSettingsRepository(this._db);
+  /// Creates a [SembastAppSettingsRepository] reading/writing [_db].
+  new(this._db);
 
   final Database _db;
 

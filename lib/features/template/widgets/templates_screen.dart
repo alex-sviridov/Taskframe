@@ -146,14 +146,16 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 template: templates[i],
                 onDelete: () => unawaited(_deleteTemplate(templates[i])),
               ),
-              gridBuilder: (context, i, slotHeight, showHourLabels) => Expanded(
-                child: _TemplateColumnGrid(
-                  template: templates[i],
-                  settings: settings,
-                  slotHeight: slotHeight,
-                  showHourLabels: showHourLabels,
-                ),
-              ),
+              gridBuilder:
+                  (context, i, slotHeight, {required showHourLabels}) =>
+                      Expanded(
+                        child: _TemplateColumnGrid(
+                          template: templates[i],
+                          settings: settings,
+                          slotHeight: slotHeight,
+                          showHourLabels: showHourLabels,
+                        ),
+                      ),
             );
           }
 
@@ -178,19 +180,20 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                     template: templates[i],
                     onDelete: () => unawaited(_deleteTemplate(templates[i])),
                   ),
-                  gridBuilder: (context, _, slotHeight, showHourLabels) =>
-                      Expanded(
-                        child: _TemplateColumnGrid(
-                          template: templates[i],
-                          settings: settings,
-                          slotHeight: slotHeight,
-                          showHourLabels: showHourLabels,
-                          onSwipeStart: _swipeForwarder.onSwipeStart,
-                          onSwipeUpdate: _swipeForwarder.onSwipeUpdate,
-                          onSwipeEnd: _swipeForwarder.onSwipeEnd,
-                          onSwipeCancel: _swipeForwarder.onSwipeCancel,
-                        ),
-                      ),
+                  gridBuilder:
+                      (context, _, slotHeight, {required showHourLabels}) =>
+                          Expanded(
+                            child: _TemplateColumnGrid(
+                              template: templates[i],
+                              settings: settings,
+                              slotHeight: slotHeight,
+                              showHourLabels: showHourLabels,
+                              onSwipeStart: _swipeForwarder.onSwipeStart,
+                              onSwipeUpdate: _swipeForwarder.onSwipeUpdate,
+                              onSwipeEnd: _swipeForwarder.onSwipeEnd,
+                              onSwipeCancel: _swipeForwarder.onSwipeCancel,
+                            ),
+                          ),
                 ),
               ),
               // Fades the sliding header content to the background color

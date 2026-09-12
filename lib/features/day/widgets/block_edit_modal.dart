@@ -22,7 +22,7 @@ import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
 /// the row's whole background, so it reads as a standard field/menu row
 /// rather than a colored block.
 class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({required this.category});
+  const new({required this.category});
 
   final Category category;
 
@@ -62,7 +62,7 @@ const _fieldDecoration = InputDecoration(
 /// edit modal's other selectors.
 class BlockCategoryPicker extends ConsumerWidget {
   /// Creates a [BlockCategoryPicker].
-  const BlockCategoryPicker({
+  const new({
     required this.selectedCategoryId,
     required this.onSelected,
     super.key,
@@ -150,7 +150,7 @@ class BlockCategoryPicker extends ConsumerWidget {
 /// block edit modal's start/end rows.
 class BlockTimeRow extends StatelessWidget {
   /// Creates a [BlockTimeRow].
-  const BlockTimeRow({
+  const new({
     required this.label,
     required this.time,
     required this.onTap,
@@ -188,7 +188,7 @@ class BlockTimeRow extends StatelessWidget {
 /// [onChanged] immediately, no separate confirm step.
 class BlockTimeDropdown extends StatelessWidget {
   /// Creates a [BlockTimeDropdown].
-  const BlockTimeDropdown({
+  const new({
     required this.label,
     required this.value,
     required this.range,
@@ -253,7 +253,7 @@ const _quarterMinutes = [0, 15, 30, 45];
 /// each wheel bolder and larger than the rest, so scrolling shows clearly
 /// what's selected.
 class _TimeWheelPicker extends StatefulWidget {
-  const _TimeWheelPicker({
+  const new({
     required this.initial,
     required this.settings,
     required this.range,
@@ -436,13 +436,13 @@ class _TimeWheelPickerState extends State<_TimeWheelPicker> {
   }
 }
 
-/// A delete icon button that requires two taps within [_confirmWindow] to
+/// A delete icon button that requires two taps within `_confirmWindow` to
 /// call [onConfirmed] — no separate confirmation dialog. The first tap
 /// swaps the icon/tooltip into a "confirming" state and starts a timer; a
 /// second tap before it lapses confirms, letting it lapse reverts.
 class BlockDeleteButton extends StatefulWidget {
   /// Creates a [BlockDeleteButton].
-  const BlockDeleteButton({required this.onConfirmed, super.key});
+  const new({required this.onConfirmed, super.key});
 
   /// Called when the second tap lands within the confirm window.
   final VoidCallback onConfirmed;
@@ -517,7 +517,6 @@ Future<void> showBlockEditModal({
   }
   return showDialog<void>(
     context: context,
-    barrierDismissible: true,
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
@@ -642,7 +641,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
   /// Opens the standard Material date picker and, if a different date is
   /// picked, moves [block] there directly via the day repository (this is
-  /// only ever reachable when [widget.column] is a [DayColumn] — see the
+  /// only ever reachable when `widget.column` is a [DayColumn] — see the
   /// date row's guard in `build`) — the same move-and-refresh pattern
   /// `DragNotifier.drop` uses for a drag-and-drop move — then switches
   /// [_currentColumn] to the new date. Only the calendar itself closes;
@@ -680,8 +679,9 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
       newEnd: newStart.add(duration),
     );
 
-    ref.invalidate(dayBlocksProvider(currentDate));
-    ref.invalidate(dayBlocksProvider(newDate));
+    ref
+      ..invalidate(dayBlocksProvider(currentDate))
+      ..invalidate(dayBlocksProvider(newDate));
     await ref.read(dayBlocksProvider(currentDate).future);
     await ref.read(dayBlocksProvider(newDate).future);
     if (!mounted) return;
@@ -718,7 +718,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   }
 
   /// Copies [block] to the following calendar day. Only ever reachable
-  /// when [widget.column] is a [DayColumn] — see the copy button's guard
+  /// when `widget.column` is a [DayColumn] — see the copy button's guard
   /// in `build`.
   Future<void> _copyToNextDay(TimeObject block) async {
     await _commitTitle(block);
@@ -774,7 +774,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
 
     final settings = ref.watch(daySettingsProvider);
     final isDayColumn = widget.column is DayColumn;
-    bool canCopy = false;
+    var canCopy = false;
     if (isDayColumn) {
       final currentDate = (_currentColumn as DayColumn).date;
       final nextDate = DateTime(
