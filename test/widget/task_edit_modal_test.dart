@@ -36,7 +36,7 @@ Future<void> _pumpOpenButton(
 
 void main() {
   group('TaskEditModal', () {
-    testWidgets('create mode: entering a title and saving adds a task', (
+    testWidgets('the title field is autofocused when the modal opens', (
       tester,
     ) async {
       final container = await _seededContainer();
@@ -45,18 +45,12 @@ void main() {
 
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Buy milk');
-      await tester.pump();
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
 
-      final tasks = container.read(taskListProvider).value!;
-      expect(tasks.where((t) => t.title == 'Buy milk'), hasLength(1));
+      final titleField = tester.widget<TextField>(find.byType(TextField));
+      expect(titleField.autofocus, isTrue);
     });
 
-    testWidgets('create mode: Save is disabled while the title is empty', (
-      tester,
-    ) async {
+    testWidgets('shows no Save/Cancel buttons', (tester) async {
       final container = await _seededContainer();
       addTearDown(container.dispose);
       await _pumpOpenButton(tester, container);
@@ -64,129 +58,249 @@ void main() {
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      final saveButton = tester.widget<TextButton>(
-        find.widgetWithText(TextButton, 'Save'),
+      expect(find.text('Save'), findsNothing);
+      expect(find.text('Cancel'), findsNothing);
+    });
+
+    group('create mode', () {
+      testWidgets('shows no Delete action before anything is typed', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Delete'), findsNothing);
+      });
+
+      testWidgets('typing a title creates the task live, no Save needed', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.where((t) => t.title == 'Buy milk'), hasLength(1));
+      });
+
+      testWidgets('the Delete action appears once the task is created', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.pump();
+
+        expect(find.text('Delete'), findsOneWidget);
+      });
+
+      testWidgets(
+        'toggling Closed before typing applies once the task is created',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(Checkbox));
+          await tester.pump();
+          await tester.enterText(find.byType(TextField), 'Buy milk');
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(
+            tasks.singleWhere((t) => t.title == 'Buy milk').closed,
+            isTrue,
+          );
+        },
       );
-      expect(saveButton.onPressed, isNull);
+
+      testWidgets(
+        'picking a category before typing applies once the task is created',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final work = await container
+              .read(categoryListProvider.notifier)
+              .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(DropdownButtonFormField<String>));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Work').last);
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField), 'Buy milk');
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(
+            tasks.singleWhere((t) => t.title == 'Buy milk').categoryId,
+            work.id,
+          );
+        },
+      );
+
+      testWidgets('typing further keystrokes updates the same task, not a '
+          'new one', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy');
+        await tester.pump();
+        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks, hasLength(1));
+        expect(tasks.single.title, 'Buy milk');
+      });
     });
 
-    testWidgets('create mode: shows no Delete action', (tester) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+    group('edit mode', () {
+      testWidgets('pre-fills the title field', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Delete'), findsNothing);
-    });
+        expect(find.text('Buy milk'), findsOneWidget);
+      });
 
-    testWidgets('create mode: shows no Closed switch', (tester) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
+      testWidgets('typing a new title updates it live, no Save needed', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy oat milk');
+        await tester.pump();
 
-      expect(find.byType(Switch), findsNothing);
-    });
+        final tasks = container.read(taskListProvider).value!;
+        final updatedTask = tasks.singleWhere((t) => t.id == created.id);
+        expect(updatedTask.title, 'Buy oat milk');
+      });
 
-    testWidgets('edit mode: pre-fills the title field', (tester) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      final created = await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'Buy milk');
-      await _pumpOpenButton(tester, container, task: created);
+      testWidgets('toggling Closed updates it live and strikes the title', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(Checkbox));
+        await tester.pump();
 
-      expect(find.text('Buy milk'), findsOneWidget);
-    });
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).closed, isTrue);
+        final titleField = tester.widget<TextField>(find.byType(TextField));
+        expect(titleField.style?.decoration, TextDecoration.lineThrough);
+      });
 
-    testWidgets('edit mode: changing the title and saving persists it', (
-      tester,
-    ) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      final created = await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'Buy milk');
-      await _pumpOpenButton(tester, container, task: created);
+      testWidgets('picking a category updates it live', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Buy oat milk');
-      await tester.pump();
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Work').last);
+        await tester.pumpAndSettle();
 
-      final tasks = container.read(taskListProvider).value!;
-      final updatedTask = tasks.singleWhere((t) => t.id == created.id);
-      expect(updatedTask.title, 'Buy oat milk');
-    });
+        final tasks = container.read(taskListProvider).value!;
+        expect(
+          tasks.singleWhere((t) => t.id == created.id).categoryId,
+          work.id,
+        );
+      });
 
-    testWidgets(
-      'edit mode: toggling the Closed switch and saving persists it',
-      (tester) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      final created = await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'Buy milk');
-      await _pumpOpenButton(tester, container, task: created);
+      testWidgets('Delete asks for confirmation, then removes the task and '
+          'closes the modal', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(Switch));
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
 
-      final tasks = container.read(taskListProvider).value!;
-      expect(tasks.singleWhere((t) => t.id == created.id).closed, isTrue);
-    });
+        expect(find.byType(AlertDialog), findsOneWidget);
 
-    testWidgets('edit mode: Delete asks for confirmation, then removes the '
-        'task', (tester) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      final created = await container
-          .read(taskListProvider.notifier)
-          .addTask(title: 'Buy milk');
-      await _pumpOpenButton(tester, container, task: created);
+        await tester.tap(find.text('Delete').last);
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.where((t) => t.id == created.id), isEmpty);
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.text('Open'), findsOneWidget);
+      });
 
-      expect(find.byType(AlertDialog), findsOneWidget);
+      testWidgets('canceling the delete confirmation leaves the task', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
 
-      await tester.tap(find.text('Delete').last);
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
 
-      final tasks = container.read(taskListProvider).value!;
-      expect(tasks.where((t) => t.id == created.id), isEmpty);
-    });
-
-    testWidgets('Cancel dismisses the modal without saving changes', (
-      tester,
-    ) async {
-      final container = await _seededContainer();
-      addTearDown(container.dispose);
-      await _pumpOpenButton(tester, container);
-
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Buy milk');
-      await tester.pump();
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-
-      final tasks = container.read(taskListProvider).value!;
-      expect(tasks.where((t) => t.title == 'Buy milk'), isEmpty);
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.where((t) => t.id == created.id), hasLength(1));
+      });
     });
   });
 }

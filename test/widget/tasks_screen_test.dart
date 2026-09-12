@@ -46,10 +46,11 @@ void main() {
         await tester.tap(find.byIcon(Icons.add));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField), 'Buy milk');
-        await tester.tap(find.text('Save'));
-        await tester.pumpAndSettle();
+        await tester.pump();
 
-        expect(find.text('Buy milk'), findsOneWidget);
+        // The modal stays open (no Save step to close it), so both its own
+        // title field and the card behind it now show "Buy milk".
+        expect(find.text('Buy milk'), findsWidgets);
       },
     );
 
@@ -66,10 +67,9 @@ void main() {
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Buy oat milk');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      expect(find.text('Buy oat milk'), findsOneWidget);
+      expect(find.text('Buy oat milk'), findsWidgets);
       expect(find.text('Buy milk'), findsNothing);
     });
 

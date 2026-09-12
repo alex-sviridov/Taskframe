@@ -44,9 +44,16 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   late String _categoryId;
   late bool _closed;
 
+  /// The task backing this modal. Starts as `null` in create mode until
+  /// [_onTitleChanged] creates it on the first non-empty keystroke — from
+  /// then on (and always, in edit mode) every field edit applies live via
+  /// this task, with no separate Save step.
+  Task? _task;
+
   @override
   void initState() {
     super.initState();
+    _task = widget.task;
     _titleController = TextEditingController(text: widget.task?.title ?? '');
     _categoryId = widget.task?.categoryId ?? Category.defaultId;
     _closed = widget.task?.closed ?? false;
@@ -58,22 +65,42 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  /// Applies every keystroke immediately. In create mode, the task doesn't
+  /// exist yet — the first non-empty value creates it (carrying along
+  /// whatever category/closed the user already picked before typing);
+  /// every keystroke after that, in either mode, updates the existing task.
+  Future<void> _onTitleChanged(String title) async {
     final notifier = ref.read(taskListProvider.notifier);
-    if (widget.task == null) {
-      await notifier.addTask(
-        title: _titleController.text,
+    final task = _task;
+    if (task == null) {
+      if (title.isEmpty) return;
+      final created = await notifier.addTask(
+        title: title,
         categoryId: _categoryId,
       );
+      if (_closed) await notifier.updateTask(created, closed: true);
+      if (mounted) setState(() => _task = created);
     } else {
-      await notifier.updateTask(
-        widget.task!,
-        title: _titleController.text,
-        closed: _closed,
-        categoryId: _categoryId,
-      );
+      await notifier.updateTask(task, title: title);
     }
-    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _onCategorySelected(String id) async {
+    setState(() => _categoryId = id);
+    final task = _task;
+    if (task != null) {
+      await ref
+          .read(taskListProvider.notifier)
+          .updateTask(task, categoryId: id);
+    }
+  }
+
+  Future<void> _onClosedChanged(bool value) async {
+    setState(() => _closed = value);
+    final task = _task;
+    if (task != null) {
+      await ref.read(taskListProvider.notifier).updateTask(task, closed: value);
+    }
   }
 
   Future<void> _confirmDelete() async {
@@ -95,7 +122,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     );
     if (!mounted) return;
     if (confirmed ?? false) {
-      await ref.read(taskListProvider.notifier).deleteTask(widget.task!);
+      await ref.read(taskListProvider.notifier).deleteTask(_task!);
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -112,52 +139,40 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
-              onChanged: (_) => setState(() {}),
+            Row(
+              children: [
+                Checkbox(
+                  value: _closed,
+                  onChanged: (value) => _onClosedChanged(value ?? !_closed),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                    style: TextStyle(
+                      decoration: _closed ? TextDecoration.lineThrough : null,
+                    ),
+                    onChanged: _onTitleChanged,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             BlockCategoryPicker(
               selectedCategoryId: _categoryId,
-              onSelected: (id) => setState(() => _categoryId = id),
+              onSelected: _onCategorySelected,
             ),
-            if (widget.task != null) ...[
+            if (_task != null) ...[
               const SizedBox(height: 16),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Closed'),
-                value: _closed,
-                onChanged: (value) => setState(() => _closed = value),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _confirmDelete,
+                  child: const Text('Delete'),
+                ),
               ),
             ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (widget.task != null)
-                  TextButton(
-                    onPressed: _confirmDelete,
-                    child: const Text('Delete'),
-                  )
-                else
-                  const SizedBox(),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: _titleController.text.isNotEmpty
-                          ? _save
-                          : null,
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ],
         ),
       ),
