@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+build
+android
+ios
+e2e
+test
+docs
+coverage
+*.log
