@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { dragMouse } from './support/gestures';
+import { dragMouseUntilMoved, gotoAndWaitForBoot, openDraftWithRetry, waitForBoundingBox } from './support/gestures';
 
 /**
  * Adds a template (raw click — see the comment in
@@ -14,15 +14,21 @@ async function addTemplateWithBlock(
   addTemplateButton: { x: number; y: number },
   blockPosition: { x: number; y: number },
 ) {
-  await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
-  await page.waitForTimeout(300);
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.waitForTimeout(300);
 
-  await page.mouse.click(blockPosition.x, blockPosition.y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(blockPosition.x, blockPosition.y);
-  await page.waitForTimeout(200);
+      await page.mouse.click(blockPosition.x, blockPosition.y);
+      await page.waitForTimeout(60);
+      await page.mouse.click(blockPosition.x, blockPosition.y);
+      await page.waitForTimeout(200);
 
-  await enableFlutterAccessibility(page);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
@@ -35,24 +41,22 @@ test.describe('single template', () => {
   const blockPosition = { x: 300, y: 300 } as const;
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
   });
 
   test('dragging a block to a new time moves it there', async ({ page }) => {
     await addTemplateWithBlock(page, addTemplateButton, blockPosition);
 
     const block = page.getByText('title');
-    const box = (await block.boundingBox())!;
+    const box = await waitForBoundingBox(block);
 
-    await dragMouse(
+    const movedBox = await dragMouseUntilMoved(
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: box.x + box.width / 2, y: box.y + box.height / 2 + 150 },
+      page.getByText('title'),
+      box,
     );
-
-    await expect(page.getByText('title')).toBeVisible();
-    const movedBox = (await page.getByText('title').boundingBox())!;
     expect(movedBox.y).toBeGreaterThan(box.y + 50);
   });
 });
@@ -67,8 +71,7 @@ test.describe('two templates side by side', () => {
   const rightColumnX = 900;
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
   });
 
   test('dragging a block across the gap moves it into the other '
@@ -81,17 +84,16 @@ test.describe('two templates side by side', () => {
     ).toHaveCount(2);
 
     const block = page.getByText('title');
-    const box = (await block.boundingBox())!;
+    const box = await waitForBoundingBox(block);
     expect(box.x).toBeLessThan(rightColumnX);
 
-    await dragMouse(
+    const movedBox = await dragMouseUntilMoved(
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: rightColumnX, y: box.y + box.height / 2 },
+      page.getByText('title'),
+      box,
     );
-
-    await expect(page.getByText('title')).toBeVisible();
-    const movedBox = (await page.getByText('title').boundingBox())!;
     expect(movedBox.x).toBeGreaterThan(box.x + 200);
   });
 });
@@ -122,8 +124,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     const pageErrors: Error[] = [];
     page.on('pageerror', (error) => pageErrors.push(error));
 
-    await page.goto('/#/templates');
-    await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+    await gotoAndWaitForBoot(page, '/#/templates');
     await addTemplateWithBlock(page, addTemplateButton, blockPosition);
 
     // Hash-only navigation to Day and back — both branches' widget
@@ -135,17 +136,16 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     await page.goto('/#/templates');
 
     const block = page.getByText('title');
-    const box = (await block.boundingBox())!;
+    const box = await waitForBoundingBox(block);
 
-    await dragMouse(
+    // The block genuinely moved, rather than the drag silently failing.
+    const movedBox = await dragMouseUntilMoved(
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: box.x + box.width / 2, y: box.y + box.height / 2 + 150 },
+      page.getByText('title'),
+      box,
     );
-
-    // The block genuinely moved, rather than the drag silently failing.
-    await expect(page.getByText('title')).toBeVisible();
-    const movedBox = (await page.getByText('title').boundingBox())!;
     expect(movedBox.y).toBeGreaterThan(box.y + 50);
 
     // No uncaught exception (the original bug threw a type-cast error

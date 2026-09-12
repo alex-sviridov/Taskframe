@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import { clickCenter, fillTextboxAndSubmit, gotoAndWaitForBoot } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await gotoAndWaitForBoot(page, '/');
   await enableFlutterAccessibility(page);
 });
 
@@ -21,8 +21,7 @@ test('editing the title and pressing Enter renames the block', async ({
   await clickCenter(page, page.getByText('Breakfast'));
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 
-  await page.getByRole('textbox').fill('Brunch');
-  await page.getByRole('textbox').press('Enter');
+  await fillTextboxAndSubmit(page.getByRole('textbox'), 'Brunch');
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.getByText('Brunch')).toBeVisible();

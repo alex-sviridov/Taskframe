@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { doubleClickFreeSpace } from './support/gestures';
+import { doubleClickFreeSpace, gotoAndWaitForBoot, openDraftWithRetry } from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -10,17 +10,31 @@ test.use({ viewport: { width: 800, height: 720 } });
 const freeSpace = { x: 300, y: 650 } as const;
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  // Wait for Flutter to finish booting before sending raw pointer events;
-  // it injects this placeholder once the app is ready to receive input.
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  // Waits for Flutter to finish booting before sending raw pointer events;
+  // it injects a placeholder once the app is ready to receive input.
+  await gotoAndWaitForBoot(page, '/');
 });
+
+/**
+ * Double-clicks free space to open a block draft, retrying (via a page
+ * reload) if Flutter's gesture recognizer misses the double-tap — see
+ * {@link openDraftWithRetry}.
+ */
+async function openFreeSpaceDraft(page: Page) {
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await doubleClickFreeSpace(page, freeSpace.x, freeSpace.y);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
+}
 
 test('double-clicking free space shows both create buttons', async ({
   page,
 }) => {
-  await doubleClickFreeSpace(page, freeSpace.x, freeSpace.y);
-  await enableFlutterAccessibility(page);
+  await openFreeSpaceDraft(page);
 
   await expect(
     page.getByRole('button', { name: 'Create Event' }),
@@ -33,8 +47,7 @@ test('double-clicking free space shows both create buttons', async ({
 test('clicking Create Event adds a block titled "title" and opens its edit modal', async ({
   page,
 }) => {
-  await doubleClickFreeSpace(page, freeSpace.x, freeSpace.y);
-  await enableFlutterAccessibility(page);
+  await openFreeSpaceDraft(page);
 
   await page.getByRole('button', { name: 'Create Event' }).click();
 
@@ -69,11 +82,7 @@ test('clicking the AppBar add button creates a block in the next free '
 test('clicking outside the draft dismisses it without creating a block', async ({
   page,
 }) => {
-  await doubleClickFreeSpace(page, freeSpace.x, freeSpace.y);
-  await enableFlutterAccessibility(page);
-  await expect(
-    page.getByRole('button', { name: 'Create Event' }),
-  ).toBeVisible();
+  await openFreeSpaceDraft(page);
 
   // A point well clear of the draft box, but still free grid space.
   await page.mouse.click(300, 450);

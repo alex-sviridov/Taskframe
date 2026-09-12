@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
+import { gotoAndWaitForBoot } from './support/gestures';
 
 test.use({ viewport: { width: 1200, height: 800 } });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await gotoAndWaitForBoot(page, '/');
   await enableFlutterAccessibility(page);
 });
 

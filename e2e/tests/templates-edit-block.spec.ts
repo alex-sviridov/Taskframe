@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import {
+  clickCenter,
+  fillTextboxAndSubmit,
+  gotoAndWaitForBoot,
+  openDraftWithRetry,
+} from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -32,20 +37,25 @@ const freeSpace = { x: 300, y: 300 } as const;
  * double-click that follows.
  */
 async function addTemplateAndOpenDraft(page: import('@playwright/test').Page) {
-  await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
-  await page.waitForTimeout(300);
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.waitForTimeout(300);
 
-  await page.mouse.click(freeSpace.x, freeSpace.y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(freeSpace.x, freeSpace.y);
-  await page.waitForTimeout(200);
+      await page.mouse.click(freeSpace.x, freeSpace.y);
+      await page.waitForTimeout(60);
+      await page.mouse.click(freeSpace.x, freeSpace.y);
+      await page.waitForTimeout(200);
 
-  await enableFlutterAccessibility(page);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/#/templates');
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  await gotoAndWaitForBoot(page, '/#/templates');
 });
 
 test('creating an event adds a block titled "title" and opens its edit '
@@ -83,8 +93,7 @@ test('editing the title renames the block', async ({ page }) => {
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 
-  await page.getByRole('textbox').first().fill('Standup');
-  await page.getByRole('textbox').first().press('Enter');
+  await fillTextboxAndSubmit(page.getByRole('textbox').first(), 'Standup');
   await page.getByRole('button', { name: 'Close' }).click();
 
   await expect(page.getByText('Standup')).toBeVisible();

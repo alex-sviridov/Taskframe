@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter } from './support/gestures';
+import {
+  clickCenter,
+  clickUntilVisible,
+  fillTextboxAndSubmit,
+  gotoAndWaitForBoot,
+  openDraftWithRetry,
+} from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -30,27 +36,31 @@ async function addTemplateWithEventAt(
   y: number,
   title: string,
 ) {
-  await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
-  await page.waitForTimeout(300);
+  await openDraftWithRetry(
+    page,
+    async () => {
+      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.waitForTimeout(300);
 
-  await page.mouse.click(300, y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(300, y);
-  await page.waitForTimeout(200);
+      await page.mouse.click(300, y);
+      await page.waitForTimeout(60);
+      await page.mouse.click(300, y);
+      await page.waitForTimeout(200);
 
-  await enableFlutterAccessibility(page);
+      await enableFlutterAccessibility(page);
+    },
+    page.getByRole('button', { name: 'Create Event' }),
+  );
 
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
-  await page.getByRole('textbox').first().fill(title);
-  await page.getByRole('textbox').first().press('Enter');
+  await fillTextboxAndSubmit(page.getByRole('textbox').first(), title);
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(title)).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/#/templates');
-  await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached' });
+  await gotoAndWaitForBoot(page, '/#/templates');
 });
 
 test('applying a template with no conflicts adds its event to the day', async ({
@@ -61,9 +71,16 @@ test('applying a template with no conflicts adds its event to the day', async ({
   // Switch to the day screen, then page to a day with no seeded blocks
   // (only "today" is seeded), so nothing here could conflict with
   // "Standup" regardless of what time it landed on.
-  await page.mouse.click(dayDestination.x, dayDestination.y);
-  await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
   await page.getByRole('button', { name: 'Next day' }).click();
+  // The outgoing day's transition-out animation can briefly leave its
+  // "Apply template" button mounted alongside the incoming day's, making
+  // `getByRole` match two — wait for exactly one before clicking.
+  await expect(page.getByRole('button', { name: 'Apply template' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Apply template' }).click();
   await clickCenter(page, page.getByText('Template 1'));
@@ -78,9 +95,14 @@ test('an overlapping template event is skipped, leaving the existing '
   // "Add block" button places its first block on an empty day.
   await addTemplateWithEventAt(page, 126, 'Conflict');
 
-  await page.mouse.click(dayDestination.x, dayDestination.y);
-  await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
   await page.getByRole('button', { name: 'Next day' }).click();
+  // Same transition-overlap race as the other test above.
+  await expect(page.getByRole('button', { name: 'Add block' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Add block' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
@@ -97,8 +119,12 @@ test('an overlapping template event is skipped, leaving the existing '
 test('the apply-template button is disabled when there are no templates', async ({
   page,
 }) => {
-  await page.mouse.click(dayDestination.x, dayDestination.y);
   await enableFlutterAccessibility(page);
+  await clickUntilVisible(
+    page,
+    dayDestination,
+    page.getByRole('heading', { name: 'Day Frame' }),
+  );
 
   await expect(page.getByRole('button', { name: 'Apply template' })).toBeDisabled();
 });
