@@ -108,7 +108,7 @@ export async function openDraftWithRetry(
   page: Page,
   openDraft: () => Promise<void>,
   marker: Locator,
-  attempts = 3,
+  attempts = 6,
 ): Promise<void> {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     await openDraft();

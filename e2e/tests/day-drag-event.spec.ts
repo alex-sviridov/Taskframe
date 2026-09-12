@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { dragMouse, gotoAndWaitForBoot } from './support/gestures';
+import {
+  dragMouseUntilMoved,
+  gotoAndWaitForBoot,
+  waitForBoundingBox,
+} from './support/gestures';
 
 test.use({ viewport: { width: 800, height: 720 } });
 
@@ -13,19 +17,18 @@ test('dragging a block to a new time moves it there', async ({ page }) => {
   // Breakfast is at 7:00-7:30, a fixed hardcoded block for today.
   await expect(page.getByText('Breakfast')).toBeVisible();
   const breakfast = page.getByText('Breakfast');
-  const box = (await breakfast.boundingBox())!;
+  const box = await waitForBoundingBox(breakfast);
 
   // Drag straight down by roughly 4 hours' worth of pixels; the exact
   // landing slot isn't asserted, only that the block moved off its
   // original position.
-  await dragMouse(
+  const movedBox = await dragMouseUntilMoved(
     page,
     { x: box.x + box.width / 2, y: box.y + box.height / 2 },
     { x: box.x + box.width / 2, y: box.y + box.height / 2 + 300 },
+    page.getByText('Breakfast'),
+    box,
   );
-
-  await expect(page.getByText('Breakfast')).toBeVisible();
-  const movedBox = (await page.getByText('Breakfast').boundingBox())!;
   expect(movedBox.y).toBeGreaterThan(box.y + 50);
 });
 
