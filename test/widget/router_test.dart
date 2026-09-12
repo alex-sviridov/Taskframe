@@ -51,6 +51,20 @@ void main() {
       expect(shell.navigationShell.currentIndex, 1);
     });
 
+    testWidgets('tapping Tasks navigates to /tasks', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tasks'), findsWidgets);
+      final shell = tester.widget<AppShell>(find.byType(AppShell));
+      expect(shell.navigationShell.currentIndex, 3);
+    });
+
     testWidgets(
       "DayScreen's paged-forward state survives switching branches and back",
       (tester) async {

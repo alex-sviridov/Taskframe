@@ -6,11 +6,12 @@ void main() {
     final names = {
       dayBlocksStore.name,
       categoriesStore.name,
+      tasksStore.name,
       templatesStore.name,
       templateBlocksStore.name,
       settingsStore.name,
     };
 
-    expect(names, hasLength(5));
+    expect(names, hasLength(6));
   });
 }

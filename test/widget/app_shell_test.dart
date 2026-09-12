@@ -42,6 +42,14 @@ GoRouter _buildTestRouter() => GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/four',
+              builder: (context, state) => const Text('Branch four'),
+            ),
+          ],
+        ),
       ],
     ),
   ],
@@ -119,6 +127,7 @@ void main() {
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Branch one'), findsOneWidget);
     });
 
