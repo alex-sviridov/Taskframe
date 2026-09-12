@@ -20,7 +20,6 @@ void main() {
       const task = Task(
         id: 'task-1',
         title: 'Buy milk',
-        closed: false,
         categoryId: 'category-1',
       );
 
