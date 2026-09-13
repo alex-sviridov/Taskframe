@@ -147,6 +147,17 @@ test.describe('wide viewport', () => {
     await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
   });
 
+  test('a trailing "#tag" with no space is still added when the modal is '
+    + 'dismissed', async ({ page }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    await page.getByRole('textbox').fill('Buy #groceries');
+
+    await dismissTaskModal(page);
+
+    await expect(page.getByRole('button', { name: 'Buy' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+  });
+
   test('removing a tag pill in the edit modal persists the removal', async ({
     page,
   }) => {

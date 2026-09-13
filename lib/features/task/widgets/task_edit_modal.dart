@@ -122,6 +122,32 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     });
   }
 
+  /// Catches a `#tag` left dangling at the end of the title with no
+  /// trailing space — [_onTitleChanged] only extracts on a trailing
+  /// space, so a tag typed right before the modal closes would otherwise
+  /// never be picked up. Called as the modal is dismissed, before the
+  /// pop actually goes through.
+  Future<void> _applyPendingTagOnExit() async {
+    final extraction = extractFinalTag(_titleController.text);
+    if (extraction == null) return;
+    _titleController.value = TextEditingValue(
+      text: extraction.title,
+      selection: TextSelection.collapsed(offset: extraction.title.length),
+    );
+    final newTags = _tags.contains(extraction.tag)
+        ? _tags
+        : [..._tags, extraction.tag];
+    setState(() => _tags = newTags);
+
+    final task =
+        _task ?? (_pendingCreate != null ? await _pendingCreate : null);
+    if (task == null) return;
+    if (!mounted) return;
+    await ref
+        .read(taskListProvider.notifier)
+        .updateTask(task, title: extraction.title, tags: newTags);
+  }
+
   /// Removes [tag] from this task's tags, persisting the change.
   Future<void> _onTagRemoved(String tag) async {
     final tags = [
@@ -179,55 +205,63 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _applyPendingTagOnExit();
+        if (context.mounted) Navigator.of(context).pop();
+      },
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Checkbox(
-                  shape: const CircleBorder(),
-                  value: _closed,
-                  onChanged: (value) => _onClosedChanged(value ?? !_closed),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    autofocus: true,
-                    style: TextStyle(
-                      decoration: _closed ? TextDecoration.lineThrough : null,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Checkbox(
+                    shape: const CircleBorder(),
+                    value: _closed,
+                    onChanged: (value) => _onClosedChanged(value ?? !_closed),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _titleController,
+                      autofocus: true,
+                      style: TextStyle(
+                        decoration: _closed ? TextDecoration.lineThrough : null,
+                      ),
+                      onChanged: _onTitleChanged,
                     ),
-                    onChanged: _onTitleChanged,
+                  ),
+                ],
+              ),
+              if (_tags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                TagPills(tags: _tags, onRemoved: _onTagRemoved),
+              ],
+              const SizedBox(height: 16),
+              BlockCategoryPicker(
+                selectedCategoryId: _categoryId,
+                onSelected: _onCategorySelected,
+              ),
+              if (_task != null) ...[
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: _confirmDelete,
+                    child: const Text('Delete'),
                   ),
                 ),
               ],
-            ),
-            if (_tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              TagPills(tags: _tags, onRemoved: _onTagRemoved),
             ],
-            const SizedBox(height: 16),
-            BlockCategoryPicker(
-              selectedCategoryId: _categoryId,
-              onSelected: _onCategorySelected,
-            ),
-            if (_task != null) ...[
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: _confirmDelete,
-                  child: const Text('Delete'),
-                ),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

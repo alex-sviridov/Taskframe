@@ -207,6 +207,31 @@ void main() {
       });
 
       testWidgets(
+        'a trailing "#tag" with no space is still added when the modal is '
+        'dismissed',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField), 'Buy #groceries');
+          await tester.pump();
+
+          // Dismiss by tapping the barrier, well outside the centered
+          // dialog's bounds — the modal has no Save/Cancel button.
+          await tester.tapAt(const Offset(10, 10));
+          await tester.pumpAndSettle();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(tasks, hasLength(1));
+          expect(tasks.single.title, 'Buy ');
+          expect(tasks.single.tags, ['groceries']);
+        },
+      );
+
+      testWidgets(
         'rapid same-tick keystrokes (real typing, faster than one addTask '
         'round-trip) still create only one task',
         (tester) async {
@@ -359,6 +384,31 @@ void main() {
         expect(updated.title, 'Buy milk ');
         expect(updated.tags, ['errands']);
       });
+
+      testWidgets(
+        'a trailing "#tag" with no space is still added when the modal is '
+        'dismissed',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Buy milk');
+          await _pumpOpenButton(tester, container, task: created);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField), 'Buy milk #errands');
+          await tester.pump();
+          await tester.tapAt(const Offset(10, 10));
+          await tester.pumpAndSettle();
+
+          final tasks = container.read(taskListProvider).value!;
+          final updated = tasks.singleWhere((t) => t.id == created.id);
+          expect(updated.title, 'Buy milk ');
+          expect(updated.tags, ['errands']);
+        },
+      );
 
       testWidgets('tapping a pill delete icon removes that tag', (
         tester,

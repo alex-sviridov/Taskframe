@@ -41,4 +41,45 @@ void main() {
       expect(extractTrailingTag(''), isNull);
     });
   });
+
+  group('extractFinalTag', () {
+    test('extracts a tag at the very end, with no trailing space', () {
+      final result = extractFinalTag('Buy #groceries');
+
+      expect(result, isNotNull);
+      expect(result!.tag, 'groceries');
+      expect(result.title, 'Buy ');
+    });
+
+    test('extracts a tag that is the entire text', () {
+      final result = extractFinalTag('#groceries');
+
+      expect(result, isNotNull);
+      expect(result!.tag, 'groceries');
+      expect(result.title, '');
+    });
+
+    test('lowercases the extracted tag', () {
+      final result = extractFinalTag('Buy #Groceries');
+
+      expect(result!.tag, 'groceries');
+    });
+
+    test('returns null when the tag has a trailing space (not the last '
+        'character)', () {
+      expect(extractFinalTag('Buy #groceries '), isNull);
+    });
+
+    test('returns null when there is no #tag at the end', () {
+      expect(extractFinalTag('Buy milk'), isNull);
+    });
+
+    test('returns null for a bare # with no word characters', () {
+      expect(extractFinalTag('Buy #'), isNull);
+    });
+
+    test('returns null for empty text', () {
+      expect(extractFinalTag(''), isNull);
+    });
+  });
 }
