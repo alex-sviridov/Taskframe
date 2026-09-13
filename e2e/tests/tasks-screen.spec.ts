@@ -166,11 +166,17 @@ test.describe('wide viewport', () => {
     const pill = page.getByRole('checkbox', { name: 'groceries' });
     await expect(pill).toBeVisible();
 
-    // `InputChip`'s delete affordance briefly reports as disabled in the
-    // semantics tree while its entrance animation settles (harmless —
-    // the tap handler itself works, as covered by the Flutter widget
-    // tests), so Playwright's actionability check never clears; force
-    // the click rather than waiting on it.
+    // `InputChip`'s delete affordance reports as disabled in the
+    // semantics/ARIA tree even once its own tap handler is live (a
+    // Flutter-web quirk, not an actual disabled state — the Flutter
+    // widget tests confirm the tap handler works), so a plain click is
+    // permanently blocked by Playwright's actionability check; force is
+    // required. Even forced, the click's target coordinates are read
+    // from the chip's current layout box, which can still be mid-
+    // transition through its own entrance animation (~195ms — see
+    // chip.dart's _kSelectDuration) right after the pill first appears,
+    // so wait for that to settle first.
+    await page.waitForTimeout(400);
     await pill.getByRole('button', { name: 'Delete' }).click({ force: true });
     await expect(pill).toHaveCount(0);
 
