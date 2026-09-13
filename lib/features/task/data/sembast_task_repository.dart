@@ -43,6 +43,7 @@ class SembastTaskRepository implements TaskRepository {
     String? title,
     bool? closed,
     String? categoryId,
+    List<String>? tags,
   }) async {
     final existingRecord = await tasksStore.record(task.id).get(_db);
     final current = existingRecord == null
@@ -52,6 +53,7 @@ class SembastTaskRepository implements TaskRepository {
       title: title,
       closed: closed,
       categoryId: categoryId,
+      tags: tags,
     );
     final order =
         existingRecord?['order'] ?? DateTime.now().microsecondsSinceEpoch;

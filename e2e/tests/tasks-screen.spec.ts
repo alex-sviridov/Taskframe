@@ -1,6 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
+import {
+  clickUntilHidden,
+  fillTextboxUntilSet,
+  fillTextboxUntilTrue,
+  gotoAndWaitForBoot,
+} from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -35,10 +40,14 @@ async function addCategoryAndGoToTasks(page: Page, name: string): Promise<void> 
 /**
  * Dismisses the task edit modal by clicking its barrier/scrim, well
  * outside the modal's own bounds — the modal has no Save/Cancel button of
- * its own to tap instead, since every field applies live.
+ * its own to tap instead, since every field applies live. Retried (see
+ * {@link clickUntilHidden}) since, like every other raw click in this
+ * suite, it can be silently dropped under CI load, leaving the modal
+ * open and every assertion that expects it closed racing a gesture that
+ * never actually landed.
  */
 async function dismissTaskModal(page: Page): Promise<void> {
-  await page.mouse.click(770, 20);
+  await clickUntilHidden(page, { x: 770, y: 20 }, page.getByRole('textbox'));
 }
 
 test.describe('wide viewport', () => {
@@ -127,6 +136,81 @@ test.describe('wide viewport', () => {
     await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
   });
 
+  test('typing "#tag " strips it from the title and shows a tag pill', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    // The extraction rewrites the field's own value as soon as the
+    // trailing "#groceries " is typed, so the textbox never settles on
+    // that raw value — fillTextboxUntilSet's equality check would never
+    // pass. Use fillTextboxUntilTrue instead, checking for the app's
+    // rewritten value, so a fill the app's text-editing client didn't
+    // actually pick up (see fillTextboxUntilSet's doc comment) still
+    // gets retried rather than silently trusted.
+    await fillTextboxUntilTrue(page.getByRole('textbox'), 'Buy #groceries ', async () =>
+      (await page.getByRole('textbox').inputValue().catch(() => '')) === 'Buy ');
+
+    // A pill renders as a Flutter `Chip`, exposed in the semantics tree
+    // as a checkbox labeled with the tag text.
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveValue('Buy ');
+
+    await dismissTaskModal(page);
+
+    await expect(page.getByRole('button', { name: 'Buy' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+  });
+
+  test('a trailing "#tag" with no space is still added when the modal is '
+    + 'dismissed', async ({ page }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    // Nothing rewrites the field while typing here (extraction only
+    // happens on exit), so — unlike the trailing-space case — a plain
+    // fillTextboxUntilSet can wait for the typed value to actually
+    // stick, guarding against a fill the app's text-editing client
+    // didn't pick up (see its doc comment).
+    await fillTextboxUntilSet(page.getByRole('textbox'), 'Buy #groceries');
+    // Also wait for the Delete button — proof the task itself was
+    // created, not just that the field holds the right text — before
+    // dismissing, since the exit-time tag extraction needs a task to
+    // apply to.
+    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
+
+    await dismissTaskModal(page);
+
+    await expect(page.getByRole('button', { name: 'Buy' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+  });
+
+  test('removing a tag pill in the edit modal persists the removal', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    // See the "strips it from the title" test above for why this needs
+    // fillTextboxUntilTrue rather than a plain fill or fillTextboxUntilSet.
+    await fillTextboxUntilTrue(page.getByRole('textbox'), 'Buy #groceries ', async () =>
+      (await page.getByRole('textbox').inputValue().catch(() => '')) === 'Buy ');
+    const pill = page.getByRole('checkbox', { name: 'groceries' });
+    await expect(pill).toBeVisible();
+
+    // `InputChip`'s delete affordance reports as disabled in the
+    // semantics/ARIA tree even once its own tap handler is live (a
+    // Flutter-web quirk, not an actual disabled state — the Flutter
+    // widget tests confirm the tap handler works), so a plain click is
+    // permanently blocked by Playwright's actionability check; force is
+    // required. Even forced, the click's target coordinates are read
+    // from the chip's current layout box, which can still be mid-
+    // transition through its own entrance animation (~195ms — see
+    // chip.dart's _kSelectDuration) right after the pill first appears,
+    // so wait for that to settle first.
+    await page.waitForTimeout(400);
+    await pill.getByRole('button', { name: 'Delete' }).click({ force: true });
+    await expect(pill).toHaveCount(0);
+
+    await dismissTaskModal(page);
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toHaveCount(0);
+  });
+
   test('Delete asks for confirmation, then removes the task', async ({
     page,
   }) => {
@@ -153,7 +237,7 @@ test.describe('narrow viewport', () => {
 
     await page.getByRole('button', { name: 'Add task' }).click();
     await fillTextboxUntilSet(page.getByRole('textbox'), 'Buy milk');
-    await page.mouse.click(200, 10);
+    await clickUntilHidden(page, { x: 200, y: 10 }, page.getByRole('textbox'));
 
     await expect(page.getByRole('button', { name: 'Buy milk' })).toBeVisible();
     await expect(page.getByRole('checkbox')).toHaveCount(1);

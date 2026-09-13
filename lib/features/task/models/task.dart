@@ -10,14 +10,18 @@ class Task {
     required this.title,
     this.closed = false,
     this.categoryId = Category.defaultId,
+    this.tags = const [],
   });
 
-  /// Reconstructs a [Task] from a map produced by [toMap].
+  /// Reconstructs a [Task] from a map produced by [toMap]. `tags` defaults
+  /// to empty when absent, so a task persisted before tags existed still
+  /// loads.
   factory fromMap(Map<String, Object?> map) => Task(
     id: map['id']! as String,
     title: map['title']! as String,
     closed: map['closed']! as bool,
     categoryId: map['categoryId']! as String,
+    tags: [for (final tag in map['tags'] as List? ?? const []) tag as String],
   );
 
   /// Unique identifier for this task.
@@ -33,13 +37,23 @@ class Task {
   /// [Category.defaultId], so every task always resolves to some category.
   final String categoryId;
 
-  /// Returns a copy of this task with any of [title]/[closed]/[categoryId]
-  /// replaced.
-  Task copyWith({String? title, bool? closed, String? categoryId}) => Task(
+  /// Free-form tags attached to this task (lowercase, no `#`), parsed out
+  /// of the title as the user types. Defaults to empty.
+  final List<String> tags;
+
+  /// Returns a copy of this task with any of [title]/[closed]/[categoryId]/
+  /// [tags] replaced.
+  Task copyWith({
+    String? title,
+    bool? closed,
+    String? categoryId,
+    List<String>? tags,
+  }) => Task(
     id: id,
     title: title ?? this.title,
     closed: closed ?? this.closed,
     categoryId: categoryId ?? this.categoryId,
+    tags: tags ?? this.tags,
   );
 
   /// This task's field values as a JSON-safe map, for storage.
@@ -48,5 +62,6 @@ class Task {
     'title': title,
     'closed': closed,
     'categoryId': categoryId,
+    'tags': tags,
   };
 }

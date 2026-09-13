@@ -60,6 +60,22 @@ void main() {
       expect(updated.closed, isTrue);
     });
 
+    test('updateTask persists a tags change', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(taskListProvider.future);
+      final created = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(created, tags: ['groceries']);
+
+      final tasks = container.read(taskListProvider).value!;
+      expect(tasks.singleWhere((t) => t.id == created.id).tags, ['groceries']);
+    });
+
     test('deleteTask removes the task from state', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

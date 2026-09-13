@@ -16,6 +16,12 @@ void main() {
       expect(task.categoryId, Category.defaultId);
     });
 
+    test('tags defaults to empty', () {
+      const task = Task(id: 'task-1', title: 'Buy milk');
+
+      expect(task.tags, isEmpty);
+    });
+
     test('copyWith replaces only the given fields', () {
       const task = Task(
         id: 'task-1',
@@ -31,12 +37,21 @@ void main() {
       expect(updated.categoryId, 'category-1');
     });
 
+    test('copyWith replaces tags', () {
+      const task = Task(id: 'task-1', title: 'Buy milk', tags: ['home']);
+
+      final updated = task.copyWith(tags: ['home', 'errands']);
+
+      expect(updated.tags, ['home', 'errands']);
+    });
+
     test('copyWith with no arguments returns equivalent fields', () {
       const task = Task(
         id: 'task-1',
         title: 'Buy milk',
         closed: true,
         categoryId: 'category-1',
+        tags: ['home'],
       );
 
       final copy = task.copyWith();
@@ -45,6 +60,7 @@ void main() {
       expect(copy.title, task.title);
       expect(copy.closed, task.closed);
       expect(copy.categoryId, task.categoryId);
+      expect(copy.tags, task.tags);
     });
   });
 
@@ -55,6 +71,7 @@ void main() {
         title: 'Buy milk',
         closed: true,
         categoryId: 'category-1',
+        tags: ['home', 'errands'],
       );
 
       final restored = Task.fromMap(task.toMap());
@@ -63,6 +80,19 @@ void main() {
       expect(restored.title, task.title);
       expect(restored.closed, task.closed);
       expect(restored.categoryId, task.categoryId);
+      expect(restored.tags, task.tags);
+    });
+
+    test('fromMap defaults tags to empty when the map has no tags key '
+        '(a task persisted before tags existed)', () {
+      final restored = Task.fromMap({
+        'id': 'task-1',
+        'title': 'Buy milk',
+        'closed': false,
+        'categoryId': 'category-1',
+      });
+
+      expect(restored.tags, isEmpty);
     });
   });
 }

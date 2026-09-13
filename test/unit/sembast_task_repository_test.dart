@@ -1,16 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sembast/sembast_memory.dart';
+import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/task/data/sembast_task_repository.dart';
 
 void main() {
   group('SembastTaskRepository', () {
+    late Database db;
     late SembastTaskRepository repository;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastTaskRepository(db);
     });
+
+    test(
+      'loads a task record stored before tags existed (no tags field)',
+      () async {
+        await tasksStore.record('legacy-task').put(db, {
+          'id': 'legacy-task',
+          'title': 'Buy milk',
+          'closed': false,
+          'categoryId': Category.defaultId,
+          'order': 0,
+        });
+
+        final tasks = await repository.load();
+
+        expect(tasks.single.title, 'Buy milk');
+        expect(tasks.single.tags, isEmpty);
+      },
+    );
 
     test('load starts empty', () async {
       expect(await repository.load(), isEmpty);
@@ -41,7 +61,7 @@ void main() {
       expect(tasks.map((t) => t.title), ['First', 'Second']);
     });
 
-    test('update changes title/closed/categoryId', () async {
+    test('update changes title/closed/categoryId/tags', () async {
       final added = await repository.add(title: 'Buy milk');
 
       final updated = await repository.update(
@@ -49,11 +69,22 @@ void main() {
         title: 'Buy oat milk',
         closed: true,
         categoryId: 'category-1',
+        tags: ['errands'],
       );
 
       expect(updated.title, 'Buy oat milk');
       expect(updated.closed, isTrue);
       expect(updated.categoryId, 'category-1');
+      expect(updated.tags, ['errands']);
+    });
+
+    test('tags persist through a later load', () async {
+      final added = await repository.add(title: 'Buy milk');
+      await repository.update(added, tags: ['errands']);
+
+      final tasks = await repository.load();
+
+      expect(tasks.singleWhere((t) => t.id == added.id).tags, ['errands']);
     });
 
     test('update leaves fields unspecified as null unchanged', () async {
