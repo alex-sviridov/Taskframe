@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -131,6 +132,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   /// show the same suggestions right back.
   bool _suggestionsDismissed = false;
 
+  /// The most recent pointer-down position on the search field, in
+  /// global coordinates — captured by the wrapping [Listener] so
+  /// [_handleFieldTap] (which [TextField.onTap] calls with no position
+  /// of its own) can test the tap against each token's actual on-screen
+  /// character boxes. Deliberately *not* derived from the resulting
+  /// caret offset: a caret offset is a boundary between characters, not
+  /// proof a tap landed on a glyph (tapping the trailing half of a
+  /// token's last character, the space just before a token, or the
+  /// field's empty leading padding can all resolve to a caret offset
+  /// that numerically falls inside — or right at the edge of — a
+  /// token's range without the tap having visually landed on it).
+  Offset? _lastPointerDownPosition;
+
   @override
   void initState() {
     super.initState();
@@ -176,24 +190,56 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
   }
 
-  /// Called on every tap on the search field, after the field has already
-  /// moved the cursor to the tapped character (per
-  /// `TextSelectionGestureDetectorBuilder.onSingleTapUp`, which updates
-  /// the selection before invoking [TextField.onTap]). If that resolved
-  /// offset falls inside a recognized token's range (see
-  /// [UnifiedQueryController.buildTextSpan]), treats the tap as "on the
-  /// token" and toggles it via [_toggleToken] instead of leaving a plain
-  /// cursor placement.
+  /// Called on every tap on the search field (see [TextField.onTap]).
+  /// Uses [_lastPointerDownPosition] — the raw pixel position the
+  /// wrapping [Listener] captured for this tap — against each
+  /// recognized token's actual rendered character boxes (via
+  /// [RenderEditable.getBoxesForSelection]) to decide whether the tap
+  /// landed on a token; if so, toggles it via [_toggleToken] instead of
+  /// leaving a plain cursor placement. Testing real glyph geometry
+  /// (rather than the resulting caret offset) is deliberate: a caret
+  /// offset is a boundary between characters, not proof a tap landed on
+  /// a glyph.
   void _handleFieldTap() {
-    final offset = _searchController.selection.baseOffset;
-    if (offset < 0) return;
+    final position = _lastPointerDownPosition;
+    if (position == null) return;
+    final root = _searchFieldKey.currentContext?.findRenderObject();
+    if (root == null) return;
+    final renderEditable = _findRenderEditable(root);
+    if (renderEditable == null) return;
+    final local = renderEditable.globalToLocal(position);
     final parsed = parseSearchQuery(_searchController.text);
     for (final token in orderedTokenRanges(parsed)) {
-      if (offset >= token.range.start && offset < token.range.end) {
+      final boxes = renderEditable.getBoxesForSelection(
+        TextSelection(
+          baseOffset: token.range.start,
+          extentOffset: token.range.end,
+        ),
+      );
+      if (boxes.any((box) => box.toRect().contains(local))) {
         _toggleToken(token.range, excluded: token.excluded);
         return;
       }
     }
+  }
+
+  /// Depth-first search of the render tree rooted at [root] for the
+  /// first [RenderEditable] — [TextField] has no public getter for its
+  /// internal one, but it's always present a few layers down (inside
+  /// its [EditableText]).
+  RenderEditable? _findRenderEditable(RenderObject root) {
+    RenderEditable? found;
+    void visit(RenderObject child) {
+      if (found != null) return;
+      if (child is RenderEditable) {
+        found = child;
+        return;
+      }
+      child.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
   }
 
   /// The dropdown's current suggestions — tag names while the text
@@ -412,26 +458,30 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               link: _searchFieldLink,
               child: Focus(
                 onKeyEvent: _handleSearchKeyEvent,
-                child: TextField(
-                  key: _searchFieldKey,
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  onTap: _handleFieldTap,
-                  decoration: InputDecoration(
-                    hintText: 'Search: #tag  /opened  free text',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            tooltip: 'Clear search',
-                            onPressed: _searchController.clear,
-                          ),
-                    isDense: true,
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
+                child: Listener(
+                  onPointerDown: (event) =>
+                      _lastPointerDownPosition = event.position,
+                  child: TextField(
+                    key: _searchFieldKey,
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    onTap: _handleFieldTap,
+                    decoration: InputDecoration(
+                      hintText: 'Search: #tag  /opened  free text',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              tooltip: 'Clear search',
+                              onPressed: _searchController.clear,
+                            ),
+                      isDense: true,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),

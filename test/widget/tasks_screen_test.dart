@@ -1,5 +1,6 @@
 // test/widget/tasks_screen_test.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,45 @@ import 'package:go_router/go_router.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/tasks_screen.dart';
+
+/// The search field's single [RenderEditable], for computing precise
+/// tap positions against a token's actual rendered character boxes
+/// rather than guessing pixel offsets — the search bar's tap-to-toggle
+/// hit-testing is itself geometry-based (see `_handleFieldTap` in
+/// `tasks_screen.dart`), so these tests probe the same geometry.
+///
+/// [EditableText]'s own render object isn't a [RenderEditable] directly
+/// (it's wrapped, e.g. for platform text composition), so this walks the
+/// render tree the same way `_handleFieldTap`'s own
+/// `_findRenderEditable` does.
+RenderEditable _renderEditable(WidgetTester tester) {
+  final root = tester.renderObject(find.byType(EditableText));
+  RenderEditable? found;
+  void visit(RenderObject child) {
+    if (found != null) return;
+    if (child is RenderEditable) {
+      found = child;
+      return;
+    }
+    child.visitChildren(visit);
+  }
+
+  visit(root);
+  return found!;
+}
+
+/// The global-coordinate [Rect] the field renders characters
+/// `start`..`end` (exclusive) within, per
+/// [RenderEditable.getBoxesForSelection].
+Rect _tokenRect(WidgetTester tester, int start, int end) {
+  final renderEditable = _renderEditable(tester);
+  final box = renderEditable
+      .getBoxesForSelection(TextSelection(baseOffset: start, extentOffset: end))
+      .single;
+  final rect = box.toRect();
+  final topLeft = renderEditable.localToGlobal(rect.topLeft);
+  return topLeft & rect.size;
+}
 
 Future<void> _pump(WidgetTester tester, {ProviderContainer? container}) async {
   if (container != null) {
@@ -340,15 +380,13 @@ void main() {
       expect(find.text('Buy milk'), findsOneWidget);
       expect(find.text('Sell couch'), findsNothing);
 
-      // Tap near the start of the field's text (not its center — the
-      // field is much wider than "#urgent", and text is left-aligned
-      // after the prefix icon, so a center tap would land past the end
-      // of the text in empty space). If this offset doesn't land on the
-      // token in practice, use `debugDumpRenderTree()` or nudge the x
-      // value — the field's prefix icon plus content padding puts text
-      // start a little past the field's own left edge.
-      final fieldTopLeft = tester.getTopLeft(find.byType(TextField));
-      await tester.tapAt(fieldTopLeft + const Offset(45, 24));
+      // Tap the actual center of the rendered "#urgent" token's glyph
+      // box, computed from the field's own RenderEditable rather than a
+      // guessed pixel offset — a guessed offset can silently land in the
+      // field's padding instead of on the token (see the regression
+      // tests below), which passes only via an unrelated hit-testing
+      // bug.
+      await tester.tapAt(_tokenRect(tester, 0, 7).center);
       await tester.pump();
 
       expect(find.byType(TasksScreen), findsOneWidget); // still mounted
@@ -356,6 +394,102 @@ void main() {
       expect(field.controller!.text, '#!urgent');
       expect(find.text('Buy milk'), findsNothing);
       expect(find.text('Sell couch'), findsOneWidget);
+    });
+
+    testWidgets("tapping the trailing half of a token's last character "
+        "still toggles it (no dead zone at the token's trailing edge)", (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), '#urgent');
+      await tester.pump();
+
+      // The right 10% of the last character ('t', the 7th of 7) — deep
+      // enough into its trailing half that a naive caret-offset check
+      // (which resolves a right-half tap to the boundary *after* the
+      // character, i.e. offset 7 == range.end) would wrongly reject it.
+      final lastCharRect = _tokenRect(tester, 6, 7);
+      final tapPosition = Offset(
+        lastCharRect.left + lastCharRect.width * 0.9,
+        lastCharRect.center.dy,
+      );
+      await tester.tapAt(tapPosition);
+      await tester.pump();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '#!urgent');
+    });
+
+    testWidgets('tapping the space just before a token does not toggle '
+        'it (no false positive just before a token)', (tester) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'buy #urgent');
+      await tester.pump();
+
+      // "buy #urgent": the space is character index 3, the token starts
+      // at index 4. Tapping the right (trailing) half of that space — a
+      // point visually clearly to the left of "#urgent" — resolves the
+      // caret to offset 4, i.e. the token's own range.start, which a
+      // naive `offset >= range.start` check would wrongly accept.
+      final spaceRect = _tokenRect(tester, 3, 4);
+      final tapPosition = Offset(
+        spaceRect.left + spaceRect.width * 0.9,
+        spaceRect.center.dy,
+      );
+      await tester.tapAt(tapPosition);
+      await tester.pump();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'buy #urgent');
+    });
+
+    testWidgets("tapping the field's empty leading padding does not "
+        'toggle a token starting at offset 0', (tester) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), '#urgent');
+      await tester.pump();
+
+      // Tap just to the left of where the first character actually
+      // renders (inside the gap between the prefix icon and the text,
+      // still within the field's own tappable area). Flutter clamps an
+      // out-of-text tap's caret to offset 0, which a naive
+      // `offset >= range.start` check (with the token starting at 0)
+      // would wrongly accept.
+      final firstCharRect = _tokenRect(tester, 0, 1);
+      final tapPosition = Offset(
+        firstCharRect.left - 5,
+        firstCharRect.center.dy,
+      );
+      expect(
+        tester.getRect(find.byType(TextField)).contains(tapPosition),
+        isTrue,
+        reason:
+            'test setup: the padding tap must still land inside the '
+            'field, or this would not exercise onTap at all',
+      );
+      await tester.tapAt(tapPosition);
+      await tester.pump();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '#urgent');
+    });
+
+    testWidgets('tapping plain free text (no token involved) leaves the '
+        'query untouched', (tester) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'buy milk');
+      await tester.pump();
+
+      final wordRect = _tokenRect(tester, 4, 8); // "milk"
+      await tester.tapAt(wordRect.center);
+      await tester.pump();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'buy milk');
     });
 
     testWidgets("backspacing through a tag token's characters removes "
