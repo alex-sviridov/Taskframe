@@ -1,32 +1,42 @@
 import 'package:flutter/services.dart' show TextRange;
 
-/// The only status word currently recognized — [Task] has no other
+/// The only status word currently recognized — a task has no other
 /// boolean field to filter by, so any other word after `/` is left
 /// alone as plain search text rather than treated as a token.
 const openedStatusWord = 'opened';
 
 /// A `#tag`/`#!tag` occurrence found anywhere in a unified search query
 /// string, together with the exact range of characters it occupies —
-/// used to mutate exactly that range when toggled ([toggleQueryToken])
-/// and to know where to style it when rendering.
+/// used to mutate exactly that range when toggled and to know where
+/// to style it when rendering.
 class TagToken {
-  const TagToken({
+  /// Creates a tag token.
+  const new({
     required this.tag,
     required this.excluded,
     required this.range,
   });
 
+  /// The tag's lowercased name, without the leading '#'.
   final String tag;
+
+  /// Whether this tag is excluded (prefixed with '!').
   final bool excluded;
+
+  /// The exact range of characters this token occupies in the query.
   final TextRange range;
 }
 
 /// A `/opened`/`/!opened` occurrence — at most one is recognized per
 /// query (see [parseSearchQuery]).
 class StatusToken {
-  const StatusToken({required this.excluded, required this.range});
+  /// Creates a status token.
+  const new({required this.excluded, required this.range});
 
+  /// Whether this status token is excluded (prefixed with '!').
   final bool excluded;
+
+  /// The exact range of characters this token occupies in the query.
   final TextRange range;
 }
 
@@ -34,14 +44,21 @@ class StatusToken {
 /// at most one status token, and the free text left over once every
 /// recognized token's characters are removed.
 class ParsedQuery {
-  const ParsedQuery({
+  /// Creates a parsed query result.
+  const new({
     required this.tagTokens,
     required this.statusToken,
     required this.freeText,
   });
 
+  /// Every tag token found in the query, in order of appearance.
   final List<TagToken> tagTokens;
+
+  /// The status token found in the query, if any (at most one).
   final StatusToken? statusToken;
+
+  /// The remaining free text after all recognized tokens are removed,
+  /// with whitespace normalized.
   final String freeText;
 }
 
@@ -106,6 +123,6 @@ List<({TextRange range, bool excluded})> orderedTokenRanges(
         excluded: parsed.statusToken!.excluded,
       ),
   ];
-  ranges.sort((a, b) => a.range.start.compareTo(b.range.start));
-  return ranges;
+  return ranges
+    ..sort((a, b) => a.range.start.compareTo(b.range.start));
 }
