@@ -25,13 +25,14 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
     return added;
   }
 
-  /// Updates [task]'s title/closed/category, persisting via the
+  /// Updates [task]'s title/closed/category/tags, persisting via the
   /// repository and refreshing state.
   Future<void> updateTask(
     Task task, {
     String? title,
     bool? closed,
     String? categoryId,
+    List<String>? tags,
   }) async {
     final repository = ref.read(taskRepositoryProvider);
     final updated = await repository.update(
@@ -39,6 +40,7 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
       title: title,
       closed: closed,
       categoryId: categoryId,
+      tags: tags,
     );
     state = AsyncData([
       for (final t in state.value ?? <Task>[])

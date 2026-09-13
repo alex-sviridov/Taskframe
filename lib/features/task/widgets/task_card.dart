@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
+import 'package:taskframe/features/task/widgets/tag_pills.dart';
 
 /// Renders a single [Task] in the tasks list: a filled card using its
 /// category's color (falling back to the theme's own color while
@@ -50,12 +51,20 @@ class TaskCard extends ConsumerWidget {
                 .read(taskListProvider.notifier)
                 .updateTask(task, closed: value ?? !task.closed),
           ),
-          title: Text(
-            title,
-            style: TextStyle(
-              decoration: task.closed ? TextDecoration.lineThrough : null,
-              color: task.closed ? Theme.of(context).disabledColor : null,
-            ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  decoration: task.closed ? TextDecoration.lineThrough : null,
+                  color: task.closed ? Theme.of(context).disabledColor : null,
+                ),
+              ),
+              if (task.tags.isNotEmpty) const SizedBox(height: 4),
+              TagPills(tags: task.tags),
+            ],
           ),
           onTap: onTap,
         ),

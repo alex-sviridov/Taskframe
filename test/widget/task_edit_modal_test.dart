@@ -174,6 +174,38 @@ void main() {
         expect(tasks.single.title, 'Buy milk');
       });
 
+      testWidgets('typing "#tag " strips it from the title and adds a tag', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy #groceries ');
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks, hasLength(1));
+        expect(tasks.single.title, 'Buy ');
+        expect(tasks.single.tags, ['groceries']);
+      });
+
+      testWidgets('the tag pill shows after typing "#tag "', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy #groceries ');
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('groceries'), findsOneWidget);
+      });
+
       testWidgets(
         'rapid same-tick keystrokes (real typing, faster than one addTask '
         'round-trip) still create only one task',
@@ -284,6 +316,81 @@ void main() {
           tasks.singleWhere((t) => t.id == created.id).categoryId,
           work.id,
         );
+      });
+
+      testWidgets('shows an existing tag as a pill', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, tags: ['groceries']);
+        final tagged = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == created.id);
+        await _pumpOpenButton(tester, container, task: tagged);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('groceries'), findsOneWidget);
+      });
+
+      testWidgets('typing "#tag " in edit mode adds a tag pill', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Buy milk #errands ');
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        final updated = tasks.singleWhere((t) => t.id == created.id);
+        expect(updated.title, 'Buy milk ');
+        expect(updated.tags, ['errands']);
+      });
+
+      testWidgets('tapping a pill delete icon removes that tag', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, tags: ['groceries', 'errands']);
+        final tagged = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == created.id);
+        await _pumpOpenButton(tester, container, task: tagged);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.widgetWithText(InputChip, 'groceries'),
+            matching: find.byIcon(Icons.clear),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final tasks = container.read(taskListProvider).value!;
+        final updated = tasks.singleWhere((t) => t.id == created.id);
+        expect(updated.tags, ['errands']);
+        expect(find.text('groceries'), findsNothing);
       });
 
       testWidgets('Delete asks for confirmation, then removes the task and '

@@ -15,13 +15,14 @@ abstract class TaskRepository {
   Future<Task> add({required String title, String? categoryId});
 
   /// Updates [task] in place, replacing any of [title]/[closed]/
-  /// [categoryId] that are given and leaving the rest unchanged. Returns
-  /// the updated task.
+  /// [categoryId]/[tags] that are given and leaving the rest unchanged.
+  /// Returns the updated task.
   Future<Task> update(
     Task task, {
     String? title,
     bool? closed,
     String? categoryId,
+    List<String>? tags,
   });
 
   /// Removes [task].
@@ -54,11 +55,13 @@ class InMemoryTaskRepository implements TaskRepository {
     String? title,
     bool? closed,
     String? categoryId,
+    List<String>? tags,
   }) async {
     final updated = task.copyWith(
       title: title,
       closed: closed,
       categoryId: categoryId,
+      tags: tags,
     );
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) {

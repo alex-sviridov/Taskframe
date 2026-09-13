@@ -127,6 +127,46 @@ test.describe('wide viewport', () => {
     await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
   });
 
+  test('typing "#tag " strips it from the title and shows a tag pill', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    // The extraction rewrites the field's own value as soon as the
+    // trailing "#groceries " is typed, so the textbox never settles on
+    // that raw value — `fill` it directly and assert on the result.
+    await page.getByRole('textbox').fill('Buy #groceries ');
+
+    // A pill renders as a Flutter `Chip`, exposed in the semantics tree
+    // as a checkbox labeled with the tag text.
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveValue('Buy ');
+
+    await dismissTaskModal(page);
+
+    await expect(page.getByRole('button', { name: 'Buy' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toBeVisible();
+  });
+
+  test('removing a tag pill in the edit modal persists the removal', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: 'Add task' }).click();
+    await page.getByRole('textbox').fill('Buy #groceries ');
+    const pill = page.getByRole('checkbox', { name: 'groceries' });
+    await expect(pill).toBeVisible();
+
+    // `InputChip`'s delete affordance briefly reports as disabled in the
+    // semantics tree while its entrance animation settles (harmless —
+    // the tap handler itself works, as covered by the Flutter widget
+    // tests), so Playwright's actionability check never clears; force
+    // the click rather than waiting on it.
+    await pill.getByRole('button', { name: 'Delete' }).click({ force: true });
+    await expect(pill).toHaveCount(0);
+
+    await dismissTaskModal(page);
+    await expect(page.getByRole('checkbox', { name: 'groceries' })).toHaveCount(0);
+  });
+
   test('Delete asks for confirmation, then removes the task', async ({
     page,
   }) => {

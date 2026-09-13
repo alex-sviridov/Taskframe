@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
+import 'package:taskframe/features/task/widgets/tag_pills.dart';
 import 'package:taskframe/features/task/widgets/task_card.dart';
 
 Future<ProviderContainer> _seededContainer() async {
@@ -115,6 +116,40 @@ void main() {
 
       final tasks = container.read(taskListProvider).value!;
       expect(tasks.single.closed, isTrue);
+    });
+
+    testWidgets('shows tag pills under the title', (tester) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final task = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(task, tags: ['groceries']);
+      final tagged = container
+          .read(taskListProvider)
+          .value!
+          .singleWhere((t) => t.id == task.id);
+
+      await _pumpCard(tester, container, tagged);
+
+      expect(find.text('groceries'), findsOneWidget);
+    });
+
+    testWidgets('renders no TagPills widget for an untagged task', (
+      tester,
+    ) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final task = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+
+      await _pumpCard(tester, container, task);
+
+      final pills = tester.widget<TagPills>(find.byType(TagPills));
+      expect(pills.tags, isEmpty);
     });
 
     testWidgets('tapping the card body (not the checkbox) calls onTap', (

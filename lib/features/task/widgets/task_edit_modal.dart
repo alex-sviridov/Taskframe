@@ -5,6 +5,8 @@ import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
+import 'package:taskframe/features/task/tag_parsing.dart';
+import 'package:taskframe/features/task/widgets/tag_pills.dart';
 
 /// Opens the edit modal for [task] (edit mode) or, when [task] is `null`,
 /// for creating a new task (create mode). Near-fullscreen on a narrow
@@ -43,6 +45,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   late final TextEditingController _titleController;
   late String _categoryId;
   late bool _closed;
+  late List<String> _tags;
 
   /// The task backing this modal. Starts as `null` in create mode until
   /// [_onTitleChanged] creates it on the first non-empty keystroke — from
@@ -64,6 +67,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _titleController = TextEditingController(text: widget.task?.title ?? '');
     _categoryId = widget.task?.categoryId ?? Category.defaultId;
     _closed = widget.task?.closed ?? false;
+    _tags = widget.task?.tags ?? [];
   }
 
   @override
@@ -76,16 +80,33 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// exist yet — the first non-empty value creates it (carrying along
   /// whatever category/closed the user already picked before typing);
   /// every keystroke after that, in either mode, updates the existing task.
-  Future<void> _onTitleChanged(String title) async {
+  ///
+  /// When the cursor is at the end and the just-typed text ends with
+  /// `#tag `, that chunk is stripped from the title and added as a tag.
+  Future<void> _onTitleChanged(String rawTitle) async {
+    final atEnd = _titleController.selection.baseOffset == rawTitle.length;
+    final extraction = atEnd ? extractTrailingTag(rawTitle) : null;
+    final title = extraction?.title ?? rawTitle;
+    if (extraction != null) {
+      _titleController.value = TextEditingValue(
+        text: title,
+        selection: TextSelection.collapsed(offset: title.length),
+      );
+    }
+    final newTags = extraction != null && !_tags.contains(extraction.tag)
+        ? [..._tags, extraction.tag]
+        : null;
+    if (newTags != null) setState(() => _tags = newTags);
+
     final notifier = ref.read(taskListProvider.notifier);
     if (_task != null) {
-      await notifier.updateTask(_task!, title: title);
+      await notifier.updateTask(_task!, title: title, tags: newTags);
       return;
     }
     if (_pendingCreate != null) {
       final created = await _pendingCreate!;
       if (!mounted) return;
-      await notifier.updateTask(created, title: title);
+      await notifier.updateTask(created, title: title, tags: newTags);
       return;
     }
     if (title.isEmpty) return;
@@ -93,11 +114,25 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _pendingCreate = future;
     final created = await future;
     if (_closed) await notifier.updateTask(created, closed: true);
+    if (newTags != null) await notifier.updateTask(created, tags: newTags);
     if (!mounted) return;
     setState(() {
       _task = created;
       _pendingCreate = null;
     });
+  }
+
+  /// Removes [tag] from this task's tags, persisting the change.
+  Future<void> _onTagRemoved(String tag) async {
+    final tags = [
+      for (final t in _tags)
+        if (t != tag) t,
+    ];
+    setState(() => _tags = tags);
+    final task = _task;
+    if (task != null) {
+      await ref.read(taskListProvider.notifier).updateTask(task, tags: tags);
+    }
   }
 
   Future<void> _onCategorySelected(String id) async {
@@ -173,6 +208,10 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                 ),
               ],
             ),
+            if (_tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              TagPills(tags: _tags, onRemoved: _onTagRemoved),
+            ],
             const SizedBox(height: 16),
             BlockCategoryPicker(
               selectedCategoryId: _categoryId,

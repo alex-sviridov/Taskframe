@@ -41,7 +41,7 @@ void main() {
       expect(tasks.map((t) => t.title), ['First', 'Second']);
     });
 
-    test('update changes title/closed/categoryId', () async {
+    test('update changes title/closed/categoryId/tags', () async {
       final added = await repository.add(title: 'Buy milk');
 
       final updated = await repository.update(
@@ -49,11 +49,22 @@ void main() {
         title: 'Buy oat milk',
         closed: true,
         categoryId: 'category-1',
+        tags: ['errands'],
       );
 
       expect(updated.title, 'Buy oat milk');
       expect(updated.closed, isTrue);
       expect(updated.categoryId, 'category-1');
+      expect(updated.tags, ['errands']);
+    });
+
+    test('tags persist through a later load', () async {
+      final added = await repository.add(title: 'Buy milk');
+      await repository.update(added, tags: ['errands']);
+
+      final tasks = await repository.load();
+
+      expect(tasks.singleWhere((t) => t.id == added.id).tags, ['errands']);
     });
 
     test('update leaves fields unspecified as null unchanged', () async {
