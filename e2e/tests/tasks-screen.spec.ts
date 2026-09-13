@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
+import { clickUntilHidden, fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -35,10 +35,14 @@ async function addCategoryAndGoToTasks(page: Page, name: string): Promise<void> 
 /**
  * Dismisses the task edit modal by clicking its barrier/scrim, well
  * outside the modal's own bounds — the modal has no Save/Cancel button of
- * its own to tap instead, since every field applies live.
+ * its own to tap instead, since every field applies live. Retried (see
+ * {@link clickUntilHidden}) since, like every other raw click in this
+ * suite, it can be silently dropped under CI load, leaving the modal
+ * open and every assertion that expects it closed racing a gesture that
+ * never actually landed.
  */
 async function dismissTaskModal(page: Page): Promise<void> {
-  await page.mouse.click(770, 20);
+  await clickUntilHidden(page, { x: 770, y: 20 }, page.getByRole('textbox'));
 }
 
 test.describe('wide viewport', () => {
@@ -151,6 +155,14 @@ test.describe('wide viewport', () => {
     + 'dismissed', async ({ page }) => {
     await page.getByRole('button', { name: 'Add task' }).click();
     await page.getByRole('textbox').fill('Buy #groceries');
+    // Dismissing right after `fill()` races the async onChanged chain
+    // (task creation) under CI's slower scheduling: the barrier click
+    // can land before that chain has even reached its first `await`, so
+    // the exit-time tag extraction finds no task yet to apply to and
+    // silently does nothing. The Delete button only appears once the
+    // task actually exists (`_task != null` in the edit modal), so wait
+    // for it as the real synchronization point before dismissing.
+    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
 
     await dismissTaskModal(page);
 
@@ -210,7 +222,7 @@ test.describe('narrow viewport', () => {
 
     await page.getByRole('button', { name: 'Add task' }).click();
     await fillTextboxUntilSet(page.getByRole('textbox'), 'Buy milk');
-    await page.mouse.click(200, 10);
+    await clickUntilHidden(page, { x: 200, y: 10 }, page.getByRole('textbox'));
 
     await expect(page.getByRole('button', { name: 'Buy milk' })).toBeVisible();
     await expect(page.getByRole('checkbox')).toHaveCount(1);

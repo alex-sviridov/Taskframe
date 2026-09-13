@@ -93,6 +93,34 @@ export async function clickUntilVisible(
 }
 
 /**
+ * Clicks [point] and confirms it took effect by waiting for [marker] to
+ * become hidden, retrying the raw click itself if it doesn't — the
+ * dismiss-a-modal-via-barrier-tap counterpart to {@link clickUntilVisible}
+ * (see its doc comment for why a single click can't be trusted under CI
+ * load).
+ */
+export async function clickUntilHidden(
+  page: Page,
+  point: { x: number; y: number },
+  marker: Locator,
+  { attempts = 3, timeoutMs = 2000 }: { attempts?: number; timeoutMs?: number } = {},
+): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    await page.mouse.click(point.x, point.y);
+    const hidden = await marker
+      .waitFor({ state: 'hidden', timeout: timeoutMs })
+      .then(() => true)
+      .catch(() => false);
+    if (hidden) return;
+    if (attempt === attempts) {
+      throw new Error(
+        `Click at (${point.x}, ${point.y}) did not dismiss the expected element after ${attempts} attempts`,
+      );
+    }
+  }
+}
+
+/**
  * Runs [openDraft] (a raw double-click gesture that opens a block draft,
  * performed before Flutter's semantics tree activates — see
  * {@link doubleClickFreeSpace}) and confirms it worked by waiting for
