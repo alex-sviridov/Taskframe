@@ -232,7 +232,6 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                   Expanded(
                     child: TextField(
                       controller: _titleController,
-                      autofocus: true,
                       style: TextStyle(
                         decoration: _closed ? TextDecoration.lineThrough : null,
                       ),

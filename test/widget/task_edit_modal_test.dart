@@ -36,7 +36,7 @@ Future<void> _pumpOpenButton(
 
 void main() {
   group('TaskEditModal', () {
-    testWidgets('the title field is autofocused when the modal opens', (
+    testWidgets('the title field is not autofocused when the modal opens', (
       tester,
     ) async {
       final container = await _seededContainer();
@@ -47,7 +47,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final titleField = tester.widget<TextField>(find.byType(TextField));
-      expect(titleField.autofocus, isTrue);
+      expect(titleField.autofocus, isFalse);
     });
 
     testWidgets('shows no Save/Cancel buttons', (tester) async {
