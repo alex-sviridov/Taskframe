@@ -12,20 +12,21 @@ text remains. A floating dropdown offers autocomplete for an unfinished
 token at the end of the field.
 
 This spec replaces that two-tier model with a single unified text input:
-one string is the only source of truth, tokens render as inline pill
-chips within the same text flow (not a separate row), and everything
-else (filtering, URL sync, autocomplete) is derived from that one string
-by parsing it fresh on every change.
+one string is the only source of truth, tokens render as styled text
+inline within the same flow (not a separate row), and everything else
+(filtering, URL sync, autocomplete) is derived from that one string by
+parsing it fresh on every change.
 
 ## Goals
 
 - One `TextField`, one `TextEditingController`, one string. No
   `_selectedTags`/`_openedFilter` fields extracted out of the text.
 - Recognized tokens (`#tag`, `#!tag`, `/opened`, `/!opened`) render as
-  rounded, padded chip widgets inline with the surrounding plain text —
-  the same visual language as today's pills (block icon + error colors
-  when excluded, radio-button icon for the status pill).
-- Tapping a chip toggles it between included/excluded, mutating the `!`
+  colored/highlighted text inline with the surrounding plain text —
+  bold + tinted background, error-toned when excluded — rather than a
+  rounded chip shape (see Approach: true chip widgets were tried and
+  dropped for a real alignment problem).
+- Tapping a token toggles it between included/excluded, mutating the `!`
   character in place.
 - Removing a token is plain text editing (backspace/select+delete) — no
   delete (X) affordance on the inline chip.
@@ -46,47 +47,51 @@ by parsing it fresh on every change.
 
 ## Approach
 
-**"Ghost field" — a real, invisible-text `TextField` for editing, with a
-decorative chip overlay painted on top.**
+**A custom `TextEditingController.buildTextSpan` override, styling
+recognized token ranges directly within the one real, actively-edited
+field — no second field, no overlay.**
 
-Two other approaches were considered and rejected:
+Three approaches were considered.
 
-- Rendering chips *inside* the actively-edited text via a custom
-  `TextEditingController.buildTextSpan` override returning `WidgetSpan`s
-  directly. Flutter's cursor/selection math for `WidgetSpan` inside text
-  that's actually being edited is not properly supported — a chip
-  occupies one internal "object replacement" position decoupled from its
-  visual width, so clicking near a chip, arrow-keying past it, or
-  selecting across it behaves unpredictably. This is the natural first
-  idea and the reason it's usually abandoned.
-- Pulling in a third-party rich-text-editing package. This repo has no
-  rich-text dependencies today, off-the-shelf packages don't natively
-  support "tap a token to toggle a custom state," and the integration
-  risk isn't justified for one feature.
+The first idea — a ghost/invisible `TextField` for editing, with a
+decorative `WidgetSpan`-based chip overlay painted on top — was worked
+through in detail and abandoned: a chip's rendered width (padded,
+rounded, with an icon) is never exactly the width of the raw characters
+it stands in for, so the overlay's line layout and the invisible field's
+line layout diverge in width after the *first* token. Everything
+rendered after that point drifts out of alignment between the two
+layers — a real, not cosmetic, problem for any query with more than one
+token or free text following a token, i.e. exactly the cases this
+feature exists for.
 
-The ghost-field technique sidesteps the hard problem entirely: the real
-`TextField` (`style: TextStyle(color: Colors.transparent)`, cursor and
-selection colors unaffected) handles 100% standard plain-text editing —
-typing, cursor placement, selection, IME — with zero special-casing.
-Its text is invisible; what's visible is a separately-painted
-`Text.rich` sitting in the same position (`Stack`), built from the exact
-same string, where recognized token ranges become `WidgetSpan`s
-containing a small chip widget and everything else is plain `TextSpan`
-text. This is the standard technique behind syntax-highlighting and
-mention-chip text editors.
+A true inline `WidgetSpan` chip *inside the actively-edited text itself*
+(no ghost field, via the same `buildTextSpan` override) was also
+rejected: Flutter's cursor/selection math for a `WidgetSpan` inside text
+that's actually being edited is not properly supported — a chip occupies
+one internal "object replacement" position decoupled from its visual
+width, so clicking near a chip, arrow-keying past it, or selecting
+across it behaves unpredictably.
 
-Pointer routing falls out naturally: a plain `TextSpan` has no
-recognizer and isn't a distinct widget, so taps there aren't claimed by
-the overlay and fall through to the real `TextField` beneath for normal
-cursor placement. A `WidgetSpan`'s chip *is* a real widget with its own
-gesture handling, so a tap precisely on a chip is claimed by the chip
-itself.
+Pulling in a third-party rich-text-editing package was rejected as
+before: no rich-text dependencies exist in this repo today, no
+off-the-shelf package natively supports "tap a token to toggle a custom
+state," and the integration risk isn't justified for one feature.
 
-The one real cost: the overlay's plain-text styling and the real
-field's `style` must be kept pixel-identical (font family/size/weight/
-letter-spacing, padding) so glyph positions in the invisible field line
-up with what the overlay paints, keeping the cursor visually where it
-looks like it should be.
+**What's left, and what this spec uses:** style the token's *own
+characters* differently — bold, tinted foreground/background — rather
+than replacing them with a differently-sized widget. Since a styled
+`TextSpan` occupies exactly the width of the text it contains (it's the
+same characters, just colored), there is no alignment problem at all,
+for any number of tokens anywhere in the string. This needs no ghost
+field: `TextEditingController.buildTextSpan` is overridden directly on
+the one real, actively-edited controller, returning a `TextSpan` tree
+where recognized ranges get a distinct `style` and a
+`TextSpan.recognizer` (a `TapGestureRecognizer`) — Flutter's native,
+fully-supported mechanism for making part of a text span tappable,
+including inside an editable field. A tap landing precisely on a
+token's characters fires its recognizer (toggle); a tap anywhere else is
+unclaimed and falls through to the field's normal cursor-placement
+behavior, exactly as today.
 
 ## Data flow
 
@@ -124,47 +129,61 @@ for tags/status.
 
 ## Rendering
 
-`_UnifiedQueryField` (replacing today's plain `TextField` in the
-AppBar's `bottom`):
+`_UnifiedQueryController extends TextEditingController`, overriding
+`buildTextSpan`:
 
 ```
-Stack(
-  children: [
-    TextField(
-      controller: _searchController,
-      focusNode: _searchFocusNode,
-      style: /* transparent text color, everything else matches the
-                overlay's plain-span style */,
-      decoration: /* same hint/prefix/clear-suffix as today */,
-    ),
-    Text.rich(
-      TextSpan(children: [
-        // walk _parseQuery(text)'s token ranges left-to-right,
-        // alternating plain TextSpan(text: segment) and
-        // WidgetSpan(child: _InlineFilterPill(...))
-      ]),
-    ),
-  ],
-)
+@override
+TextSpan buildTextSpan({
+  required BuildContext context,
+  TextStyle? style,
+  required bool withComposing,
+}) {
+  final parsed = parseSearchQuery(text);
+  final tokens = /* parsed.tagTokens + parsed.statusToken, as
+                    (range, excluded) pairs, sorted by range.start */;
+  final colors = Theme.of(context).colorScheme;
+  final spans = <TextSpan>[];
+  var cursor = 0;
+  for (final token in tokens) {
+    if (token.range.start > cursor) {
+      spans.add(TextSpan(text: text.substring(cursor, token.range.start), style: style));
+    }
+    spans.add(TextSpan(
+      text: text.substring(token.range.start, token.range.end),
+      style: (style ?? const TextStyle()).copyWith(
+        fontWeight: FontWeight.w600,
+        color: token.excluded ? colors.onErrorContainer : colors.onPrimaryContainer,
+        backgroundColor: token.excluded ? colors.errorContainer : colors.primaryContainer,
+      ),
+      recognizer: TapGestureRecognizer()
+        ..onTap = () => onTokenTapped(token.range, excluded: token.excluded),
+    ));
+    cursor = token.range.end;
+  }
+  if (cursor < text.length) {
+    spans.add(TextSpan(text: text.substring(cursor), style: style));
+  }
+  return TextSpan(style: style, children: spans);
+}
 ```
 
-The overlay is *not* wrapped in `IgnorePointer`: a plain `TextSpan` has
-no recognizer and isn't a distinct widget, so `RichText`'s hit-testing
-never claims a hit there — those pixels fall through to the `TextField`
-beneath on their own. Only a `WidgetSpan`'s chip is an actual widget
-that can claim its own pixels, so only taps precisely on a chip are
-intercepted; everything else reaches the real field untouched.
+The `TextField` itself is otherwise unchanged from today — same
+`decoration` (hint/prefix icon/clear suffix), same single controller,
+no `Stack`, no second field. A tap landing on a token's own characters
+fires that span's `TapGestureRecognizer` (toggle); a tap anywhere else
+has no recognizer to claim it and falls through to `TextField`'s normal
+cursor-placement handling, unchanged from today.
 
-`_InlineFilterPill` reuses today's `_FilterPill` visuals (block icon +
-error colors when excluded, radio-button icon for the status pill) but
-drops the delete (X) affordance — its only interaction is `onPressed`
-(toggle), wrapped in `WidgetSpan(alignment: PlaceholderAlignment.middle,
-child: ...)` so it sits on the text baseline.
+Each `buildTextSpan` call creates fresh `TapGestureRecognizer`s for the
+current token set; the controller disposes the previous batch at the
+start of each call (and any stragglers in its own `dispose()`), which is
+the standard lifecycle for span recognizers rebuilt on every change.
 
 ## Interaction
 
-- **Toggling**: a chip's `onPressed` calls `_toggleTokenAt(TextRange
-  range)`, which inserts/removes the `!` character immediately after the
+- **Toggling**: `onTokenTapped(TextRange range, {required bool
+  excluded})` inserts/removes the `!` character immediately after the
   `#`/`/` at that exact range via a `TextEditingValue` replace, shifting
   the cursor offset by ±1 if it was positioned after the edit point.
 - **Autocomplete at cursor**: the existing partial-token regexes
@@ -184,12 +203,18 @@ child: ...)` so it sits on the text baseline.
 
 Most of `tasks_screen_test.dart`'s search-related tests currently assert
 against `_selectedTags`/a separate `InputChip` row and need rewriting,
-not just extending, since that model goes away. New coverage should
+not just extending, since that model goes away. Since tokens no longer
+render as separate widgets (`InputChip`/`ListTile` in earlier turns),
+assertions shift from widget-tree lookups to checking rendered
+`TextSpan` styling/`recognizer` presence at the right ranges, plus
+functional outcomes (filtered task list, URL). New coverage should
 include:
 
-- A mixed string (`"Buy milk #groceries /opened"`) renders the right
-  inline chips in the right positions and filters correctly.
-- Tapping a chip toggles its `!` in place and re-renders/re-filters.
+- A mixed string (`"Buy milk #groceries /opened"`) produces the right
+  spans (plain vs. styled+tappable at the right ranges) and filters
+  correctly.
+- Tapping a token's rendered text toggles its `!` in place and
+  re-renders/re-filters.
 - Backspacing through a token's characters removes it and un-filters.
 - Autocomplete triggers for a partial token with the cursor positioned
   mid-string (not just at the end), and completes at that position.
@@ -200,20 +225,26 @@ include:
 
 Existing `e2e/tests/tasks-screen.spec.ts` search/tag coverage will also
 need rework: selectors currently assume a separate search `textbox`
-plus separate `InputChip` pills outside it; with pills now painted
-inline over a ghost field, Playwright's accessibility-tree view of the
-field's *visible* text vs the chips' own semantics needs re-verification
-(likely via the same kind of probe-test approach used earlier this
-session) before finalizing selectors.
+plus separate `InputChip` pills outside it; with tokens now styled text
+inside the one field rather than separate semantic nodes, Playwright's
+accessibility-tree view needs re-verification (via the same kind of
+probe-test approach used earlier this session) before finalizing
+selectors — clicking a specific token's on-screen position (via
+coordinates) is likely the reliable mechanism, since there's no longer a
+separate tappable element to target by role/name.
 
 ## Risks
 
-- Pixel alignment between the ghost field and the overlay depends on
-  exact `TextStyle`/padding parity and needs real-device verification in
-  the running app, not just widget tests.
+- `TextSpan.recognizer`-based taps inside an actively-edited `TextField`
+  is well-documented, standard Flutter behavior, but should get an early
+  smoke check in the running app before building the rest of the feature
+  on top of it.
 - This is a rewrite of the search bar's internals built over the last
   several turns of this session (tag pills, status pill, autocomplete) —
   not additive. Expect the bulk of `tasks_screen.dart`'s state/rendering
   for the search bar to change.
 - Breaking URL-shape change: old `?tags=...&status=...` links stop being
   understood (accepted).
+- e2e selectors for tapping a token lose the "target by accessible
+  role/name" mechanism they relied on for the separate-pill design;
+  coordinate-based clicks are more brittle to incidental layout changes.
