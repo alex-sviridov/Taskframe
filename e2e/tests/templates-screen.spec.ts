@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import {
   clickCenter,
-  dragMouse,
+  dragMouseUntilTrue,
   fillTextboxAndSubmit,
   gotoAndWaitForBoot,
 } from './support/gestures';
@@ -156,8 +156,20 @@ test.describe('narrow viewport', () => {
 
     // Free grid space, well below the header, dragged leftward like a
     // real finger swipe (a genuine drag rather than a fling, matching
-    // this suite's other drag helper).
-    await dragMouse(page, { x: 300, y: 300 }, { x: 20, y: 300 });
+    // this suite's other drag helper). Retried like this suite's block
+    // drags: the same "gesture silently dropped under CI load" race
+    // dragMouseUntilMoved guards against, but success here is the page
+    // having turned, not a locator's box having moved.
+    await dragMouseUntilTrue(page, { x: 300, y: 300 }, { x: 20, y: 300 }, async () => {
+      try {
+        await expect(page.getByRole('button', { name: 'Next template' })).toBeDisabled({
+          timeout: 1000,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    });
 
     // Swiped forward to the last template: "Next" disabled again, same
     // signal the arrow-paging test above uses and for the same reason.

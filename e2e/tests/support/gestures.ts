@@ -259,3 +259,27 @@ export async function dragMouseUntilMoved(
   }
   throw new Error('unreachable');
 }
+
+/**
+ * Drags the mouse from [from] to [to] (see {@link dragMouse}), retrying up
+ * to [attempts] times until [succeeded] returns `true`. Same "gesture
+ * silently dropped under CI load" issue {@link dragMouseUntilMoved}
+ * guards against, but for a drag whose success isn't visible as some
+ * locator's bounding box moving — e.g. a swipe that pages to a different
+ * view. The caller supplies its own success check instead.
+ */
+export async function dragMouseUntilTrue(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  succeeded: () => Promise<boolean>,
+  { attempts = 3, steps = 10 }: { attempts?: number; steps?: number } = {},
+): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    await dragMouse(page, from, to, { steps });
+    if (await succeeded()) return;
+    if (attempt === attempts) {
+      throw new Error(`Drag from (${from.x}, ${from.y}) to (${to.x}, ${to.y}) never succeeded after ${attempts} attempts`);
+    }
+  }
+}
