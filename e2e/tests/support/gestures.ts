@@ -50,6 +50,29 @@ export async function fillTextboxUntilSet(
 }
 
 /**
+ * {@link fillTextboxUntilSet}, but for a field whose value the app itself
+ * rewrites as a side effect of the fill (so waiting for the typed value to
+ * stick, as `fillTextboxUntilSet` does, would never succeed) — the caller
+ * supplies its own check for "the fill was actually picked up" instead
+ * (typically: the field now holds the app's rewritten value).
+ */
+export async function fillTextboxUntilTrue(
+  textbox: Locator,
+  value: string,
+  succeeded: () => Promise<boolean>,
+  attempts = 3,
+): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    await textbox.fill(value);
+    await textbox.page().waitForTimeout(100);
+    if (await succeeded()) return;
+    if (attempt === attempts) {
+      throw new Error(`Textbox never picked up a fill of "${value}" after ${attempts} attempts`);
+    }
+  }
+}
+
+/**
  * {@link fillTextboxUntilSet}, then presses Enter — for the common case
  * where the caller was going to submit the field that way regardless.
  */

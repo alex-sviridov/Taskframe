@@ -1,6 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickUntilHidden, fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
+import {
+  clickUntilHidden,
+  fillTextboxUntilSet,
+  fillTextboxUntilTrue,
+  gotoAndWaitForBoot,
+} from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -137,8 +142,13 @@ test.describe('wide viewport', () => {
     await page.getByRole('button', { name: 'Add task' }).click();
     // The extraction rewrites the field's own value as soon as the
     // trailing "#groceries " is typed, so the textbox never settles on
-    // that raw value — `fill` it directly and assert on the result.
-    await page.getByRole('textbox').fill('Buy #groceries ');
+    // that raw value — fillTextboxUntilSet's equality check would never
+    // pass. Use fillTextboxUntilTrue instead, checking for the app's
+    // rewritten value, so a fill the app's text-editing client didn't
+    // actually pick up (see fillTextboxUntilSet's doc comment) still
+    // gets retried rather than silently trusted.
+    await fillTextboxUntilTrue(page.getByRole('textbox'), 'Buy #groceries ', async () =>
+      (await page.getByRole('textbox').inputValue().catch(() => '')) === 'Buy ');
 
     // A pill renders as a Flutter `Chip`, exposed in the semantics tree
     // as a checkbox labeled with the tag text.
@@ -154,14 +164,16 @@ test.describe('wide viewport', () => {
   test('a trailing "#tag" with no space is still added when the modal is '
     + 'dismissed', async ({ page }) => {
     await page.getByRole('button', { name: 'Add task' }).click();
-    await page.getByRole('textbox').fill('Buy #groceries');
-    // Dismissing right after `fill()` races the async onChanged chain
-    // (task creation) under CI's slower scheduling: the barrier click
-    // can land before that chain has even reached its first `await`, so
-    // the exit-time tag extraction finds no task yet to apply to and
-    // silently does nothing. The Delete button only appears once the
-    // task actually exists (`_task != null` in the edit modal), so wait
-    // for it as the real synchronization point before dismissing.
+    // Nothing rewrites the field while typing here (extraction only
+    // happens on exit), so — unlike the trailing-space case — a plain
+    // fillTextboxUntilSet can wait for the typed value to actually
+    // stick, guarding against a fill the app's text-editing client
+    // didn't pick up (see its doc comment).
+    await fillTextboxUntilSet(page.getByRole('textbox'), 'Buy #groceries');
+    // Also wait for the Delete button — proof the task itself was
+    // created, not just that the field holds the right text — before
+    // dismissing, since the exit-time tag extraction needs a task to
+    // apply to.
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
 
     await dismissTaskModal(page);
@@ -174,7 +186,10 @@ test.describe('wide viewport', () => {
     page,
   }) => {
     await page.getByRole('button', { name: 'Add task' }).click();
-    await page.getByRole('textbox').fill('Buy #groceries ');
+    // See the "strips it from the title" test above for why this needs
+    // fillTextboxUntilTrue rather than a plain fill or fillTextboxUntilSet.
+    await fillTextboxUntilTrue(page.getByRole('textbox'), 'Buy #groceries ', async () =>
+      (await page.getByRole('textbox').inputValue().catch(() => '')) === 'Buy ');
     const pill = page.getByRole('checkbox', { name: 'groceries' });
     await expect(pill).toBeVisible();
 
