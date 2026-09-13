@@ -7,8 +7,8 @@ const openedStatusWord = 'opened';
 
 /// A `#tag`/`#!tag` occurrence found anywhere in a unified search query
 /// string, together with the exact range of characters it occupies —
-/// used to mutate exactly that range when toggled and to know where
-/// to style it when rendering.
+/// used to mutate exactly that range when toggled (see [toggleQueryToken])
+/// and to know where to style it when rendering.
 class TagToken {
   /// Creates a tag token.
   const new({
@@ -125,4 +125,32 @@ List<({TextRange range, bool excluded})> orderedTokenRanges(
   ];
   return ranges
     ..sort((a, b) => a.range.start.compareTo(b.range.start));
+}
+
+/// Returns [text] with the token at [range] toggled between its
+/// included and excluded form (inserting/removing the `!` right after
+/// the `#`/`/`), and the equivalent offset for [cursorOffset] once that
+/// edit is applied (shifted by the token's change in length if the
+/// cursor was positioned at or after the edit point, unchanged
+/// otherwise).
+({String text, int cursorOffset}) toggleQueryToken(
+  String text,
+  TextRange range, {
+  required bool currentlyExcluded,
+  required int cursorOffset,
+}) {
+  final bangIndex = range.start + 1;
+  final String newText;
+  final int delta;
+  if (currentlyExcluded) {
+    newText = text.replaceRange(bangIndex, bangIndex + 1, '');
+    delta = -1;
+  } else {
+    newText = text.replaceRange(bangIndex, bangIndex, '!');
+    delta = 1;
+  }
+  final newCursor = cursorOffset >= bangIndex
+      ? cursorOffset + delta
+      : cursorOffset;
+  return (text: newText, cursorOffset: newCursor);
 }

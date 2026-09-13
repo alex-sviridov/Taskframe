@@ -87,4 +87,66 @@ void main() {
       expect(ranges.last.range.start, 8); // "#groceries"
     });
   });
+
+  group('toggleQueryToken', () {
+    test('toggling an included tag to excluded inserts "!" right after '
+        'the "#"', () {
+      final parsed = parseSearchQuery('#groceries');
+      final result = toggleQueryToken(
+        '#groceries',
+        parsed.tagTokens.single.range,
+        currentlyExcluded: false,
+        cursorOffset: 0,
+      );
+      expect(result.text, '#!groceries');
+    });
+
+    test('toggling an excluded tag to included removes the "!"', () {
+      final result = toggleQueryToken(
+        '#!groceries',
+        const TextRange(start: 0, end: 11),
+        currentlyExcluded: true,
+        cursorOffset: 0,
+      );
+      expect(result.text, '#groceries');
+    });
+
+    test('the cursor shifts forward by 1 when it was at or after the '
+        'edit point', () {
+      // "Buy #groceries", cursor right after "groceries" (offset 14).
+      final result = toggleQueryToken(
+        'Buy #groceries',
+        const TextRange(start: 4, end: 14),
+        currentlyExcluded: false,
+        cursorOffset: 14,
+      );
+      expect(result.text, 'Buy #!groceries');
+      expect(result.cursorOffset, 15);
+    });
+
+    test('the cursor is unchanged when it was before the edit point', () {
+      // "Buy #groceries", cursor after "Buy " (offset 4), right at the
+      // token's own start — the edit happens one character later (right
+      // after the "#"), so this cursor position is unaffected.
+      final result = toggleQueryToken(
+        'Buy #groceries',
+        const TextRange(start: 4, end: 14),
+        currentlyExcluded: false,
+        cursorOffset: 4,
+      );
+      expect(result.cursorOffset, 4);
+    });
+
+    test('toggling a status token works the same way, with "/"', () {
+      final parsed = parseSearchQuery('/opened');
+      final result = toggleQueryToken(
+        '/opened',
+        parsed.statusToken!.range,
+        currentlyExcluded: false,
+        cursorOffset: 7,
+      );
+      expect(result.text, '/!opened');
+      expect(result.cursorOffset, 8);
+    });
+  });
 }
