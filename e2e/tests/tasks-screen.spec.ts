@@ -2,6 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import {
   clickUntilHidden,
+  clickUntilVisible,
   fillTextboxUntilSet,
   fillTextboxUntilTrue,
   gotoAndWaitForBoot,
@@ -317,14 +318,17 @@ test.describe('wide viewport', () => {
       // of the text in empty space. Adjust the x offset if it doesn't
       // land on the token in practice (re-run with a Playwright trace to
       // see exactly where the click landed vs. where the text renders).
+      // Wrapped in clickUntilVisible (see support/gestures.ts) rather than
+      // a raw page.mouse.click, since a single synthetic click can be
+      // silently dropped by Flutter web's canvas hit-testing under CI
+      // load — "Sell couch" becoming visible is the marker that the tap
+      // actually landed and toggled the token, not just a fixed wait.
       const box = (await search.boundingBox())!;
-      await page.mouse.click(box.x + 45, box.y + box.height / 2);
-      // Tap-to-toggle and the field's own editing-focus state don't
-      // always settle in the same frame under headless/CI load; give it
-      // a beat before the next action reads/writes the field (see
-      // support/gestures.ts for other examples of this kind of
-      // CI-load-only flakiness).
-      await page.waitForTimeout(300);
+      await clickUntilVisible(
+        page,
+        { x: box.x + 45, y: box.y + box.height / 2 },
+        page.getByRole('button', { name: 'Sell couch' }),
+      );
 
       await expect(page.getByRole('button', { name: 'Buy milk' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Sell couch' })).toBeVisible();
@@ -372,21 +376,33 @@ test.describe('wide viewport', () => {
       const suggestion = page.getByRole('button', { name: 'groceries' });
       await expect(suggestion).toBeVisible();
       const suggestionBox = (await suggestion.boundingBox())!;
-      await page.mouse.click(
-        suggestionBox.x + suggestionBox.width / 2,
-        suggestionBox.y + suggestionBox.height / 2,
+      // Wrapped in clickUntilHidden (see support/gestures.ts) rather than
+      // a raw page.mouse.click: a single synthetic click can be silently
+      // dropped by Flutter web's canvas hit-testing under CI load, and the
+      // suggestion closing (rather than a fixed wait) is the marker that
+      // the tap actually landed and completed the tag.
+      await clickUntilHidden(
+        page,
+        {
+          x: suggestionBox.x + suggestionBox.width / 2,
+          y: suggestionBox.y + suggestionBox.height / 2,
+        },
+        suggestion,
       );
-      await page.waitForTimeout(300);
 
       // Confirmed via probing: selecting the suggestion updates the app's
       // real text-editing state (the task list filters correctly right
       // away), but the search field's underlying DOM `<input>` — what
       // `inputValue()`/`toHaveValue()` read — is a Flutter-web semantics
       // mirror that only resyncs to the true value when the field is
-      // next focused; it stays stale (still "#gro") until then. Click the
-      // field itself to force that resync before asserting its value.
-      const box = (await search.boundingBox())!;
-      await page.mouse.click(box.x + 10, box.y + box.height / 2);
+      // next focused; it stays stale (still "#gro") until then. Force
+      // that resync via a direct DOM focus() rather than a synthetic
+      // pointer click — focus() isn't subject to the canvas-hit-testing
+      // drop risk a raw click carries (there's no click-retry marker for
+      // "the mirrored value changed" to wrap around, since the value
+      // isn't reflected in any DOM attribute or text node Playwright can
+      // observe — confirmed by probing).
+      await search.focus();
       await page.waitForTimeout(300);
 
       await expect(search).toHaveValue('#groceries ');
