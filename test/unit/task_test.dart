@@ -82,5 +82,17 @@ void main() {
       expect(restored.categoryId, task.categoryId);
       expect(restored.tags, task.tags);
     });
+
+    test('fromMap defaults tags to empty when the map has no tags key '
+        '(a task persisted before tags existed)', () {
+      final restored = Task.fromMap({
+        'id': 'task-1',
+        'title': 'Buy milk',
+        'closed': false,
+        'categoryId': 'category-1',
+      });
+
+      expect(restored.tags, isEmpty);
+    });
   });
 }

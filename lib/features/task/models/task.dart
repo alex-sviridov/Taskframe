@@ -13,13 +13,15 @@ class Task {
     this.tags = const [],
   });
 
-  /// Reconstructs a [Task] from a map produced by [toMap].
+  /// Reconstructs a [Task] from a map produced by [toMap]. `tags` defaults
+  /// to empty when absent, so a task persisted before tags existed still
+  /// loads.
   factory fromMap(Map<String, Object?> map) => Task(
     id: map['id']! as String,
     title: map['title']! as String,
     closed: map['closed']! as bool,
     categoryId: map['categoryId']! as String,
-    tags: [for (final tag in map['tags']! as List) tag as String],
+    tags: [for (final tag in map['tags'] as List? ?? const []) tag as String],
   );
 
   /// Unique identifier for this task.
