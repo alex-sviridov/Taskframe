@@ -75,6 +75,45 @@ void main() {
       expect(parsed.statusToken!.excluded, isFalse);
       expect(parsed.freeText, 'Buy milk extra');
     });
+
+    test('a single @category is extracted, leaving empty free text', () {
+      final parsed = parseSearchQuery('@work');
+      expect(parsed.categoryTokens, hasLength(1));
+      expect(parsed.categoryTokens.single.category, 'work');
+      expect(parsed.categoryTokens.single.excluded, isFalse);
+      expect(
+        parsed.categoryTokens.single.range,
+        const TextRange(start: 0, end: 5),
+      );
+      expect(parsed.freeText, isEmpty);
+    });
+
+    test('@!category is an excluded category token', () {
+      final parsed = parseSearchQuery('@!work');
+      expect(parsed.categoryTokens.single.category, 'work');
+      expect(parsed.categoryTokens.single.excluded, isTrue);
+    });
+
+    test('category names are lowercased', () {
+      final parsed = parseSearchQuery('@WORK');
+      expect(parsed.categoryTokens.single.category, 'work');
+    });
+
+    test('multiple @categories are all extracted, in order', () {
+      final parsed = parseSearchQuery('@work @home');
+      expect(parsed.categoryTokens.map((t) => t.category), ['work', 'home']);
+      expect(parsed.freeText, isEmpty);
+    });
+
+    test('a mixed query extracts tags, status, and categories together', () {
+      final parsed = parseSearchQuery(
+        'Buy milk #groceries @home /opened extra',
+      );
+      expect(parsed.tagTokens.map((t) => t.tag), ['groceries']);
+      expect(parsed.categoryTokens.map((t) => t.category), ['home']);
+      expect(parsed.statusToken!.excluded, isFalse);
+      expect(parsed.freeText, 'Buy milk extra');
+    });
   });
 
   group('orderedTokenRanges', () {
@@ -85,6 +124,15 @@ void main() {
       expect(ranges, hasLength(2));
       expect(ranges.first.range.start, 0); // "/opened"
       expect(ranges.last.range.start, 8); // "#groceries"
+    });
+
+    test('also includes category tokens, sorted by position', () {
+      final parsed = parseSearchQuery('@work /opened #groceries');
+      final ranges = orderedTokenRanges(parsed);
+      expect(ranges, hasLength(3));
+      expect(ranges[0].range.start, 0); // "@work"
+      expect(ranges[1].range.start, 6); // "/opened"
+      expect(ranges[2].range.start, 14); // "#groceries"
     });
   });
 
@@ -147,6 +195,18 @@ void main() {
       );
       expect(result.text, '/!opened');
       expect(result.cursorOffset, 8);
+    });
+
+    test('toggling a category token works the same way, with "@"', () {
+      final parsed = parseSearchQuery('@work');
+      final result = toggleQueryToken(
+        '@work',
+        parsed.categoryTokens.single.range,
+        currentlyExcluded: false,
+        cursorOffset: 5,
+      );
+      expect(result.text, '@!work');
+      expect(result.cursorOffset, 6);
     });
   });
 }
