@@ -471,27 +471,50 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   Widget _buildFilterRow() {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          ActionChip(
-            avatar: const Icon(Icons.tag, size: 18),
-            label: const Text('#tag'),
-            onPressed: () => _insertSymbol('#'),
-          ),
-          const SizedBox(width: 8),
-          ActionChip(
-            avatar: const Icon(Icons.radio_button_unchecked, size: 18),
-            label: const Text('/status'),
-            onPressed: () => _insertSymbol('/'),
-          ),
-          const SizedBox(width: 8),
-          ActionChip(
-            avatar: const Icon(Icons.category, size: 18),
-            label: const Text('@category'),
-            onPressed: () => _insertSymbol('@'),
-          ),
-        ],
+      // A focusable tap target (e.g. ActionChip, which owns its own
+      // FocusNode) claims focus for itself right after its onPressed
+      // fires, undoing _insertSymbol's own requestFocus() call on the
+      // search field. Every button below is therefore a plain
+      // GestureDetector (never focusable on its own) reacting to
+      // onTapDown — the same fix the suggestions dropdown uses (see its
+      // own `Focus(canRequestFocus: false, ...)` above) and for the same
+      // reason.
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        child: Row(
+          children: [
+            _filterButton(icon: Icons.tag, label: '#tag', symbol: '#'),
+            const SizedBox(width: 8),
+            _filterButton(
+              icon: Icons.radio_button_unchecked,
+              label: '/status',
+              symbol: '/',
+            ),
+            const SizedBox(width: 8),
+            _filterButton(
+              icon: Icons.category,
+              label: '@category',
+              symbol: '@',
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  /// One quick-insert button of [_buildFilterRow] — a static (visually
+  /// chip-like) [Chip] for display plus a [GestureDetector] for the tap
+  /// itself, so nothing in the subtree owns a [FocusNode] that could
+  /// steal focus from the search field (see [_buildFilterRow]'s doc).
+  Widget _filterButton({
+    required IconData icon,
+    required String label,
+    required String symbol,
+  }) {
+    return GestureDetector(
+      onTapDown: (_) => _insertSymbol(symbol),
+      child: Chip(avatar: Icon(icon, size: 18), label: Text(label)),
     );
   }
 
