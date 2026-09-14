@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
+import 'package:taskframe/features/saved_search/models/saved_search.dart';
+import 'package:taskframe/features/saved_search/providers.dart';
 
 /// One destination in the app's top-level navigation.
 class _Destination {
@@ -58,7 +61,10 @@ class AppShell extends StatelessWidget {
             Navigator.pop(context);
             navigationShell.goBranch(index);
           },
-          children: _drawerDestinations(),
+          children: [
+            ..._drawerDestinations(),
+            const _SavedViewsSection(isNarrow: true),
+          ],
         ),
         body: Column(
           children: [
@@ -112,12 +118,85 @@ class AppShell extends StatelessWidget {
             tilePadding: const EdgeInsets.symmetric(horizontal: 8),
             selectedIndex: navigationShell.currentIndex,
             onDestinationSelected: navigationShell.goBranch,
-            children: _drawerDestinations(),
+            children: [
+              ..._drawerDestinations(),
+              const _SavedViewsSection(isNarrow: false),
+            ],
           ),
         ),
         const VerticalDivider(width: 1),
         Expanded(child: navigationShell),
       ],
+    );
+  }
+}
+
+/// The "Saved views" sidebar section, listed directly under the "Tasks"
+/// destination — hidden entirely while there are no saved views.
+class _SavedViewsSection extends ConsumerWidget {
+  const new({required this.isNarrow});
+
+  /// Whether this is rendered in the narrow (drawer) or wide (persistent
+  /// sidebar) layout — controls whether tapping a view also closes the
+  /// drawer, and whether row affordances reveal on long-press vs. hover.
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final views =
+        ref.watch(savedSearchListProvider).value ?? const <SavedSearch>[];
+    if (views.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 16, 16, 4),
+          child: Text(
+            'Saved views',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        for (var i = 0; i < views.length; i++)
+          _SavedViewRow(
+            key: ValueKey(views[i].id),
+            view: views[i],
+            index: i,
+            isNarrow: isNarrow,
+          ),
+      ],
+    );
+  }
+}
+
+/// One row of [_SavedViewsSection]: tap navigates to the view's query;
+/// rename/delete/reorder affordances are added in later tasks.
+class _SavedViewRow extends ConsumerWidget {
+  const new({
+    required this.view,
+    required this.index,
+    required this.isNarrow,
+    super.key,
+  });
+
+  final SavedSearch view;
+  final int index;
+  final bool isNarrow;
+
+  void _navigate(BuildContext context) {
+    if (isNarrow) Navigator.pop(context);
+    context.go('/tasks?q=${Uri.encodeQueryComponent(view.query)}');
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.only(left: 28, right: 16),
+      title: Text(view.name, overflow: TextOverflow.ellipsis),
+      onTap: () => _navigate(context),
     );
   }
 }
