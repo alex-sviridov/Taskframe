@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,6 +95,76 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Urgent work'), findsOneWidget);
+    });
+
+    testWidgets('wide: hovering a row reveals the overflow menu', (
+      tester,
+    ) async {
+      _setViewportWidth(tester, 1000);
+      await _seedOneView(tester);
+
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(find.text('Urgent work')));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    });
+
+    testWidgets('narrow: long-pressing a row reveals the overflow menu', (
+      tester,
+    ) async {
+      _setViewportWidth(tester, 600);
+      await _seedOneView(tester);
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+      await tester.longPress(find.text('Urgent work'));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    });
+
+    testWidgets('renaming a view updates its label', (tester) async {
+      _setViewportWidth(tester, 600);
+      await _seedOneView(tester);
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Urgent work'));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rename'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField).last, 'Renamed view');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Renamed view'), findsOneWidget);
+      expect(find.text('Urgent work'), findsNothing);
+    });
+
+    testWidgets('deleting a view removes it from the sidebar', (tester) async {
+      _setViewportWidth(tester, 600);
+      await _seedOneView(tester);
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Urgent work'));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Urgent work'), findsNothing);
+      expect(find.text('Saved views'), findsNothing);
     });
   });
 }

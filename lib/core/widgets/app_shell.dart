@@ -171,9 +171,11 @@ class _SavedViewsSection extends ConsumerWidget {
   }
 }
 
-/// One row of [_SavedViewsSection]: tap navigates to the view's query;
-/// rename/delete/reorder affordances are added in later tasks.
-class _SavedViewRow extends ConsumerWidget {
+/// One row of [_SavedViewsSection]. Tapping navigates to the view's
+/// query. On wide layouts, hovering the row reveals a trailing overflow
+/// menu (Rename/Delete); on narrow layouts, long-pressing does. Rename
+/// swaps the label for an inline, autofocused text field.
+class _SavedViewRow extends ConsumerStatefulWidget {
   const new({
     required this.view,
     required this.index,
@@ -185,18 +187,98 @@ class _SavedViewRow extends ConsumerWidget {
   final int index;
   final bool isNarrow;
 
-  void _navigate(BuildContext context) {
-    if (isNarrow) Navigator.pop(context);
-    context.go('/tasks?q=${Uri.encodeQueryComponent(view.query)}');
+  @override
+  ConsumerState<_SavedViewRow> createState() => _SavedViewRowState();
+}
+
+class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
+  bool _revealed = false;
+  bool _renaming = false;
+  late final TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.view.name);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
+  void didUpdateWidget(covariant _SavedViewRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_renaming && oldWidget.view.name != widget.view.name) {
+      _nameController.text = widget.view.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _navigate(BuildContext context) {
+    if (widget.isNarrow) Navigator.pop(context);
+    context.go('/tasks?q=${Uri.encodeQueryComponent(widget.view.query)}');
+  }
+
+  void _submitRename() {
+    final newName = _nameController.text.trim();
+    setState(() {
+      _renaming = false;
+      _revealed = false;
+    });
+    if (newName.isEmpty || newName == widget.view.name) {
+      _nameController.text = widget.view.name;
+      return;
+    }
+    ref.read(savedSearchListProvider.notifier).renameView(widget.view, newName);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showAffordances = _revealed || _renaming;
+
+    final row = ListTile(
       dense: true,
-      contentPadding: const EdgeInsets.only(left: 28, right: 16),
-      title: Text(view.name, overflow: TextOverflow.ellipsis),
-      onTap: () => _navigate(context),
+      contentPadding: const EdgeInsets.only(left: 28, right: 8),
+      title: _renaming
+          ? TextField(
+              controller: _nameController,
+              autofocus: true,
+              onSubmitted: (_) => _submitRename(),
+              onTapOutside: (_) => _submitRename(),
+            )
+          : Text(widget.view.name, overflow: TextOverflow.ellipsis),
+      trailing: showAffordances
+          ? PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 18),
+              onSelected: (choice) {
+                if (choice == 'rename') {
+                  setState(() => _renaming = true);
+                } else if (choice == 'delete') {
+                  setState(() => _revealed = false);
+                  ref
+                      .read(savedSearchListProvider.notifier)
+                      .deleteView(widget.view);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'rename', child: Text('Rename')),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            )
+          : null,
+      onTap: _renaming ? null : () => _navigate(context),
+      onLongPress: widget.isNarrow
+          ? () => setState(() => _revealed = !_revealed)
+          : null,
+    );
+
+    if (widget.isNarrow) return row;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _revealed = true),
+      onExit: (_) => setState(() => _revealed = false),
+      child: row,
     );
   }
 }
