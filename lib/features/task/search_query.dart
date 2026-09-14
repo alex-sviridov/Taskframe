@@ -11,11 +11,7 @@ const openedStatusWord = 'opened';
 /// and to know where to style it when rendering.
 class TagToken {
   /// Creates a tag token.
-  const new({
-    required this.tag,
-    required this.excluded,
-    required this.range,
-  });
+  const new({required this.tag, required this.excluded, required this.range});
 
   /// The tag's lowercased name, without the leading '#'.
   final String tag;
@@ -123,8 +119,7 @@ List<({TextRange range, bool excluded})> orderedTokenRanges(
         excluded: parsed.statusToken!.excluded,
       ),
   ];
-  return ranges
-    ..sort((a, b) => a.range.start.compareTo(b.range.start));
+  return ranges..sort((a, b) => a.range.start.compareTo(b.range.start));
 }
 
 /// Returns [text] with the token at [range] toggled between its
