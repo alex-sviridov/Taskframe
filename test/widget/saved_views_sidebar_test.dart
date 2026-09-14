@@ -78,16 +78,37 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Saved views'), findsNothing);
+      expect(find.byType(ReorderableListView), findsNothing);
     });
 
     testWidgets('shows each saved view by name, wide sidebar', (tester) async {
       _setViewportWidth(tester, 1000);
       await _seedOneView(tester);
 
-      expect(find.text('Saved views'), findsOneWidget);
       expect(find.text('Urgent work'), findsOneWidget);
     });
+
+    testWidgets(
+      'a saved view is highlighted once its query becomes the current one',
+      (tester) async {
+        _setViewportWidth(tester, 1000);
+        await _seedOneView(tester);
+
+        ListTile rowTile() => tester.widget<ListTile>(
+          find.ancestor(
+            of: find.text('Urgent work'),
+            matching: find.byType(ListTile),
+          ),
+        );
+
+        expect(rowTile().selected, isFalse);
+
+        await tester.tap(find.text('Urgent work'));
+        await tester.pumpAndSettle();
+
+        expect(rowTile().selected, isTrue);
+      },
+    );
 
     testWidgets('tapping a saved view loads its query into Tasks', (
       tester,
@@ -180,7 +201,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Urgent work'), findsNothing);
-      expect(find.text('Saved views'), findsNothing);
+      expect(find.byType(ReorderableListView), findsNothing);
     });
 
     testWidgets('two saved views can be reordered by dragging the handle', (

@@ -149,13 +149,20 @@ class _SavedViewsSection extends ConsumerWidget {
         ref.watch(savedSearchListProvider).value ?? const <SavedSearch>[];
     if (views.isEmpty) return const SizedBox.shrink();
 
+    // Reading GoRouterState here (rather than just once from wherever the
+    // route was pushed) makes this section rebuild whenever the URL's `q`
+    // changes — including when the user edits the search box directly —
+    // so the highlighted row always tracks the search bar's current query,
+    // not just the view that was last tapped.
+    final currentQuery = GoRouterState.of(context).uri.queryParameters['q'];
+
     // The left border reads as a "child of Tasks" tree accent — offset
     // under the destination icon column, with the section's own content
-    // padding (32) picking up the rest of the indent the header/rows used
-    // to carry entirely on their own (48), so text still lands at the same
-    // x as before.
+    // padding (32) picking up the rest of the indent the rows used to
+    // carry entirely on their own (48), so text still lands at the same x
+    // as before.
     return Padding(
-      padding: const EdgeInsets.only(left: 16),
+      padding: const EdgeInsets.only(left: 16, top: 8),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -166,39 +173,26 @@ class _SavedViewsSection extends ConsumerWidget {
             ),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          // onReorderItem pre-adjusts newIndex for the removed item, but
+          // SavedSearchListNotifier.reorder already does that adjustment
+          // itself; migrating both sides is out of scope for this fix.
+          // ignore: deprecated_member_use
+          onReorder: (oldIndex, newIndex) => ref
+              .read(savedSearchListProvider.notifier)
+              .reorder(oldIndex, newIndex),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(32, 16, 16, 4),
-              child: Text(
-                'Saved views',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+            for (var i = 0; i < views.length; i++)
+              _SavedViewRow(
+                key: ValueKey(views[i].id),
+                view: views[i],
+                index: i,
+                isNarrow: isNarrow,
+                isSelected: views[i].query == currentQuery,
               ),
-            ),
-            ReorderableListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: false,
-              // onReorderItem pre-adjusts newIndex for the removed item, but
-              // SavedSearchListNotifier.reorder already does that adjustment
-              // itself; migrating both sides is out of scope for this fix.
-              // ignore: deprecated_member_use
-              onReorder: (oldIndex, newIndex) => ref
-                  .read(savedSearchListProvider.notifier)
-                  .reorder(oldIndex, newIndex),
-              children: [
-                for (var i = 0; i < views.length; i++)
-                  _SavedViewRow(
-                    key: ValueKey(views[i].id),
-                    view: views[i],
-                    index: i,
-                    isNarrow: isNarrow,
-                  ),
-              ],
-            ),
           ],
         ),
       ),
@@ -215,12 +209,17 @@ class _SavedViewRow extends ConsumerStatefulWidget {
     required this.view,
     required this.index,
     required this.isNarrow,
+    required this.isSelected,
     super.key,
   });
 
   final SavedSearch view;
   final int index;
   final bool isNarrow;
+
+  /// Whether this view's query matches the search bar's current query —
+  /// highlighted the same way the selected top-level destination is.
+  final bool isSelected;
 
   @override
   ConsumerState<_SavedViewRow> createState() => _SavedViewRowState();
@@ -280,6 +279,10 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
     final row = ListTile(
       dense: true,
       contentPadding: const EdgeInsets.only(left: 32, right: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      selected: widget.isSelected,
+      selectedTileColor: colorScheme.secondaryContainer,
+      selectedColor: colorScheme.onSecondaryContainer,
       title: _renaming
           // Reads DefaultTextStyle from inside the title slot, so the field
           // always matches whatever text style ListTile would otherwise
