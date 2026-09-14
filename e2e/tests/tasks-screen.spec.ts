@@ -463,6 +463,26 @@ test.describe('wide viewport', () => {
 
       await expect(search).toHaveValue('#groceries ');
     });
+
+    test('tapping the /status filter button opens the "opened" '
+      + 'suggestion dropdown', async ({ page }) => {
+      // Regresses a real-browser-only bug: focusing the search field
+      // programmatically (rather than via a direct tap on it) selects
+      // all of its text on desktop/web platforms, which left the
+      // dropdown's cursor-position matching unable to find a partial
+      // token — invisible to the widget-test suite, which runs under a
+      // fixed non-desktop TargetPlatform that doesn't select-all on
+      // focus.
+      //
+      // The filter row's buttons are plain (non-interactive) `Chip`s —
+      // deliberately not `ActionChip`s, see `_buildFilterRow`'s doc — so
+      // they aren't exposed with button semantics; addressed by their
+      // aria-label instead of a role.
+      await page.getByRole('button', { name: 'Filters' }).click();
+      await page.locator('[aria-label="/status"]').click();
+
+      await expect(page.getByRole('button', { name: 'opened' })).toBeVisible();
+    });
   });
 });
 

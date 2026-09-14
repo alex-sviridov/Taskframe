@@ -225,11 +225,23 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final needsLeadingSpace = cursor > 0 && text[cursor - 1] != ' ';
     final insertion = (needsLeadingSpace ? ' ' : '') + symbol;
     final newText = text.replaceRange(cursor, cursor, insertion);
+    final newCursor = cursor + insertion.length;
     _searchController.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: cursor + insertion.length),
+      selection: TextSelection.collapsed(offset: newCursor),
     );
     _searchFocusNode.requestFocus();
+    // A field that gains focus programmatically (rather than via a direct
+    // tap on it) selects all of its text on desktop/web platforms — this
+    // clobbers the collapsed selection just set above. Reassert it once
+    // that focus-driven selection has been applied. (Not exercised by
+    // widget tests: flutter_test runs under a fixed non-desktop
+    // TargetPlatform, which doesn't reproduce this platform-specific
+    // behavior — see the e2e test instead.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _searchController.selection = TextSelection.collapsed(offset: newCursor);
+    });
   }
 
   /// Called on every tap on the search field (see [TextField.onTap]).
