@@ -1,21 +1,442 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
+import 'package:taskframe/features/task/search_query.dart';
 import 'package:taskframe/features/task/widgets/task_card.dart';
 import 'package:taskframe/features/task/widgets/task_edit_modal.dart';
+
+/// Matches an *unfinished* `#word`/`#!word` immediately before the
+/// cursor — no trailing space yet — so suggestions can be offered while
+/// the user is still typing it, wherever the cursor currently sits.
+final _partialTagPattern = RegExp(r'(^|\s)#(!?)(\w*)$');
+
+/// The `/` counterpart of [_partialTagPattern].
+final _partialStatusPattern = RegExp(r'(^|\s)/(!?)(\w*)$');
+
+/// Suggestions dropdown never lists more than this many options — the
+/// tag/status vocabulary can grow arbitrarily large, but a floating list
+/// longer than a handful of rows stops being scannable.
+const _maxSuggestions = 4;
+
+/// A [TextEditingController] whose [buildTextSpan] renders recognized
+/// `#tag`/`#!tag`/`/opened`/`/!opened` tokens (see [parseSearchQuery])
+/// as styled text within the one real, actively-edited field — bold +
+/// tinted when included, error-toned when excluded.
+///
+/// Tokens are *not* given a `TextSpan.recognizer`: `RenderEditable`
+/// asserts that any span with a recognizer requires a read-only,
+/// non-obscured field (see
+/// `RenderEditable.describeSemanticsConfiguration` in the Flutter
+/// framework), which this field — still directly editable — is not.
+/// Tap-to-toggle is instead handled by
+/// `_TasksScreenState._handleFieldTap`, which hit-tests the tap
+/// position against each token's rendered glyph boxes via
+/// [RenderEditable.getBoxesForSelection].
+class UnifiedQueryController extends TextEditingController {
+  /// Creates a controller seeded with [text] (defaults to empty).
+  new({super.text});
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    required bool withComposing,
+    TextStyle? style,
+  }) {
+    final parsed = parseSearchQuery(text);
+    final tokens = orderedTokenRanges(parsed);
+    final colors = Theme.of(context).colorScheme;
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final token in tokens) {
+      if (token.range.start > cursor) {
+        spans.add(
+          TextSpan(
+            text: text.substring(cursor, token.range.start),
+            style: style,
+          ),
+        );
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(token.range.start, token.range.end),
+          style: (style ?? const TextStyle()).copyWith(
+            fontWeight: FontWeight.w600,
+            color: token.excluded
+                ? colors.onErrorContainer
+                : colors.onPrimaryContainer,
+            backgroundColor: token.excluded
+                ? colors.errorContainer
+                : colors.primaryContainer,
+          ),
+        ),
+      );
+      cursor = token.range.end;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor), style: style));
+    }
+    return TextSpan(style: style, children: spans);
+  }
+}
 
 /// Lists every task as a [TaskCard], in creation order, and lets the user
 /// add or edit one via [showTaskEditModal]. Closing a task is a checkbox
 /// on its own card — see [TaskCard] — so this screen only wires up
 /// add/open-for-edit.
-class TasksScreen extends ConsumerWidget {
+///
+/// A single search field doubles as the query: plain text filters by
+/// title, `#tag`/`#!tag` anywhere in the text filters tasks by tag
+/// (multiple combine with AND), and `/opened`/`/!opened` filters by
+/// closed status. Recognized tokens render as styled (not extracted)
+/// text — tapping one toggles it between included/excluded; removing
+/// one is plain text editing. The whole query string mirrors to/from the
+/// `q` query parameter of the current route (when reached via
+/// [GoRouter]), so it's shareable and survives a refresh.
+class TasksScreen extends ConsumerStatefulWidget {
   /// Creates a [TasksScreen].
   const new({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TasksScreen> createState() => _TasksScreenState();
+}
+
+class _TasksScreenState extends ConsumerState<TasksScreen> {
+  late final UnifiedQueryController _searchController;
+  late final FocusNode _searchFocusNode;
+
+  /// Anchors the floating suggestions dropdown to the search field's
+  /// current position/size, via [CompositedTransformTarget] and
+  /// [CompositedTransformFollower].
+  final LayerLink _searchFieldLink = LayerLink();
+
+  /// Reads the search field's laid-out size, so the floating dropdown
+  /// (built outside the field's own layout via [Overlay]) can match its
+  /// width and sit directly below it.
+  final GlobalKey _searchFieldKey = GlobalKey();
+
+  /// The floating suggestions dropdown, inserted into the ambient
+  /// [Overlay] on demand (see [_syncSuggestionsOverlay]) rather than laid
+  /// out inline, so it floats over the task list instead of pushing it
+  /// down.
+  OverlayEntry? _suggestionsOverlayEntry;
+
+  /// Set on Escape to hide the suggestions dropdown until the next
+  /// keystroke (see [_onSearchChanged], which clears it) — otherwise a
+  /// pure recompute of [_currentSuggestions] from unchanged text would
+  /// show the same suggestions right back.
+  bool _suggestionsDismissed = false;
+
+  /// The most recent pointer-down position on the search field, in
+  /// global coordinates — captured by the wrapping [Listener] so
+  /// [_handleFieldTap] (which [TextField.onTap] calls with no position
+  /// of its own) can test the tap against each token's actual on-screen
+  /// character boxes. Deliberately *not* derived from the resulting
+  /// caret offset: a caret offset is a boundary between characters, not
+  /// proof a tap landed on a glyph (tapping the trailing half of a
+  /// token's last character, the space just before a token, or the
+  /// field's empty leading padding can all resolve to a caret offset
+  /// that numerically falls inside — or right at the edge of — a
+  /// token's range without the tap having visually landed on it).
+  Offset? _lastPointerDownPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    final params = GoRouter.maybeOf(context)?.state.uri.queryParameters;
+    _searchController = UnifiedQueryController(text: params?['q'] ?? '')
+      ..addListener(_onSearchChanged);
+    _searchFocusNode = FocusNode()
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _suggestionsOverlayEntry?.remove();
+    _suggestionsOverlayEntry?.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _suggestionsDismissed = false;
+    setState(() {});
+    _syncUrl();
+  }
+
+  /// Toggles the token at [range] (currently `excluded` or not) by
+  /// inserting/removing its `!`, then re-applies the result as the
+  /// field's new value — this re-enters [_onSearchChanged] via the
+  /// controller's own listener, so the rebuild/URL-sync happens there.
+  void _toggleToken(TextRange range, {required bool excluded}) {
+    final result = toggleQueryToken(
+      _searchController.text,
+      range,
+      currentlyExcluded: excluded,
+      cursorOffset: _searchController.selection.baseOffset,
+    );
+    _searchController.value = TextEditingValue(
+      text: result.text,
+      selection: TextSelection.collapsed(offset: result.cursorOffset),
+    );
+  }
+
+  /// Called on every tap on the search field (see [TextField.onTap]).
+  /// Uses [_lastPointerDownPosition] — the raw pixel position the
+  /// wrapping [Listener] captured for this tap — against each
+  /// recognized token's actual rendered character boxes (via
+  /// [RenderEditable.getBoxesForSelection]) to decide whether the tap
+  /// landed on a token; if so, toggles it via [_toggleToken] instead of
+  /// leaving a plain cursor placement. Testing real glyph geometry
+  /// (rather than the resulting caret offset) is deliberate: a caret
+  /// offset is a boundary between characters, not proof a tap landed on
+  /// a glyph.
+  void _handleFieldTap() {
+    final position = _lastPointerDownPosition;
+    if (position == null) return;
+    final root = _searchFieldKey.currentContext?.findRenderObject();
+    if (root == null) return;
+    final renderEditable = _findRenderEditable(root);
+    if (renderEditable == null) return;
+    final local = renderEditable.globalToLocal(position);
+    final parsed = parseSearchQuery(_searchController.text);
+    for (final token in orderedTokenRanges(parsed)) {
+      final boxes = renderEditable.getBoxesForSelection(
+        TextSelection(
+          baseOffset: token.range.start,
+          extentOffset: token.range.end,
+        ),
+      );
+      if (boxes.any((box) => box.toRect().contains(local))) {
+        _toggleToken(token.range, excluded: token.excluded);
+        return;
+      }
+    }
+  }
+
+  /// Depth-first search of the render tree rooted at [root] for the
+  /// first [RenderEditable] — [TextField] has no public getter for its
+  /// internal one, but it's always present a few layers down (inside
+  /// its [EditableText]).
+  RenderEditable? _findRenderEditable(RenderObject root) {
+    RenderEditable? found;
+    void visit(RenderObject child) {
+      if (found != null) return;
+      if (child is RenderEditable) {
+        found = child;
+        return;
+      }
+      child.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
+  /// The dropdown's current suggestions — tag names while the text
+  /// immediately before the cursor ends in an unfinished `#word`/
+  /// `#!word`, or `opened` while it ends in an unfinished `/word`/
+  /// `/!word` and no status filter is set yet. `null` hides the
+  /// dropdown: no partial match, no candidates, dismissed via Escape, or
+  /// the field isn't focused.
+  ({List<String> options, bool isStatus})? _currentSuggestions(
+    List<Task> tasks,
+  ) {
+    if (_suggestionsDismissed || !_searchFocusNode.hasFocus) return null;
+    final cursor = _searchController.selection.baseOffset;
+    if (cursor < 0) return null;
+    final beforeCursor = _searchController.text.substring(0, cursor);
+    final tagMatch = _partialTagPattern.firstMatch(beforeCursor);
+    if (tagMatch != null) {
+      final partial = tagMatch.group(3)!.toLowerCase();
+      final parsed = parseSearchQuery(_searchController.text);
+      final selected = {for (final t in parsed.tagTokens) t.tag};
+      final allTags = <String>{for (final task in tasks) ...task.tags};
+      final options =
+          allTags
+              .difference(selected)
+              .where((tag) => tag.startsWith(partial))
+              .toList()
+            ..sort();
+      return options.isEmpty
+          ? null
+          : (options: options.take(_maxSuggestions).toList(), isStatus: false);
+    }
+    final statusMatch = _partialStatusPattern.firstMatch(beforeCursor);
+    if (statusMatch != null) {
+      final parsed = parseSearchQuery(_searchController.text);
+      if (parsed.statusToken == null) {
+        final partial = statusMatch.group(3)!.toLowerCase();
+        if (openedStatusWord.startsWith(partial)) {
+          return (options: [openedStatusWord], isStatus: true);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Completes the unfinished token immediately before the cursor with
+  /// [option] plus a trailing space, then reinserts whatever followed
+  /// the cursor — same shape a manually-typed `#tag `/`/opened ` settles
+  /// to, so the assignment re-enters [_onSearchChanged].
+  void _selectSuggestion(String option, {required bool isStatus}) {
+    final cursor = _searchController.selection.baseOffset;
+    final text = _searchController.text;
+    final beforeCursor = text.substring(0, cursor);
+    final afterCursor = text.substring(cursor);
+    final match = (isStatus ? _partialStatusPattern : _partialTagPattern)
+        .firstMatch(beforeCursor)!;
+    final prefix = beforeCursor.substring(0, match.start) + match.group(1)!;
+    final symbol = isStatus ? '/' : '#';
+    final completed = '$prefix$symbol${match.group(2)}$option ';
+    _searchController.value = TextEditingValue(
+      text: completed + afterCursor,
+      selection: TextSelection.collapsed(offset: completed.length),
+    );
+  }
+
+  /// Inserts, rebuilds, or removes the floating suggestions dropdown to
+  /// match [_currentSuggestions]'s current answer. Called after every
+  /// frame (see the `addPostFrameCallback` in [build]) so it always runs
+  /// once the search field's [_searchFieldKey] render box — needed to
+  /// size/position the dropdown — is guaranteed to be laid out.
+  void _syncSuggestionsOverlay() {
+    final tasks = ref.read(taskListProvider).value ?? const <Task>[];
+    final hasSuggestions = _currentSuggestions(tasks) != null;
+    if (!hasSuggestions) {
+      _suggestionsOverlayEntry?.remove();
+      _suggestionsOverlayEntry?.dispose();
+      _suggestionsOverlayEntry = null;
+      return;
+    }
+    if (_suggestionsOverlayEntry != null) {
+      _suggestionsOverlayEntry!.markNeedsBuild();
+      return;
+    }
+    final entry = OverlayEntry(builder: _buildSuggestionsOverlay);
+    _suggestionsOverlayEntry = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  /// Builds the floating dropdown's content, re-reading
+  /// [_currentSuggestions] fresh each time (rather than capturing a stale
+  /// snapshot) since [OverlayEntry.markNeedsBuild] just re-invokes this.
+  Widget _buildSuggestionsOverlay(BuildContext context) {
+    final tasks = ref.read(taskListProvider).value ?? const <Task>[];
+    final suggestions = _currentSuggestions(tasks);
+    if (suggestions == null) return const SizedBox.shrink();
+    final fieldBox =
+        _searchFieldKey.currentContext?.findRenderObject() as RenderBox?;
+    final fieldSize = fieldBox?.size ?? const Size(300, 48);
+    return Positioned(
+      width: fieldSize.width,
+      child: CompositedTransformFollower(
+        link: _searchFieldLink,
+        showWhenUnlinked: false,
+        offset: Offset(0, fieldSize.height + 4),
+        // Keeps the search field focused (and the dropdown itself open)
+        // while a suggestion is being tapped — without this, the tap
+        // target's own focusable ink response steals focus on the way
+        // down, which would hide the dropdown (and remove the tapped
+        // row) before the tap completes.
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in suggestions.options)
+                  GestureDetector(
+                    // Selection fires on tap-DOWN, not tap-up: by tap-up,
+                    // the search field may already have lost focus (see
+                    // above) and this row rebuilt away.
+                    onTapDown: (_) => _selectSuggestion(
+                      option,
+                      isStatus: suggestions.isStatus,
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        suggestions.isStatus
+                            ? Icons.radio_button_unchecked
+                            : Icons.tag,
+                      ),
+                      title: Text(option),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  KeyEventResult _handleSearchKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      final tasks = ref.read(taskListProvider).value ?? const <Task>[];
+      if (_currentSuggestions(tasks) != null) {
+        setState(() => _suggestionsDismissed = true);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _syncUrl() {
+    final router = GoRouter.maybeOf(context);
+    if (router == null) return;
+    final text = _searchController.text;
+    unawaited(
+      router.replace<void>(
+        Uri(
+          path: '/tasks',
+          queryParameters: text.isEmpty ? null : {'q': text},
+        ).toString(),
+      ),
+    );
+  }
+
+  List<Task> _filter(List<Task> tasks) {
+    final parsed = parseSearchQuery(_searchController.text);
+    final query = parsed.freeText.toLowerCase();
+    return [
+      for (final task in tasks)
+        if ((query.isEmpty || task.title.toLowerCase().contains(query)) &&
+            (parsed.statusToken == null ||
+                task.closed == parsed.statusToken!.excluded) &&
+            parsed.tagTokens.every(
+              (t) => t.excluded
+                  ? !task.tags.contains(t.tag)
+                  : task.tags.contains(t.tag),
+            ))
+          task,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tasksAsync = ref.watch(taskListProvider);
+    // Overlay content can only be sized/positioned off the search field's
+    // render box once this frame has actually laid it out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncSuggestionsOverlay();
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -30,6 +451,45 @@ class TasksScreen extends ConsumerWidget {
             onPressed: () => showTaskEditModal(context: context),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: CompositedTransformTarget(
+              link: _searchFieldLink,
+              child: Focus(
+                onKeyEvent: _handleSearchKeyEvent,
+                child: Listener(
+                  onPointerDown: (event) =>
+                      _lastPointerDownPosition = event.position,
+                  child: TextField(
+                    key: _searchFieldKey,
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    onTap: _handleFieldTap,
+                    decoration: InputDecoration(
+                      hintText: 'Search: #tag  /opened  free text',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              tooltip: 'Clear search',
+                              onPressed: _searchController.clear,
+                            ),
+                      isDense: true,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
       body: switch (tasksAsync) {
         AsyncData(:final value) => LayoutBuilder(
@@ -40,7 +500,7 @@ class TasksScreen extends ConsumerWidget {
                   ? EdgeInsets.zero
                   : const EdgeInsets.symmetric(vertical: 8),
               children: [
-                for (final task in value)
+                for (final task in _filter(value))
                   TaskCard(
                     task: task,
                     onTap: () =>
