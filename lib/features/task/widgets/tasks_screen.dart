@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/saved_search/models/saved_search.dart';
+import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/search_query.dart';
@@ -176,6 +178,31 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       ..addListener(() {
         if (mounted) setState(() {});
       });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `GoRouter.maybeOf(context)?.state` (unlike [GoRouterState.of]) does
+    // not register this as a listener of route changes, so it would never
+    // see a `q` update that happens while this screen stays mounted — as
+    // when a saved view navigates here via `context.go('/tasks?q=...')`.
+    // [GoRouterState.of] does subscribe, via an [InheritedWidget], so this
+    // re-runs whenever the route's query actually changes.
+    if (GoRouter.maybeOf(context) == null) return;
+    final urlQuery = GoRouterState.of(context).uri.queryParameters['q'] ?? '';
+    if (urlQuery != _searchController.text) {
+      // Bypass the listener that normally fires on every edit: it calls
+      // [_syncUrl], which would push another route change right back at
+      // the router while this screen is still building in response to the
+      // first one.
+      _searchController.removeListener(_onSearchChanged);
+      _searchController.value = TextEditingValue(
+        text: urlQuery,
+        selection: TextSelection.collapsed(offset: urlQuery.length),
+      );
+      _searchController.addListener(_onSearchChanged);
+    }
   }
 
   @override
@@ -595,6 +622,17 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       if (mounted) _syncSuggestionsOverlay();
     });
 
+    final savedViews =
+        ref.watch(savedSearchListProvider).value ?? const <SavedSearch>[];
+    final currentQuery = _searchController.text.trim();
+    SavedSearch? matchingView;
+    for (final view in savedViews) {
+      if (view.query == currentQuery) {
+        matchingView = view;
+        break;
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         // Reserves the leading slot so AppShell's floating hamburger button
@@ -650,6 +688,36 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                                   () => _filterRowOpen = !_filterRowOpen,
                                 ),
                               ),
+                              if (currentQuery.isNotEmpty)
+                                IconButton(
+                                  icon: Icon(
+                                    matchingView != null
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                  ),
+                                  tooltip: matchingView != null
+                                      ? 'Remove pinned view'
+                                      : 'Pin this search',
+                                  onPressed: () {
+                                    if (matchingView != null) {
+                                      unawaited(
+                                        ref
+                                            .read(
+                                              savedSearchListProvider.notifier,
+                                            )
+                                            .deleteView(matchingView),
+                                      );
+                                    } else {
+                                      unawaited(
+                                        ref
+                                            .read(
+                                              savedSearchListProvider.notifier,
+                                            )
+                                            .addView(currentQuery),
+                                      );
+                                    }
+                                  },
+                                ),
                             ],
                           ),
                           isDense: true,

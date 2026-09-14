@@ -10,8 +10,9 @@ void main() {
       templatesStore.name,
       templateBlocksStore.name,
       settingsStore.name,
+      savedSearchesStore.name,
     };
 
-    expect(names, hasLength(6));
+    expect(names, hasLength(7));
   });
 }

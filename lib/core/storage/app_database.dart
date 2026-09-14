@@ -32,6 +32,11 @@ final StoreRef<String, Map<String, Object?>> templateBlocksStore =
 final StoreRef<String, Map<String, Object?>> settingsStore =
     stringMapStoreFactory.store('settings');
 
+/// Saved (pinned) Tasks search views, keyed by view id, each record
+/// carrying an `order` field for sidebar position.
+final StoreRef<String, Map<String, Object?>> savedSearchesStore =
+    stringMapStoreFactory.store('saved_searches');
+
 /// Opens the app's single sembast [Database], using the platform-correct
 /// factory and location from `database_factory.dart`.
 Future<Database> openAppDatabase() async {

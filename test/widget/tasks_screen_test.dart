@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/tasks_screen.dart';
 
@@ -544,6 +545,17 @@ void main() {
       expect(find.text('Walk the dog'), findsNothing);
     });
 
+    testWidgets("search field updates when the route's q parameter changes "
+        'while already mounted', (tester) async {
+      final router = _buildTestRouter();
+      await _pumpWithRouter(tester, router);
+
+      router.go('/tasks?q=%23urgent');
+      await tester.pumpAndSettle();
+
+      expect(find.text('#urgent'), findsOneWidget);
+    });
+
     testWidgets('typing updates the q query parameter in the address '
         'bar to the raw text, verbatim', (tester) async {
       final router = _buildTestRouter();
@@ -836,6 +848,62 @@ void main() {
       await tester.pump();
 
       expect(find.text('#tag'), findsOneWidget);
+    });
+
+    testWidgets('star icon is outlined for a query with no saved view', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await tester.enterText(find.byType(TextField), '#urgent');
+      await tester.pump();
+
+      expect(find.byIcon(Icons.star_border), findsOneWidget);
+      expect(find.byIcon(Icons.star), findsNothing);
+    });
+
+    testWidgets('tapping the star icon creates a saved view', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container.read(savedSearchListProvider.future);
+      await _pump(tester, container: container);
+      await tester.enterText(find.byType(TextField), '#urgent');
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.star_border));
+      await tester.pump();
+
+      final views = container.read(savedSearchListProvider).value!;
+      expect(views.single.query, '#urgent');
+      expect(find.byIcon(Icons.star), findsOneWidget);
+    });
+
+    testWidgets('tapping a filled star deletes the saved view', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container.read(savedSearchListProvider.future);
+      await _pump(tester, container: container);
+      await tester.enterText(find.byType(TextField), '#urgent');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.star_border));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.star));
+      await tester.pump();
+
+      final views = container.read(savedSearchListProvider).value!;
+      expect(views, isEmpty);
+      expect(find.byIcon(Icons.star_border), findsOneWidget);
+    });
+
+    testWidgets('star icon is hidden when the query is empty', (tester) async {
+      await _pump(tester);
+
+      expect(find.byIcon(Icons.star_border), findsNothing);
+      expect(find.byIcon(Icons.star), findsNothing);
     });
   });
 }
