@@ -256,6 +256,12 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
 
   @override
   Widget build(BuildContext context) {
+    // Applied to both the label and the rename field, so switching between
+    // them never changes the text size — ListTile's default title style
+    // otherwise diverges from a bare TextField's default style.
+    final titleStyle = Theme.of(context).textTheme.bodyLarge;
+    final colorScheme = Theme.of(context).colorScheme;
+
     final row = ListTile(
       dense: true,
       contentPadding: const EdgeInsets.only(left: 48, right: 8),
@@ -263,15 +269,33 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
           ? TextField(
               controller: _nameController,
               autofocus: true,
-              decoration: const InputDecoration(
+              style: titleStyle,
+              cursorColor: colorScheme.primary,
+              decoration: InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                filled: true,
+                fillColor: colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: colorScheme.primary, width: 2),
+                ),
               ),
               onSubmitted: (_) => _submitRename(),
               onTapOutside: (_) => _submitRename(),
             )
-          : Text(widget.view.name, overflow: TextOverflow.ellipsis),
+          : Text(
+              widget.view.name,
+              style: titleStyle,
+              overflow: TextOverflow.ellipsis,
+            ),
       // While _revealed (hover/long-press, menu not yet opened or open),
       // kept in the tree and only toggled via Opacity/IgnorePointer, never
       // removed — removing the PopupMenuButton from the tree while its menu
