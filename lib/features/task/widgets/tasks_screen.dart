@@ -146,6 +146,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   /// show the same suggestions right back.
   bool _suggestionsDismissed = false;
 
+  /// Whether the filter row (the `#tag` / `/status` / `@category` quick
+  /// insert buttons below the search field) is currently shown. Toggled
+  /// only by the filter icon in the search field's suffix — inserting a
+  /// symbol via one of the row's own buttons leaves it open, so more than
+  /// one filter can be added without reopening it.
+  bool _filterRowOpen = false;
+
   /// The most recent pointer-down position on the search field, in
   /// global coordinates — captured by the wrapping [Listener] so
   /// [_handleFieldTap] (which [TextField.onTap] calls with no position
@@ -202,6 +209,39 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       text: result.text,
       selection: TextSelection.collapsed(offset: result.cursorOffset),
     );
+  }
+
+  /// Inserts [symbol] (`#`, `/`, or `@`) at the search field's current
+  /// cursor position — same character a manually-typed token starts
+  /// with, so the existing suggestions dropdown (which already matches
+  /// an empty partial) opens for it. A leading space is added first when
+  /// the cursor doesn't already sit at the start of the text or right
+  /// after whitespace, so the inserted symbol doesn't fuse onto the
+  /// preceding word.
+  void _insertSymbol(String symbol) {
+    final text = _searchController.text;
+    var cursor = _searchController.selection.baseOffset;
+    if (cursor < 0) cursor = text.length;
+    final needsLeadingSpace = cursor > 0 && text[cursor - 1] != ' ';
+    final insertion = (needsLeadingSpace ? ' ' : '') + symbol;
+    final newText = text.replaceRange(cursor, cursor, insertion);
+    final newCursor = cursor + insertion.length;
+    _searchController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newCursor),
+    );
+    _searchFocusNode.requestFocus();
+    // A field that gains focus programmatically (rather than via a direct
+    // tap on it) selects all of its text on desktop/web platforms — this
+    // clobbers the collapsed selection just set above. Reassert it once
+    // that focus-driven selection has been applied. (Not exercised by
+    // widget tests: flutter_test runs under a fixed non-desktop
+    // TargetPlatform, which doesn't reproduce this platform-specific
+    // behavior — see the e2e test instead.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _searchController.selection = TextSelection.collapsed(offset: newCursor);
+    });
   }
 
   /// Called on every tap on the search field (see [TextField.onTap]).
@@ -436,6 +476,60 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
   }
 
+  /// The row of quick-insert filter buttons shown below the search field
+  /// while [_filterRowOpen] is true — tapping one inserts its symbol via
+  /// [_insertSymbol], which reopens the existing suggestions dropdown for
+  /// that kind of token.
+  Widget _buildFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      // A focusable tap target (e.g. ActionChip, which owns its own
+      // FocusNode) claims focus for itself right after its onPressed
+      // fires, undoing _insertSymbol's own requestFocus() call on the
+      // search field. Every button below is therefore a plain
+      // GestureDetector (never focusable on its own) reacting to
+      // onTapDown — the same fix the suggestions dropdown uses (see its
+      // own `Focus(canRequestFocus: false, ...)` above) and for the same
+      // reason.
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        child: Row(
+          children: [
+            _filterButton(icon: Icons.tag, label: '#tag', symbol: '#'),
+            const SizedBox(width: 8),
+            _filterButton(
+              icon: Icons.radio_button_unchecked,
+              label: '/status',
+              symbol: '/',
+            ),
+            const SizedBox(width: 8),
+            _filterButton(
+              icon: Icons.category,
+              label: '@category',
+              symbol: '@',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One quick-insert button of [_buildFilterRow] — a static (visually
+  /// chip-like) [Chip] for display plus a [GestureDetector] for the tap
+  /// itself, so nothing in the subtree owns a [FocusNode] that could
+  /// steal focus from the search field (see [_buildFilterRow]'s doc).
+  Widget _filterButton({
+    required IconData icon,
+    required String label,
+    required String symbol,
+  }) {
+    return GestureDetector(
+      onTapDown: (_) => _insertSymbol(symbol),
+      child: Chip(avatar: Icon(icon, size: 18), label: Text(label)),
+    );
+  }
+
   KeyEventResult _handleSearchKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape) {
@@ -515,41 +609,62 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: Size.fromHeight(_filterRowOpen ? 104 : 56),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: CompositedTransformTarget(
-              link: _searchFieldLink,
-              child: Focus(
-                onKeyEvent: _handleSearchKeyEvent,
-                child: Listener(
-                  onPointerDown: (event) =>
-                      _lastPointerDownPosition = event.position,
-                  child: TextField(
-                    key: _searchFieldKey,
-                    controller: _searchController,
-                    focusNode: _searchFocusNode,
-                    onTap: _handleFieldTap,
-                    decoration: InputDecoration(
-                      hintText: 'Search: #tag  @category  /opened  free text',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear),
-                              tooltip: 'Clear search',
-                              onPressed: _searchController.clear,
-                            ),
-                      isDense: true,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CompositedTransformTarget(
+                  link: _searchFieldLink,
+                  child: Focus(
+                    onKeyEvent: _handleSearchKeyEvent,
+                    child: Listener(
+                      onPointerDown: (event) =>
+                          _lastPointerDownPosition = event.position,
+                      child: TextField(
+                        key: _searchFieldKey,
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        onTap: _handleFieldTap,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Search: #tag  @category  /opened  free text',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_searchController.text.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  tooltip: 'Clear search',
+                                  onPressed: _searchController.clear,
+                                ),
+                              IconButton(
+                                icon: const Icon(Icons.filter_alt),
+                                tooltip: 'Filters',
+                                color: _filterRowOpen
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                                onPressed: () => setState(
+                                  () => _filterRowOpen = !_filterRowOpen,
+                                ),
+                              ),
+                            ],
+                          ),
+                          isDense: true,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                if (_filterRowOpen) _buildFilterRow(),
+              ],
             ),
           ),
         ),

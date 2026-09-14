@@ -728,4 +728,114 @@ void main() {
       expect(find.byIcon(Icons.tag), findsNWidgets(4));
     });
   });
+
+  group('filter row', () {
+    testWidgets('is hidden by default', (tester) async {
+      await _pump(tester);
+
+      expect(find.text('#tag'), findsNothing);
+      expect(find.text('/status'), findsNothing);
+      expect(find.text('@category'), findsNothing);
+    });
+
+    testWidgets('tapping the filter toggle shows the #tag /status '
+        '@category buttons', (tester) async {
+      await _pump(tester);
+
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+
+      expect(find.text('#tag'), findsOneWidget);
+      expect(find.text('/status'), findsOneWidget);
+      expect(find.text('@category'), findsOneWidget);
+    });
+
+    testWidgets('tapping the filter toggle again hides the row', (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+
+      expect(find.text('#tag'), findsNothing);
+    });
+
+    testWidgets('tapping the #tag button inserts "#" at the cursor and '
+        'opens the tag suggestions dropdown', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      final notifier = container.read(taskListProvider.notifier);
+      final milk = await notifier.addTask(title: 'Buy milk');
+      await notifier.updateTask(milk, tags: ['groceries']);
+      await _pump(tester, container: container);
+
+      await tester.enterText(find.byType(TextField), 'buy ');
+      final field = tester.widget<TextField>(find.byType(TextField));
+      field.controller!.selection = const TextSelection.collapsed(offset: 4);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+
+      await tester.tap(find.text('#tag'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(field.controller!.text, 'buy #');
+      expect(find.widgetWithText(ListTile, 'groceries'), findsOneWidget);
+    });
+
+    testWidgets('tapping the @category button inserts "@" mid-text with '
+        'a leading space when the cursor sits right after a word', (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'buy milk');
+      final field = tester.widget<TextField>(find.byType(TextField));
+      field.controller!.selection = const TextSelection.collapsed(offset: 3);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+
+      await tester.tap(find.text('@category'));
+      await tester.pump();
+
+      expect(field.controller!.text, 'buy @ milk');
+    });
+
+    testWidgets('tapping the /status button does not insert a leading '
+        'space when the cursor already sits after whitespace', (tester) async {
+      await _pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'buy ');
+      final field = tester.widget<TextField>(find.byType(TextField));
+      field.controller!.selection = const TextSelection.collapsed(offset: 4);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+
+      await tester.tap(find.text('/status'));
+      await tester.pump();
+
+      expect(field.controller!.text, 'buy /');
+    });
+
+    testWidgets('the filter row stays open after tapping a filter button', (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pump();
+      await tester.tap(find.text('#tag'));
+      await tester.pump();
+
+      expect(find.text('#tag'), findsOneWidget);
+    });
+  });
 }
