@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/search_query.dart';
@@ -19,6 +21,14 @@ final _partialTagPattern = RegExp(r'(^|\s)#(!?)(\w*)$');
 
 /// The `/` counterpart of [_partialTagPattern].
 final _partialStatusPattern = RegExp(r'(^|\s)/(!?)(\w*)$');
+
+/// The `@` counterpart of [_partialTagPattern].
+final _partialCategoryPattern = RegExp(r'(^|\s)@(!?)(\w*)$');
+
+/// Which kind of token the suggestions dropdown is currently offering —
+/// decides both the icon shown per row and which symbol/lookup
+/// [_TasksScreenState._selectSuggestion] uses to complete it.
+enum _TokenKind { tag, status, category }
 
 /// Suggestions dropdown never lists more than this many options — the
 /// tag/status vocabulary can grow arbitrarily large, but a floating list
@@ -93,8 +103,11 @@ class UnifiedQueryController extends TextEditingController {
 ///
 /// A single search field doubles as the query: plain text filters by
 /// title, `#tag`/`#!tag` anywhere in the text filters tasks by tag
-/// (multiple combine with AND), and `/opened`/`/!opened` filters by
-/// closed status. Recognized tokens render as styled (not extracted)
+/// (multiple combine with AND), `@category`/`@!category` filters by the
+/// task's category name (multiple also combine with AND — since a task
+/// has exactly one category, more than one *included* category can
+/// never match), and `/opened`/`/!opened` filters by closed status.
+/// Recognized tokens render as styled (not extracted)
 /// text — tapping one toggles it between included/excluded; removing
 /// one is plain text editing. The whole query string mirrors to/from the
 /// `q` query parameter of the current route (when reached via
@@ -245,12 +258,14 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
   /// The dropdown's current suggestions — tag names while the text
   /// immediately before the cursor ends in an unfinished `#word`/
-  /// `#!word`, or `opened` while it ends in an unfinished `/word`/
+  /// `#!word`, category names while it ends in an unfinished `@word`/
+  /// `@!word`, or `opened` while it ends in an unfinished `/word`/
   /// `/!word` and no status filter is set yet. `null` hides the
   /// dropdown: no partial match, no candidates, dismissed via Escape, or
   /// the field isn't focused.
-  ({List<String> options, bool isStatus})? _currentSuggestions(
+  ({List<String> options, _TokenKind kind})? _currentSuggestions(
     List<Task> tasks,
+    List<Category> categories,
   ) {
     if (_suggestionsDismissed || !_searchFocusNode.hasFocus) return null;
     final cursor = _searchController.selection.baseOffset;
@@ -270,7 +285,31 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             ..sort();
       return options.isEmpty
           ? null
-          : (options: options.take(_maxSuggestions).toList(), isStatus: false);
+          : (
+              options: options.take(_maxSuggestions).toList(),
+              kind: _TokenKind.tag,
+            );
+    }
+    final categoryMatch = _partialCategoryPattern.firstMatch(beforeCursor);
+    if (categoryMatch != null) {
+      final partial = categoryMatch.group(3)!.toLowerCase();
+      final parsed = parseSearchQuery(_searchController.text);
+      final selected = {for (final t in parsed.categoryTokens) t.category};
+      final allCategoryNames = <String>{
+        for (final category in categories) category.name.toLowerCase(),
+      };
+      final options =
+          allCategoryNames
+              .difference(selected)
+              .where((name) => name.startsWith(partial))
+              .toList()
+            ..sort();
+      return options.isEmpty
+          ? null
+          : (
+              options: options.take(_maxSuggestions).toList(),
+              kind: _TokenKind.category,
+            );
     }
     final statusMatch = _partialStatusPattern.firstMatch(beforeCursor);
     if (statusMatch != null) {
@@ -278,7 +317,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       if (parsed.statusToken == null) {
         final partial = statusMatch.group(3)!.toLowerCase();
         if (openedStatusWord.startsWith(partial)) {
-          return (options: [openedStatusWord], isStatus: true);
+          return (options: [openedStatusWord], kind: _TokenKind.status);
         }
       }
     }
@@ -287,17 +326,26 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
   /// Completes the unfinished token immediately before the cursor with
   /// [option] plus a trailing space, then reinserts whatever followed
-  /// the cursor — same shape a manually-typed `#tag `/`/opened ` settles
-  /// to, so the assignment re-enters [_onSearchChanged].
-  void _selectSuggestion(String option, {required bool isStatus}) {
+  /// the cursor — same shape a manually-typed `#tag `/`@category `/
+  /// `/opened ` settles to, so the assignment re-enters
+  /// [_onSearchChanged].
+  void _selectSuggestion(String option, {required _TokenKind kind}) {
     final cursor = _searchController.selection.baseOffset;
     final text = _searchController.text;
     final beforeCursor = text.substring(0, cursor);
     final afterCursor = text.substring(cursor);
-    final match = (isStatus ? _partialStatusPattern : _partialTagPattern)
-        .firstMatch(beforeCursor)!;
+    final pattern = switch (kind) {
+      _TokenKind.status => _partialStatusPattern,
+      _TokenKind.tag => _partialTagPattern,
+      _TokenKind.category => _partialCategoryPattern,
+    };
+    final match = pattern.firstMatch(beforeCursor)!;
     final prefix = beforeCursor.substring(0, match.start) + match.group(1)!;
-    final symbol = isStatus ? '/' : '#';
+    final symbol = switch (kind) {
+      _TokenKind.status => '/',
+      _TokenKind.tag => '#',
+      _TokenKind.category => '@',
+    };
     final completed = '$prefix$symbol${match.group(2)}$option ';
     _searchController.value = TextEditingValue(
       text: completed + afterCursor,
@@ -312,7 +360,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   /// size/position the dropdown — is guaranteed to be laid out.
   void _syncSuggestionsOverlay() {
     final tasks = ref.read(taskListProvider).value ?? const <Task>[];
-    final hasSuggestions = _currentSuggestions(tasks) != null;
+    final categories =
+        ref.read(categoryListProvider).value ?? const <Category>[];
+    final hasSuggestions = _currentSuggestions(tasks, categories) != null;
     if (!hasSuggestions) {
       _suggestionsOverlayEntry?.remove();
       _suggestionsOverlayEntry?.dispose();
@@ -333,7 +383,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   /// snapshot) since [OverlayEntry.markNeedsBuild] just re-invokes this.
   Widget _buildSuggestionsOverlay(BuildContext context) {
     final tasks = ref.read(taskListProvider).value ?? const <Task>[];
-    final suggestions = _currentSuggestions(tasks);
+    final categories =
+        ref.read(categoryListProvider).value ?? const <Category>[];
+    final suggestions = _currentSuggestions(tasks, categories);
     if (suggestions == null) return const SizedBox.shrink();
     final fieldBox =
         _searchFieldKey.currentContext?.findRenderObject() as RenderBox?;
@@ -364,17 +416,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                     // Selection fires on tap-DOWN, not tap-up: by tap-up,
                     // the search field may already have lost focus (see
                     // above) and this row rebuilt away.
-                    onTapDown: (_) => _selectSuggestion(
-                      option,
-                      isStatus: suggestions.isStatus,
-                    ),
+                    onTapDown: (_) =>
+                        _selectSuggestion(option, kind: suggestions.kind),
                     child: ListTile(
                       dense: true,
-                      leading: Icon(
-                        suggestions.isStatus
-                            ? Icons.radio_button_unchecked
-                            : Icons.tag,
-                      ),
+                      leading: Icon(switch (suggestions.kind) {
+                        _TokenKind.status => Icons.radio_button_unchecked,
+                        _TokenKind.tag => Icons.tag,
+                        _TokenKind.category => Icons.category,
+                      }),
                       title: Text(option),
                     ),
                   ),
@@ -390,7 +440,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape) {
       final tasks = ref.read(taskListProvider).value ?? const <Task>[];
-      if (_currentSuggestions(tasks) != null) {
+      final categories =
+          ref.read(categoryListProvider).value ?? const <Category>[];
+      if (_currentSuggestions(tasks, categories) != null) {
         setState(() => _suggestionsDismissed = true);
         return KeyEventResult.handled;
       }
@@ -412,9 +464,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
   }
 
-  List<Task> _filter(List<Task> tasks) {
+  List<Task> _filter(List<Task> tasks, List<Category> categories) {
     final parsed = parseSearchQuery(_searchController.text);
     final query = parsed.freeText.toLowerCase();
+    final categoryNameById = {
+      for (final category in categories)
+        category.id: category.name.toLowerCase(),
+    };
     return [
       for (final task in tasks)
         if ((query.isEmpty || task.title.toLowerCase().contains(query)) &&
@@ -424,7 +480,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               (t) => t.excluded
                   ? !task.tags.contains(t.tag)
                   : task.tags.contains(t.tag),
-            ))
+            ) &&
+            parsed.categoryTokens.every((t) {
+              final taskCategoryName = categoryNameById[task.categoryId];
+              return t.excluded
+                  ? taskCategoryName != t.category
+                  : taskCategoryName == t.category;
+            }))
           task,
     ];
   }
@@ -432,6 +494,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(taskListProvider);
+    final categoriesAsync = ref.watch(categoryListProvider);
     // Overlay content can only be sized/positioned off the search field's
     // render box once this frame has actually laid it out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -468,7 +531,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                     focusNode: _searchFocusNode,
                     onTap: _handleFieldTap,
                     decoration: InputDecoration(
-                      hintText: 'Search: #tag  /opened  free text',
+                      hintText: 'Search: #tag  @category  /opened  free text',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: _searchController.text.isEmpty
                           ? null
@@ -500,7 +563,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   ? EdgeInsets.zero
                   : const EdgeInsets.symmetric(vertical: 8),
               children: [
-                for (final task in _filter(value))
+                for (final task in _filter(
+                  value,
+                  categoriesAsync.value ?? const <Category>[],
+                ))
                   TaskCard(
                     task: task,
                     onTap: () =>

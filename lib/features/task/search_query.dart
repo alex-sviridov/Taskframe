@@ -23,6 +23,27 @@ class TagToken {
   final TextRange range;
 }
 
+/// An `@category`/`@!category` occurrence found anywhere in a unified
+/// search query string — the `@` counterpart of [TagToken], matched
+/// against a category's name rather than a task's tags.
+class CategoryToken {
+  /// Creates a category token.
+  const new({
+    required this.category,
+    required this.excluded,
+    required this.range,
+  });
+
+  /// The category's lowercased name, without the leading '@'.
+  final String category;
+
+  /// Whether this category is excluded (prefixed with '!').
+  final bool excluded;
+
+  /// The exact range of characters this token occupies in the query.
+  final TextRange range;
+}
+
 /// A `/opened`/`/!opened` occurrence — at most one is recognized per
 /// query (see [parseSearchQuery]).
 class StatusToken {
@@ -37,18 +58,22 @@ class StatusToken {
 }
 
 /// The parsed pieces of a unified search query string: every tag token,
-/// at most one status token, and the free text left over once every
-/// recognized token's characters are removed.
+/// every category token, at most one status token, and the free text
+/// left over once every recognized token's characters are removed.
 class ParsedQuery {
   /// Creates a parsed query result.
   const new({
     required this.tagTokens,
+    required this.categoryTokens,
     required this.statusToken,
     required this.freeText,
   });
 
   /// Every tag token found in the query, in order of appearance.
   final List<TagToken> tagTokens;
+
+  /// Every category token found in the query, in order of appearance.
+  final List<CategoryToken> categoryTokens;
 
   /// The status token found in the query, if any (at most one).
   final StatusToken? statusToken;
@@ -58,18 +83,20 @@ class ParsedQuery {
   final String freeText;
 }
 
-final _tokenPattern = RegExp(r'(#|/)(!?)(\w+)');
+final _tokenPattern = RegExp(r'(#|/|@)(!?)(\w+)');
 
-/// Parses [text] for every `#tag`/`#!tag` and the first `/opened`/
-/// `/!opened` occurrence, returning their positions plus the leftover
-/// free text (every recognized token's characters removed, whitespace
-/// collapsed and trimmed).
+/// Parses [text] for every `#tag`/`#!tag`, every `@category`/
+/// `@!category`, and the first `/opened`/`/!opened` occurrence,
+/// returning their positions plus the leftover free text (every
+/// recognized token's characters removed, whitespace collapsed and
+/// trimmed).
 ///
 /// A `/word` where `word` isn't [openedStatusWord] is left alone as
 /// plain text. A second `/opened`/`/!opened` beyond the first is also
 /// left as plain text: only one status filter slot exists.
 ParsedQuery parseSearchQuery(String text) {
   final tagTokens = <TagToken>[];
+  final categoryTokens = <CategoryToken>[];
   StatusToken? statusToken;
   final removedRanges = <TextRange>[];
 
@@ -81,6 +108,15 @@ ParsedQuery parseSearchQuery(String text) {
     if (symbol == '#') {
       tagTokens.add(
         TagToken(tag: word.toLowerCase(), excluded: excluded, range: range),
+      );
+      removedRanges.add(range);
+    } else if (symbol == '@') {
+      categoryTokens.add(
+        CategoryToken(
+          category: word.toLowerCase(),
+          excluded: excluded,
+          range: range,
+        ),
       );
       removedRanges.add(range);
     } else if (statusToken == null && word.toLowerCase() == openedStatusWord) {
@@ -100,19 +136,22 @@ ParsedQuery parseSearchQuery(String text) {
 
   return ParsedQuery(
     tagTokens: tagTokens,
+    categoryTokens: categoryTokens,
     statusToken: statusToken,
     freeText: freeText,
   );
 }
 
-/// Every recognized token in [parsed] (tag and status alike) as a
-/// uniform `(range, excluded)` shape, sorted left-to-right — the order
-/// rendering (and any other range-based consumer) needs.
+/// Every recognized token in [parsed] (tag, category, and status alike)
+/// as a uniform `(range, excluded)` shape, sorted left-to-right — the
+/// order rendering (and any other range-based consumer) needs.
 List<({TextRange range, bool excluded})> orderedTokenRanges(
   ParsedQuery parsed,
 ) {
   final ranges = [
     for (final t in parsed.tagTokens) (range: t.range, excluded: t.excluded),
+    for (final t in parsed.categoryTokens)
+      (range: t.range, excluded: t.excluded),
     if (parsed.statusToken != null)
       (
         range: parsed.statusToken!.range,

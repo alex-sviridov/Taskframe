@@ -1,7 +1,7 @@
 COVERAGE_DIR := coverage
 
 .PHONY: help setup format format-check analyze test test-coverage e2e check \
-	run-android run-web build-apk build-web build-ios clean
+	run run-android run-web build-apk build-web build-ios clean
 
 help:
 	@echo "Available targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  test-coverage  Run tests with a coverage report"
 	@echo "  e2e            Run Playwright end-to-end tests against flutter web"
 	@echo "  check          format-check + analyze + test + e2e (run before pushing)"
+	@echo "  run            Build the release web bundle and serve it on :8080"
 	@echo "  run-android    Run on an Android device/emulator"
 	@echo "  run-web        Run in Chrome"
 	@echo "  build-apk      Build a release APK"
@@ -50,6 +51,15 @@ e2e:
 	cd e2e && npx playwright test
 
 check: format-check analyze test e2e
+
+# Builds first and only then serves the finished, static build/web/ —
+# `flutter run -d web-server` starts accepting connections before its
+# background release build finishes writing build/web/, which can serve a
+# stale or partial bundle (see e2e/playwright.config.ts's webServer).
+run:
+	@fuser -k 8080/tcp 2>/dev/null || true
+	flutter build web --release --pwa-strategy=offline-first
+	python3 -m http.server 8080 --directory build/web
 
 run-android:
 	flutter run -d android

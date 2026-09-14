@@ -13,8 +13,9 @@ import {
  * persistent search field — every plain `getByRole('textbox')` in this file
  * would otherwise match both once the modal is open. Distinguished by
  * accessible name: the search field's name is its hint text ("Search:
- * #tag  /opened  free text", collapsed to "Search: #tag /opened free text"
- * in the accessibility tree) regardless of its current value, while the
+ * #tag  @category  /opened  free text", collapsed to "Search: #tag
+ * @category /opened free text" in the accessibility tree) regardless of its
+ * current value, while the
  * modal's field has no name at all.
  */
 function modalTextbox(page: Page): Locator {
@@ -67,8 +68,8 @@ async function dismissTaskModal(page: Page): Promise<void> {
 /**
  * The tasks screen's persistent search field, as opposed to the task edit
  * modal's own title field (see {@link modalTextbox}). Distinguished by
- * accessible name: the search field keeps its hint ("Search: #tag  /opened
- * free text") as its name while empty; the modal's field has none.
+ * accessible name: the search field keeps its hint ("Search: #tag  @category
+ * /opened  free text") as its name while empty; the modal's field has none.
  */
 function searchTextbox(page: Page): Locator {
   return page.getByRole('textbox', { name: /^Search:/ });
@@ -91,6 +92,25 @@ async function addTaskWithTags(
     await fillTextboxUntilTrue(field, `${title} #${tag} `, async () =>
       (await field.inputValue().catch(() => '')) === `${title} `);
   }
+  await dismissTaskModal(page);
+}
+
+/**
+ * Creates a task titled [title] and assigns it to the category named
+ * [categoryName] via the modal's category dropdown — the same picker
+ * exercised by "picking a category from the dropdown" above. [categoryName]
+ * must already exist (see {@link addCategoryAndGoToTasks}).
+ */
+async function addTaskWithCategory(
+  page: Page,
+  title: string,
+  categoryName: string,
+): Promise<void> {
+  await page.getByRole('button', { name: 'Add task' }).click();
+  await fillTextboxUntilSet(modalTextbox(page), title);
+  await page.getByRole('button', { name: 'Default' }).click();
+  await page.getByRole('menuitem', { name: categoryName }).click();
+  await expect(page.getByRole('button', { name: categoryName })).toBeVisible();
   await dismissTaskModal(page);
 }
 
@@ -362,6 +382,42 @@ test.describe('wide viewport', () => {
 
       await expect(page.getByRole('button', { name: 'Buy milk' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Walk the dog' })).toHaveCount(0);
+    });
+
+    test('an @category anywhere in the search text filters to tasks with '
+      + 'that category', async ({ page }) => {
+      await addCategoryAndGoToTasks(page, 'Work');
+      await addTaskWithCategory(page, 'Ship it', 'Work');
+      await addTaskWithTags(page, 'Buy milk', []);
+
+      await fillTextboxUntilSet(searchTextbox(page), '@work');
+
+      await expect(page.getByRole('button', { name: 'Ship it' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Buy milk' })).toHaveCount(0);
+    });
+
+    test('@!category excludes tasks with that category', async ({ page }) => {
+      await addCategoryAndGoToTasks(page, 'Work');
+      await addTaskWithCategory(page, 'Ship it', 'Work');
+      await addTaskWithTags(page, 'Buy milk', []);
+
+      await fillTextboxUntilSet(searchTextbox(page), '@!work');
+
+      await expect(page.getByRole('button', { name: 'Ship it' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Buy milk' })).toBeVisible();
+    });
+
+    test('several @categories combine with AND — since a task has only one '
+      + 'category, two different included ones together match nothing', async ({
+      page,
+    }) => {
+      await addCategoryAndGoToTasks(page, 'Work');
+      await addCategoryAndGoToTasks(page, 'Home');
+      await addTaskWithCategory(page, 'Ship it', 'Work');
+
+      await fillTextboxUntilSet(searchTextbox(page), '@work @home');
+
+      await expect(page.getByRole('button', { name: 'Ship it' })).toHaveCount(0);
     });
 
     test('typing #groceries into an empty search field shows a tag '
