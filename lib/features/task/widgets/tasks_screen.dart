@@ -181,6 +181,31 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `GoRouter.maybeOf(context)?.state` (unlike [GoRouterState.of]) does
+    // not register this as a listener of route changes, so it would never
+    // see a `q` update that happens while this screen stays mounted — as
+    // when a saved view navigates here via `context.go('/tasks?q=...')`.
+    // [GoRouterState.of] does subscribe, via an [InheritedWidget], so this
+    // re-runs whenever the route's query actually changes.
+    if (GoRouter.maybeOf(context) == null) return;
+    final urlQuery = GoRouterState.of(context).uri.queryParameters['q'] ?? '';
+    if (urlQuery != _searchController.text) {
+      // Bypass the listener that normally fires on every edit: it calls
+      // [_syncUrl], which would push another route change right back at
+      // the router while this screen is still building in response to the
+      // first one.
+      _searchController.removeListener(_onSearchChanged);
+      _searchController.value = TextEditingValue(
+        text: urlQuery,
+        selection: TextSelection.collapsed(offset: urlQuery.length),
+      );
+      _searchController.addListener(_onSearchChanged);
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();

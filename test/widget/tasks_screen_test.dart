@@ -545,6 +545,20 @@ void main() {
       expect(find.text('Walk the dog'), findsNothing);
     });
 
+    testWidgets(
+      "search field updates when the route's q parameter changes "
+      'while already mounted',
+      (tester) async {
+        final router = _buildTestRouter();
+        await _pumpWithRouter(tester, router);
+
+        router.go('/tasks?q=%23urgent');
+        await tester.pumpAndSettle();
+
+        expect(find.text('#urgent'), findsOneWidget);
+      },
+    );
+
     testWidgets('typing updates the q query parameter in the address '
         'bar to the raw text, verbatim', (tester) async {
       final router = _buildTestRouter();
