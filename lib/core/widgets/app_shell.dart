@@ -159,13 +159,23 @@ class _SavedViewsSection extends ConsumerWidget {
             ),
           ),
         ),
-        for (var i = 0; i < views.length; i++)
-          _SavedViewRow(
-            key: ValueKey(views[i].id),
-            view: views[i],
-            index: i,
-            isNarrow: isNarrow,
-          ),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorder: (oldIndex, newIndex) => ref
+              .read(savedSearchListProvider.notifier)
+              .reorder(oldIndex, newIndex),
+          children: [
+            for (var i = 0; i < views.length; i++)
+              _SavedViewRow(
+                key: ValueKey(views[i].id),
+                view: views[i],
+                index: i,
+                isNarrow: isNarrow,
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -250,21 +260,30 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
             )
           : Text(widget.view.name, overflow: TextOverflow.ellipsis),
       trailing: showAffordances
-          ? PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 18),
-              onSelected: (choice) {
-                if (choice == 'rename') {
-                  setState(() => _renaming = true);
-                } else if (choice == 'delete') {
-                  setState(() => _revealed = false);
-                  ref
-                      .read(savedSearchListProvider.notifier)
-                      .deleteView(widget.view);
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'rename', child: Text('Rename')),
-                PopupMenuItem(value: 'delete', child: Text('Delete')),
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: const Icon(Icons.drag_indicator, size: 18),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 18),
+                  onSelected: (choice) {
+                    if (choice == 'rename') {
+                      setState(() => _renaming = true);
+                    } else if (choice == 'delete') {
+                      setState(() => _revealed = false);
+                      ref
+                          .read(savedSearchListProvider.notifier)
+                          .deleteView(widget.view);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
               ],
             )
           : null,

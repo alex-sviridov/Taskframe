@@ -166,5 +166,47 @@ void main() {
       expect(find.text('Urgent work'), findsNothing);
       expect(find.text('Saved views'), findsNothing);
     });
+
+    testWidgets('two saved views can be reordered by dragging the handle', (
+      tester,
+    ) async {
+      _setViewportWidth(tester, 1000);
+      final repository = InMemorySavedSearchRepository();
+      await repository.add(name: 'First', query: '#a');
+      await repository.add(name: 'Second', query: '#b');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            savedSearchRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp.router(routerConfig: _buildRouter()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Reveal the row affordances (drag handle + overflow menu) the same
+      // way the hover test above does, since they're hidden until then.
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(find.text('First')));
+      await tester.pump();
+
+      final firstHandleFinder = find.byIcon(Icons.drag_indicator).first;
+      final secondRowFinder = find.text('Second');
+      await tester.drag(
+        firstHandleFinder,
+        tester.getCenter(secondRowFinder) - tester.getCenter(firstHandleFinder),
+      );
+      await tester.pumpAndSettle();
+
+      final rowTexts = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data)
+          .where((t) => t == 'First' || t == 'Second')
+          .toList();
+      expect(rowTexts, ['Second', 'First']);
+    });
   });
 }
