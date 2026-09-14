@@ -162,7 +162,7 @@ class _SavedViewsSection extends ConsumerWidget {
     // carry entirely on their own (48), so text still lands at the same x
     // as before.
     return Padding(
-      padding: const EdgeInsets.only(left: 16, top: 8),
+      padding: const EdgeInsets.only(left: 16, top: 8, right: 8),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -278,8 +278,18 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
 
     final row = ListTile(
       dense: true,
-      contentPadding: const EdgeInsets.only(left: 32, right: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      // The section's own right: 8 padding already insets the tile from
+      // the sidebar edge to align with the Tasks pill above, so no
+      // additional right content padding is needed here.
+      contentPadding: const EdgeInsets.only(left: 32),
+      // Left corners stay square so the selected pill continues the
+      // straight accent-bar line unbroken instead of curving away from it.
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(20),
+          bottomRight: Radius.circular(20),
+        ),
+      ),
       selected: widget.isSelected,
       selectedTileColor: colorScheme.secondaryContainer,
       selectedColor: colorScheme.onSecondaryContainer,
