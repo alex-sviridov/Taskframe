@@ -149,40 +149,59 @@ class _SavedViewsSection extends ConsumerWidget {
         ref.watch(savedSearchListProvider).value ?? const <SavedSearch>[];
     if (views.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(48, 16, 16, 4),
-          child: Text(
-            'Saved views',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+    // The left border reads as a "child of Tasks" tree accent — offset
+    // under the destination icon column, with the section's own content
+    // padding (32) picking up the rest of the indent the header/rows used
+    // to carry entirely on their own (48), so text still lands at the same
+    // x as before.
+    return Padding(
+      padding: const EdgeInsets.only(left: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: Theme.of(context).colorScheme.primary
+                  .withValues(alpha: 0.4),
+              width: 3,
             ),
           ),
         ),
-        ReorderableListView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles: false,
-          // onReorderItem pre-adjusts newIndex for the removed item, but
-          // SavedSearchListNotifier.reorder already does that adjustment
-          // itself; migrating both sides is out of scope for this fix.
-          // ignore: deprecated_member_use
-          onReorder: (oldIndex, newIndex) => ref
-              .read(savedSearchListProvider.notifier)
-              .reorder(oldIndex, newIndex),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var i = 0; i < views.length; i++)
-              _SavedViewRow(
-                key: ValueKey(views[i].id),
-                view: views[i],
-                index: i,
-                isNarrow: isNarrow,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 16, 16, 4),
+              child: Text(
+                'Saved views',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
+            ),
+            ReorderableListView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              // onReorderItem pre-adjusts newIndex for the removed item, but
+              // SavedSearchListNotifier.reorder already does that adjustment
+              // itself; migrating both sides is out of scope for this fix.
+              // ignore: deprecated_member_use
+              onReorder: (oldIndex, newIndex) => ref
+                  .read(savedSearchListProvider.notifier)
+                  .reorder(oldIndex, newIndex),
+              children: [
+                for (var i = 0; i < views.length; i++)
+                  _SavedViewRow(
+                    key: ValueKey(views[i].id),
+                    view: views[i],
+                    index: i,
+                    isNarrow: isNarrow,
+                  ),
+              ],
+            ),
           ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -260,7 +279,7 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
 
     final row = ListTile(
       dense: true,
-      contentPadding: const EdgeInsets.only(left: 48, right: 8),
+      contentPadding: const EdgeInsets.only(left: 32, right: 8),
       title: _renaming
           // Reads DefaultTextStyle from inside the title slot, so the field
           // always matches whatever text style ListTile would otherwise
