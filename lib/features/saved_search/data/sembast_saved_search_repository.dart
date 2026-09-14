@@ -10,7 +10,7 @@ const _uuid = Uuid();
 /// saved views across restarts. Records are keyed by [SavedSearch.id].
 class SembastSavedSearchRepository implements SavedSearchRepository {
   /// Creates a [SembastSavedSearchRepository] reading/writing [_db].
-  SembastSavedSearchRepository(this._db);
+  new(this._db);
 
   final Database _db;
 
