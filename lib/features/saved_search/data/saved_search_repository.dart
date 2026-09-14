@@ -1,4 +1,3 @@
-// lib/features/saved_search/data/saved_search_repository.dart
 import 'package:taskframe/features/saved_search/models/saved_search.dart';
 
 /// Loads and stores pinned Tasks search views.
@@ -34,15 +33,15 @@ class InMemorySavedSearchRepository implements SavedSearchRepository {
   Future<List<SavedSearch>> load() async => List.unmodifiable(_views);
 
   @override
-  Future<SavedSearch> add({
-    required String name,
-    required String query,
-  }) async {
+  Future<SavedSearch> add({required String name, required String query}) async {
+    final nextOrder = _views.isEmpty
+        ? 0
+        : _views.map((v) => v.order).reduce((a, b) => a > b ? a : b) + 1;
     final view = SavedSearch(
       id: 'saved-search-${_nextId++}',
       name: name,
       query: query,
-      order: _views.length,
+      order: nextOrder,
     );
     _views.add(view);
     return view;

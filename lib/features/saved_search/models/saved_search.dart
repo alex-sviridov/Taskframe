@@ -1,6 +1,7 @@
-// lib/features/saved_search/models/saved_search.dart
+import 'package:flutter/foundation.dart';
 
 /// A pinned Tasks search query, shown in the sidebar under "Tasks".
+@immutable
 class SavedSearch {
   /// Creates a [SavedSearch].
   const new({

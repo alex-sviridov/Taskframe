@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -163,6 +165,10 @@ class _SavedViewsSection extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
+          // onReorderItem pre-adjusts newIndex for the removed item, but
+          // SavedSearchListNotifier.reorder already does that adjustment
+          // itself; migrating both sides is out of scope for this fix.
+          // ignore: deprecated_member_use
           onReorder: (oldIndex, newIndex) => ref
               .read(savedSearchListProvider.notifier)
               .reorder(oldIndex, newIndex),
@@ -241,7 +247,11 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
       _nameController.text = widget.view.name;
       return;
     }
-    ref.read(savedSearchListProvider.notifier).renameView(widget.view, newName);
+    unawaited(
+      ref
+          .read(savedSearchListProvider.notifier)
+          .renameView(widget.view, newName),
+    );
   }
 
   @override
@@ -274,9 +284,11 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
                       setState(() => _renaming = true);
                     } else if (choice == 'delete') {
                       setState(() => _revealed = false);
-                      ref
-                          .read(savedSearchListProvider.notifier)
-                          .deleteView(widget.view);
+                      unawaited(
+                        ref
+                            .read(savedSearchListProvider.notifier)
+                            .deleteView(widget.view),
+                      );
                     }
                   },
                   itemBuilder: (context) => const [

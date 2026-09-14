@@ -14,10 +14,7 @@ void main() {
       final repository = InMemorySavedSearchRepository();
 
       await repository.add(name: 'Tasks view 1', query: '#urgent');
-      final second = await repository.add(
-        name: 'Tasks view 2',
-        query: '@work',
-      );
+      final second = await repository.add(name: 'Tasks view 2', query: '@work');
 
       final views = await repository.load();
       expect(views, hasLength(2));
@@ -53,16 +50,38 @@ void main() {
       expect(await repository.load(), isEmpty);
     });
 
-    test('reorder persists the given order and reassigns order fields', () async {
-      final repository = InMemorySavedSearchRepository();
-      final first = await repository.add(name: 'First', query: 'a');
-      final second = await repository.add(name: 'Second', query: 'b');
+    test(
+      'reorder persists the given order and reassigns order fields',
+      () async {
+        final repository = InMemorySavedSearchRepository();
+        final first = await repository.add(name: 'First', query: 'a');
+        final second = await repository.add(name: 'Second', query: 'b');
 
-      await repository.reorder([second, first]);
+        await repository.reorder([second, first]);
 
-      final views = await repository.load();
-      expect(views.map((v) => v.name), ['Second', 'First']);
-      expect(views.map((v) => v.order), [0, 1]);
-    });
+        final views = await repository.load();
+        expect(views.map((v) => v.name), ['Second', 'First']);
+        expect(views.map((v) => v.order), [0, 1]);
+      },
+    );
+
+    test(
+      'add after deleting an earlier view does not collide orders',
+      () async {
+        final repository = InMemorySavedSearchRepository();
+        await repository.add(name: 'First', query: 'a');
+        final second = await repository.add(name: 'Second', query: 'b');
+        final third = await repository.add(name: 'Third', query: 'c');
+
+        await repository.delete(
+          (await repository.load()).firstWhere((v) => v.name == 'First'),
+        );
+        final fourth = await repository.add(name: 'Fourth', query: 'd');
+
+        expect(fourth.order, 3);
+        final orders = [second.order, third.order, fourth.order];
+        expect(orders.toSet(), hasLength(orders.length));
+      },
+    );
   });
 }

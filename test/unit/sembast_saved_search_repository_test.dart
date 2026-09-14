@@ -60,5 +60,23 @@ void main() {
       final views = await repository.load();
       expect(views.map((v) => v.name), ['Second', 'First']);
     });
+
+    test(
+      'add after deleting an earlier view does not collide orders',
+      () async {
+        await repository.add(name: 'First', query: 'a');
+        final second = await repository.add(name: 'Second', query: 'b');
+        final third = await repository.add(name: 'Third', query: 'c');
+
+        await repository.delete(
+          (await repository.load()).firstWhere((v) => v.name == 'First'),
+        );
+        final fourth = await repository.add(name: 'Fourth', query: 'd');
+
+        expect(fourth.order, 3);
+        final orders = [second.order, third.order, fourth.order];
+        expect(orders.toSet(), hasLength(orders.length));
+      },
+    );
   });
 }

@@ -1,4 +1,3 @@
-// lib/features/saved_search/providers.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/saved_search/data/saved_search_repository.dart';
 import 'package:taskframe/features/saved_search/models/saved_search.dart';
@@ -56,15 +55,16 @@ class SavedSearchListNotifier extends AsyncNotifier<List<SavedSearch>> {
   }
 
   /// Moves the view at [oldIndex] to [newIndex] — same index semantics as
-  /// [ReorderableListView.onReorder] (i.e. [newIndex] is the index in the
+  /// ReorderableListView's onReorder (i.e. [newIndex] is the index in the
   /// list *before* the moved item is removed) — persisting the new order
   /// via the repository and refreshing state.
   Future<void> reorder(int oldIndex, int newIndex) async {
     final repository = ref.read(savedSearchRepositoryProvider);
     final current = [...?state.value];
-    if (newIndex > oldIndex) newIndex -= 1;
+    var adjustedNewIndex = newIndex;
+    if (adjustedNewIndex > oldIndex) adjustedNewIndex -= 1;
     final moved = current.removeAt(oldIndex);
-    current.insert(newIndex, moved);
+    current.insert(adjustedNewIndex, moved);
     state = AsyncData(current);
     await repository.reorder(current);
   }

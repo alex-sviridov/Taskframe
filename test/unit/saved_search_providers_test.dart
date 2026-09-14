@@ -63,9 +63,7 @@ void main() {
           .read(savedSearchListProvider.notifier)
           .addView('#a');
 
-      await container
-          .read(savedSearchListProvider.notifier)
-          .deleteView(added);
+      await container.read(savedSearchListProvider.notifier).deleteView(added);
 
       final views = container.read(savedSearchListProvider).value!;
       expect(views, isEmpty);

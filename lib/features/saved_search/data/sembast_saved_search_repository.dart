@@ -22,16 +22,16 @@ class SembastSavedSearchRepository implements SavedSearchRepository {
   }
 
   @override
-  Future<SavedSearch> add({
-    required String name,
-    required String query,
-  }) async {
+  Future<SavedSearch> add({required String name, required String query}) async {
     final existing = await load();
+    final nextOrder = existing.isEmpty
+        ? 0
+        : existing.map((v) => v.order).reduce((a, b) => a > b ? a : b) + 1;
     final view = SavedSearch(
       id: _uuid.v4(),
       name: name,
       query: query,
-      order: existing.length,
+      order: nextOrder,
     );
     await savedSearchesStore.record(view.id).put(_db, view.toMap());
     return view;

@@ -700,17 +700,21 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                                       : 'Pin this search',
                                   onPressed: () {
                                     if (matchingView != null) {
-                                      ref
-                                          .read(
-                                            savedSearchListProvider.notifier,
-                                          )
-                                          .deleteView(matchingView);
+                                      unawaited(
+                                        ref
+                                            .read(
+                                              savedSearchListProvider.notifier,
+                                            )
+                                            .deleteView(matchingView),
+                                      );
                                     } else {
-                                      ref
-                                          .read(
-                                            savedSearchListProvider.notifier,
-                                          )
-                                          .addView(currentQuery);
+                                      unawaited(
+                                        ref
+                                            .read(
+                                              savedSearchListProvider.notifier,
+                                            )
+                                            .addView(currentQuery),
+                                      );
                                     }
                                   },
                                 ),
