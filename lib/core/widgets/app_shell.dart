@@ -162,7 +162,7 @@ class _SavedViewsSection extends ConsumerWidget {
     // carry entirely on their own (48), so text still lands at the same x
     // as before.
     return Padding(
-      padding: const EdgeInsets.only(left: 16, top: 8, right: 8),
+      padding: const EdgeInsets.only(left: 16, right: 8),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
