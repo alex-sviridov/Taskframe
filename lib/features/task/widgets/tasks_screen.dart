@@ -36,8 +36,9 @@ const _maxSuggestions = 4;
 /// `RenderEditable.describeSemanticsConfiguration` in the Flutter
 /// framework), which this field — still directly editable — is not.
 /// Tap-to-toggle is instead handled by
-/// `_TasksScreenState._handleFieldTap`, using the cursor position the
-/// field itself already resolves on tap.
+/// `_TasksScreenState._handleFieldTap`, which hit-tests the tap
+/// position against each token's rendered glyph boxes via
+/// [RenderEditable.getBoxesForSelection].
 class UnifiedQueryController extends TextEditingController {
   /// Creates a controller seeded with [text] (defaults to empty).
   new({super.text});
