@@ -153,7 +153,7 @@ class _SavedViewsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 16, 16, 4),
+          padding: const EdgeInsets.fromLTRB(48, 16, 16, 4),
           child: Text(
             'Saved views',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -256,49 +256,69 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
 
   @override
   Widget build(BuildContext context) {
-    final showAffordances = _revealed || _renaming;
-
     final row = ListTile(
       dense: true,
-      contentPadding: const EdgeInsets.only(left: 28, right: 8),
+      contentPadding: const EdgeInsets.only(left: 48, right: 8),
       title: _renaming
           ? TextField(
               controller: _nameController,
               autofocus: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
               onSubmitted: (_) => _submitRename(),
               onTapOutside: (_) => _submitRename(),
             )
           : Text(widget.view.name, overflow: TextOverflow.ellipsis),
-      trailing: showAffordances
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ReorderableDragStartListener(
-                  index: widget.index,
-                  child: const Icon(Icons.drag_indicator, size: 18),
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 18),
-                  onSelected: (choice) {
-                    if (choice == 'rename') {
-                      setState(() => _renaming = true);
-                    } else if (choice == 'delete') {
-                      setState(() => _revealed = false);
-                      unawaited(
-                        ref
-                            .read(savedSearchListProvider.notifier)
-                            .deleteView(widget.view),
-                      );
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'rename', child: Text('Rename')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+      // While _revealed (hover/long-press, menu not yet opened or open),
+      // kept in the tree and only toggled via Opacity/IgnorePointer, never
+      // removed — removing the PopupMenuButton from the tree while its menu
+      // route is open (which happens the instant the cursor leaves this
+      // row's MouseRegion to move onto the menu overlay itself) breaks the
+      // open menu's item selection, since the button that owns the route
+      // gets disposed mid-interaction. Same pattern as _HoverReveal in
+      // apply_template_button.dart. Once _renaming is true, the popup menu
+      // that got us here has already closed (selecting "Rename" closes it),
+      // so it's then safe to drop trailing entirely and give the rename
+      // TextField the full row width.
+      trailing: _renaming
+          ? null
+          : Opacity(
+              opacity: _revealed ? 1 : 0,
+              child: IgnorePointer(
+                ignoring: !_revealed,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReorderableDragStartListener(
+                      index: widget.index,
+                      child: const Icon(Icons.drag_indicator, size: 18),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      onSelected: (choice) {
+                        if (choice == 'rename') {
+                          setState(() => _renaming = true);
+                        } else if (choice == 'delete') {
+                          setState(() => _revealed = false);
+                          unawaited(
+                            ref
+                                .read(savedSearchListProvider.notifier)
+                                .deleteView(widget.view),
+                          );
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            )
-          : null,
+              ),
+            ),
       onTap: _renaming ? null : () => _navigate(context),
       onLongPress: widget.isNarrow
           ? () => setState(() => _revealed = !_revealed)
