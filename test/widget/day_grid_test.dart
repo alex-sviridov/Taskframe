@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/providers.dart';
@@ -74,13 +75,16 @@ final _workBlock = TimeObject(
   locked: false,
 );
 
-/// Double-taps at [position] by sending two taps close enough together for
-/// the gesture arena to recognize a double tap.
-Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
-  await tester.tapAt(position);
-  await tester.pump(const Duration(milliseconds: 50));
-  await tester.tapAt(position);
-  await tester.pump(const Duration(milliseconds: 300));
+/// Clicks at [position] with a mouse pointer — no movement, so it resolves
+/// as a plain tap rather than the vertical-drag recognizer racing it in the
+/// same arena.
+Future<void> _clickAt(WidgetTester tester, Offset position) async {
+  final gesture = await tester.startGesture(
+    position,
+    kind: PointerDeviceKind.mouse,
+  );
+  await gesture.up();
+  await tester.pump();
 }
 
 /// Starts a touch drag at [position] within a single-column `_pump`ed grid,
@@ -692,14 +696,14 @@ void main() {
     });
 
     group('draft', () {
-      testWidgets('double-tapping free space shows both create buttons', (
+      testWidgets('clicking free space shows both create buttons', (
         tester,
       ) async {
         final semantics = tester.ensureSemantics();
         await _pump(tester, []);
 
         // y 192 is 9:00, well within the empty grid.
-        await _doubleTapAt(tester, const Offset(200, 192));
+        await _clickAt(tester, const Offset(200, 192));
 
         expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
         expect(find.bySemanticsLabel('Create Frame'), findsOneWidget);
@@ -732,7 +736,7 @@ void main() {
             created = (start: start, end: end, kind: kind);
           },
         );
-        await _doubleTapAt(tester, const Offset(200, 192));
+        await _clickAt(tester, const Offset(200, 192));
 
         await tester.tap(find.bySemanticsLabel('Create Event'));
         await tester.pump();
@@ -754,7 +758,7 @@ void main() {
             created = (start: start, end: end, kind: kind);
           },
         );
-        await _doubleTapAt(tester, const Offset(200, 192));
+        await _clickAt(tester, const Offset(200, 192));
 
         await tester.tap(find.bySemanticsLabel('Create Frame'));
         await tester.pump();
@@ -784,7 +788,7 @@ void main() {
             },
           );
 
-          await _doubleTapAt(tester, const Offset(200, 192));
+          await _clickAt(tester, const Offset(200, 192));
           await tester.tap(find.bySemanticsLabel('Create Event'));
           await tester.pump();
 
@@ -793,9 +797,8 @@ void main() {
         },
       );
 
-      testWidgets('tapping outside the draft dismisses it without creating', (
-        tester,
-      ) async {
+      testWidgets('clicking elsewhere opens a new draft there instead, '
+          'without creating a block', (tester) async {
         final semantics = tester.ensureSemantics();
         var called = false;
         await _pump(
@@ -805,18 +808,253 @@ void main() {
             called = true;
           },
         );
-        await _doubleTapAt(tester, const Offset(200, 192));
+        await _clickAt(tester, const Offset(200, 192));
         expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
 
-        // A plain single tap elsewhere dismisses the draft. The tap
-        // recognizer waits out the double-tap timeout before firing.
-        await tester.tapAt(const Offset(200, 400));
-        await tester.pump(const Duration(milliseconds: 300));
+        // A click elsewhere on free space opens a new draft there,
+        // replacing the first one — still without committing a block.
+        await _clickAt(tester, const Offset(200, 400));
 
-        expect(find.bySemanticsLabel('Create Event'), findsNothing);
+        expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
         expect(called, isFalse);
         semantics.dispose();
       });
+
+      testWidgets(
+        'dragging vertically before releasing sizes the draft to the drag',
+        (tester) async {
+          _CreatedBlock? created;
+          await _pump(
+            tester,
+            [],
+            onCreateBlock: ({required start, required end, required kind}) {
+              created = (start: start, end: end, kind: kind);
+            },
+          );
+
+          // y 192 is 9:00; dragging down 4 slots (64px) should size the
+          // draft to 9:00-10:00 instead of the default 9:00-9:30.
+          final gesture = await tester.startGesture(
+            const Offset(200, 192),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, 64));
+          await tester.pump();
+          await gesture.up();
+          await tester.pump();
+
+          final semantics = tester.ensureSemantics();
+          await tester.tap(find.bySemanticsLabel('Create Event'));
+          await tester.pump();
+
+          expect(created!.start, DateTime(2026, 9, 9, 9));
+          expect(created!.end, DateTime(2026, 9, 9, 10));
+          semantics.dispose();
+        },
+      );
+
+      testWidgets(
+        'dragging upward extends the draft to start earlier, keeping the '
+        'drag origin as its end',
+        (tester) async {
+          _CreatedBlock? created;
+          await _pump(
+            tester,
+            [],
+            onCreateBlock: ({required start, required end, required kind}) {
+              created = (start: start, end: end, kind: kind);
+            },
+          );
+
+          // y 192 is 9:00; dragging up 2 slots (32px) should size the draft
+          // to 8:30-9:00.
+          final gesture = await tester.startGesture(
+            const Offset(200, 192),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, -32));
+          await tester.pump();
+          await gesture.up();
+          await tester.pump();
+
+          final semantics = tester.ensureSemantics();
+          await tester.tap(find.bySemanticsLabel('Create Event'));
+          await tester.pump();
+
+          expect(created!.start, DateTime(2026, 9, 9, 8, 30));
+          expect(created!.end, DateTime(2026, 9, 9, 9));
+          semantics.dispose();
+        },
+      );
+
+      testWidgets(
+        'a touch long-press followed by a drag sizes the draft the same '
+        'way as the mouse',
+        (tester) async {
+          _CreatedBlock? created;
+          await _pump(
+            tester,
+            [],
+            onCreateBlock: ({required start, required end, required kind}) {
+              created = (start: start, end: end, kind: kind);
+            },
+          );
+
+          final gesture = await _startTouchDrag(tester, const Offset(200, 192));
+          await gesture.moveBy(const Offset(0, 64));
+          await tester.pump();
+          await gesture.up();
+          await tester.pump();
+
+          final semantics = tester.ensureSemantics();
+          await tester.tap(find.bySemanticsLabel('Create Event'));
+          await tester.pump();
+
+          expect(created!.start, DateTime(2026, 9, 9, 9));
+          expect(created!.end, DateTime(2026, 9, 9, 10));
+          semantics.dispose();
+        },
+      );
+    });
+
+    group('draft — cross-column', () {
+      testWidgets(
+        'opening a draft on one column dismisses one open on another',
+        (tester) async {
+          final container = ProviderContainer();
+          addTearDown(container.dispose);
+          final dateA = DateTime(2026, 9, 9);
+          final dateB = DateTime(2026, 9, 10);
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp(
+                home: Scaffold(
+                  body: Row(
+                    children: [
+                      Expanded(
+                        child: DayGrid(
+                          date: dateA,
+                          column: DayColumn(dateA),
+                          controller: const DayScheduleController(),
+                          actions: dayScheduleBlockActions,
+                          blocks: const [],
+                          settings: _settings,
+                          slotHeight: _slotHeight,
+                          onCreateBlock: ({
+                            required start,
+                            required end,
+                            required kind,
+                          }) {},
+                        ),
+                      ),
+                      Expanded(
+                        child: DayGrid(
+                          date: dateB,
+                          column: DayColumn(dateB),
+                          controller: const DayScheduleController(),
+                          actions: dayScheduleBlockActions,
+                          blocks: const [],
+                          settings: _settings,
+                          slotHeight: _slotHeight,
+                          onCreateBlock: ({
+                            required start,
+                            required end,
+                            required kind,
+                          }) {},
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          final semantics = tester.ensureSemantics();
+          await _clickAt(tester, const Offset(100, 192));
+          expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
+
+          await _clickAt(tester, const Offset(500, 192));
+
+          // Still exactly one draft overall — the first one is gone, not
+          // just hidden behind a second.
+          expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
+          expect(container.read(draftStateProvider)!.column, DayColumn(dateB));
+          semantics.dispose();
+        },
+      );
+    });
+
+    group('draft — cursor', () {
+      testWidgets(
+        'shows a resize cursor while a mouse drag is sizing a new draft, '
+        'reverting once released',
+        (tester) async {
+          await _pump(tester, []);
+
+          final gesture = await tester.startGesture(
+            const Offset(200, 192),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, 32));
+          await tester.pump();
+
+          final region = tester.widget<MouseRegion>(
+            find.byKey(const Key('day-grid-background-cursor')),
+          );
+          expect(region.cursor, SystemMouseCursors.resizeRow);
+
+          await gesture.up();
+          await tester.pump();
+
+          final regionAfter = tester.widget<MouseRegion>(
+            find.byKey(const Key('day-grid-background-cursor')),
+          );
+          expect(regionAfter.cursor, isNot(SystemMouseCursors.resizeRow));
+        },
+      );
+
+      testWidgets('does not show the resize cursor for a plain click', (
+        tester,
+      ) async {
+        await _pump(tester, []);
+
+        await _clickAt(tester, const Offset(200, 192));
+
+        final region = tester.widget<MouseRegion>(
+          find.byKey(const Key('day-grid-background-cursor')),
+        );
+        expect(region.cursor, isNot(SystemMouseCursors.resizeRow));
+      });
+
+      testWidgets(
+        'the actual resolved system cursor stays the resize cursor even '
+        'when dragging upward moves the pointer over the rendered draft '
+        'box itself '
+        "(regression: an upward drag's floor-snapped box top sits above "
+        'the real pointer position, so the pointer ends up hovering the '
+        'draft box — which has no cursor override — rather than the '
+        'background behind it)',
+        (tester) async {
+          await _pump(tester, []);
+
+          final gesture = await tester.startGesture(
+            const Offset(200, 192),
+            kind: PointerDeviceKind.mouse,
+          );
+          await gesture.moveBy(const Offset(0, -32));
+          await tester.pump();
+
+          // Mouse pointers default to device id 1 (see `TestPointer`).
+          expect(
+            RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+            SystemMouseCursors.resizeRow,
+          );
+
+          await gesture.up();
+        },
+      );
     });
 
     group('landzone', () {
@@ -1042,7 +1280,7 @@ void main() {
       ) async {
         final semantics = tester.ensureSemantics();
         await _pump(tester, [_workBlock]);
-        await _doubleTapAt(tester, const Offset(200, 500));
+        await _clickAt(tester, const Offset(200, 500));
         expect(find.bySemanticsLabel('Create Event'), findsOneWidget);
 
         await tester.tapAt(const Offset(200, 300));

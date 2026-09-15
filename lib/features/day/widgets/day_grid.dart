@@ -23,10 +23,12 @@ import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
 
 /// The 15-minute-aligned timeline: an hour grid with [blocks] drawn on top.
 ///
-/// Double-tapping (desktop) or long-pressing (touch) free grid space opens a
-/// draft for a new block there; tapping one of [_DraftOverlay]'s two icon
-/// buttons creates it via [onCreateBlock], and tapping elsewhere dismisses
-/// the draft.
+/// Clicking (desktop) or long-pressing (touch) free grid space opens a
+/// draft for a new block there, sized to a default 30 minutes; dragging
+/// vertically before releasing (mouse) or moving while still pressed
+/// (touch) resizes the draft to span the drag instead. Tapping one of
+/// [_DraftOverlay]'s two icon buttons creates it via [onCreateBlock];
+/// clicking elsewhere on the grid opens a new draft there, replacing it.
 class DayGrid extends ConsumerStatefulWidget {
   /// Creates a [DayGrid] showing [blocks] between [settings]'s day start
   /// and day end, with each 15-minute slot [slotHeight] pixels tall.
@@ -129,7 +131,20 @@ class DayGrid extends ConsumerStatefulWidget {
 }
 
 class _DayGridState extends ConsumerState<DayGrid> {
-  ({DateTime start, DateTime end})? _draft;
+  /// The fixed point a draft-creating drag began at, set by [_openDraftAt]
+  /// and read by [_updateDraftDrag] to resolve the draft's other edge as the
+  /// pointer moves — the draft itself may end up starting before or after
+  /// this point depending on which way the drag goes. Local rather than
+  /// shared via `draftStateProvider`: a drag never leaves the column it
+  /// started in, so nothing outside this widget ever needs it.
+  DateTime? _draftAnchor;
+
+  /// Whether a mouse drag is actively sizing a new draft right now (between
+  /// the vertical-drag recognizer's start and its end/cancel) — drives the
+  /// resize cursor shown over the grid background. Desktop-only: touch has
+  /// no cursor to change.
+  bool _isDragSizingDraft = false;
+
   Timer? _nowTimer;
 
   @override
@@ -262,13 +277,40 @@ class _DayGridState extends ConsumerState<DayGrid> {
       existingBlocks: widget.blocks,
       settings: widget.settings,
     );
-    setState(() => _draft = (start: start, end: start.add(duration)));
+    _draftAnchor = start;
+    ref
+        .read(draftStateProvider.notifier)
+        .openAt(column: widget.column, start: start, end: start.add(duration));
+  }
+
+  /// Resizes the in-progress draft to span from [_draftAnchor] to the
+  /// pointer's current position at [dy], called on every move of a
+  /// draft-creating drag. Does nothing before [_openDraftAt] has set an
+  /// anchor.
+  void _updateDraftDrag(double dy) {
+    final anchor = _draftAnchor;
+    if (anchor == null) return;
+
+    final candidate = resizeCandidateForOffset(
+      day: widget.date,
+      dy: dy,
+      settings: widget.settings,
+      slotHeight: widget.slotHeight,
+    );
+    final range = draftRangeForDrag(
+      anchor: anchor,
+      candidate: candidate,
+      day: widget.date,
+      settings: widget.settings,
+    );
+    ref
+        .read(draftStateProvider.notifier)
+        .updateRange(start: range.start, end: range.end);
   }
 
   void _dismissDraft() {
-    if (_draft != null) {
-      setState(() => _draft = null);
-    }
+    _draftAnchor = null;
+    ref.read(draftStateProvider.notifier).dismiss();
   }
 
   void _openEditModal(TimeObject block) {
@@ -283,9 +325,14 @@ class _DayGridState extends ConsumerState<DayGrid> {
   }
 
   void _create(BlockKind kind) {
-    final draft = _draft!;
+    final draft = ref.read(
+      draftStateProvider.select(
+        (state) => draftStateForColumn(state, widget.column),
+      ),
+    )!;
     widget.onCreateBlock(start: draft.start, end: draft.end, kind: kind);
-    setState(() => _draft = null);
+    _draftAnchor = null;
+    ref.read(draftStateProvider.notifier).dismiss();
   }
 
   /// Wraps [child] in the newly-applied-template border pulse when [block]
@@ -303,13 +350,20 @@ class _DayGridState extends ConsumerState<DayGrid> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final height = _slotCount * widget.slotHeight;
-    final draft = _draft;
     // Selected rather than watched outright: a plain `ref.watch` here would
     // rebuild every visible `DayGrid` column on every pointer move of a drag
     // or resize happening on some other day (most columns, in week view).
-    // `dragStateForColumn`/`resizeStateForColumn` collapse to `null` for a
-    // column the in-flight gesture doesn't touch, and `null == null`, so
-    // `select` skips the rebuild there entirely.
+    // `dragStateForColumn`/`resizeStateForColumn`/`draftStateForColumn`
+    // collapse to `null` for a column the in-flight gesture doesn't touch,
+    // and `null == null`, so `select` skips the rebuild there entirely.
+    final draftState = ref.watch(
+      draftStateProvider.select(
+        (state) => draftStateForColumn(state, widget.column),
+      ),
+    );
+    final draft = draftState == null
+        ? null
+        : (start: draftState.start, end: draftState.end);
     final dragState = ref.watch(
       dragStateProvider.select(
         (state) => dragStateForColumn(state, widget.column),
@@ -345,210 +399,309 @@ class _DayGridState extends ConsumerState<DayGrid> {
       maxBleed: _DraggableBlock.hitBleed,
     );
 
-    return SizedBox(
-      height: height,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            // Only the background layer reacts to gestures: blocks (and the
-            // draft overlay) are drawn above it in this Stack and, being
-            // opaque, absorb touches that start on them before they ever
-            // reach this GestureDetector.
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _dismissDraft,
-              onDoubleTapDown: (details) =>
-                  _openDraftAt(details.localPosition.dy),
-              onLongPressStart: (details) =>
-                  _openDraftAt(details.localPosition.dy),
-              onHorizontalDragStart: widget.onSwipeStart,
-              onHorizontalDragUpdate: widget.onSwipeUpdate,
-              onHorizontalDragEnd: widget.onSwipeEnd,
-              onHorizontalDragCancel: widget.onSwipeCancel,
-              child: CustomPaint(
-                painter: _DayGridPainter(
+    return MouseRegion(
+      // Wraps the whole grid, not just the background layer, so the cursor
+      // stays the resize cursor even when the pointer ends up hovering the
+      // rendered draft-preview box itself — which has no cursor override
+      // of its own — rather than the background behind it. That happens
+      // routinely on an upward drag: the draft's box top is floor-snapped
+      // to the grid, which puts it above (not below) the real,
+      // not-yet-snapped pointer position, so the pointer sits inside the
+      // box rather than clear of it.
+      key: const Key('day-grid-background-cursor'),
+      cursor: _isDragSizingDraft
+          ? SystemMouseCursors.resizeRow
+          : MouseCursor.defer,
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              // Only the background layer reacts to gestures: blocks (and
+              // the draft overlay) are drawn above it in this Stack and,
+              // being opaque, absorb touches that start on them before
+              // they ever
+              // reach this GestureDetector.
+              child: RawGestureDetector(
+                behavior: HitTestBehavior.opaque,
+                gestures: {
+                  // Mouse/trackpad: a plain click opens a default-sized
+                  // draft; if the same gesture moves enough to be claimed by
+                  // the vertical recognizer below instead, this never fires.
+                  TapGestureRecognizer:
+                      GestureRecognizerFactoryWithHandlers<
+                        TapGestureRecognizer
+                      >(
+                        () => TapGestureRecognizer()
+                          ..supportedDevices = {
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          },
+                        (recognizer) =>
+                            recognizer.onTapUp = (details) =>
+                                _openDraftAt(details.localPosition.dy),
+                      ),
+                  // Mouse/trackpad: opens the draft at the drag's start and
+                  // resizes it live as the pointer moves vertically, sizing
+                  // the eventual block to the drag instead of the default.
+                  VerticalDragGestureRecognizer:
+                      GestureRecognizerFactoryWithHandlers<
+                        VerticalDragGestureRecognizer
+                      >(
+                        () => VerticalDragGestureRecognizer()
+                          ..supportedDevices = {
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          }
+                          // Anchors the draft to where the pointer actually
+                          // went down, not (the default) where the arena
+                          // resolved the drag after the initial move past
+                          // slop — which would already be offset from the
+                          // real anchor.
+                          ..dragStartBehavior = DragStartBehavior.down,
+                        (recognizer) {
+                          recognizer
+                            ..onStart = (details) {
+                              setState(() => _isDragSizingDraft = true);
+                              _openDraftAt(details.localPosition.dy);
+                            }
+                            ..onUpdate = (details) {
+                              _updateDraftDrag(details.localPosition.dy);
+                            }
+                            ..onEnd = (_) {
+                              setState(() => _isDragSizingDraft = false);
+                            }
+                            ..onCancel = () {
+                              setState(() => _isDragSizingDraft = false);
+                            };
+                        },
+                      ),
+                  // Touch: a long-press opens the draft (a plain tap is left
+                  // free for other uses, e.g. scrolling); moving while still
+                  // pressed resizes it live, same as the mouse vertical drag.
+                  LongPressGestureRecognizer:
+                      GestureRecognizerFactoryWithHandlers<
+                        LongPressGestureRecognizer
+                      >(
+                        () =>
+                            LongPressGestureRecognizer()
+                              ..supportedDevices = {PointerDeviceKind.touch},
+                        (recognizer) {
+                          recognizer
+                            ..onLongPressStart = (details) {
+                              _openDraftAt(details.localPosition.dy);
+                            }
+                            ..onLongPressMoveUpdate = (details) {
+                              _updateDraftDrag(details.localPosition.dy);
+                            };
+                        },
+                      ),
+                  // Only registered when day-switching is enabled (see
+                  // onSwipeStart's docs) — an always-present recognizer here,
+                  // even with null callbacks, would still claim every
+                  // horizontal drag and keep it from reaching an ancestor
+                  // gesture detector in a caller that disables swiping.
+                  if (widget.onSwipeStart != null ||
+                      widget.onSwipeUpdate != null ||
+                      widget.onSwipeEnd != null ||
+                      widget.onSwipeCancel != null)
+                    HorizontalDragGestureRecognizer:
+                        GestureRecognizerFactoryWithHandlers<
+                          HorizontalDragGestureRecognizer
+                        >(HorizontalDragGestureRecognizer.new, (recognizer) {
+                          recognizer
+                            ..onStart = widget.onSwipeStart
+                            ..onUpdate = widget.onSwipeUpdate
+                            ..onEnd = widget.onSwipeEnd
+                            ..onCancel = widget.onSwipeCancel;
+                        }),
+                },
+                child: CustomPaint(
+                  painter: _DayGridPainter(
+                    settings: widget.settings,
+                    slotHeight: widget.slotHeight,
+                    lineColor: scheme.outlineVariant,
+                    labelStyle: Theme.of(context).textTheme.labelSmall,
+                    gridLeft: _gridLeft,
+                    showLabels: widget.showHourLabels,
+                  ),
+                ),
+              ),
+            ),
+            for (final block in widget.blocks)
+              Positioned(
+                key: ValueKey('day-grid-block-position-${block.id}'),
+                // Enlarged by up to `_DraggableBlock.hitBleed` on each
+                // side — clamped per [resizeBleedForBlocks] so a
+                // time-adjacent neighbor's true bounds are never intruded
+                // on — giving the touch resize zone (and, on a very short
+                // block, the mouse resize strips) room to bleed past the
+                // block's true edges. Hit-testing gates on a render
+                // object's own reported size, so that bleed only works if
+                // it's baked in here rather than attempted via `Clip.none`
+                // alone. `_DraggableBlock` insets its real visual content
+                // back to the true, unbled bounds.
+                top:
+                    _offsetFor(block.start) - (resizeBleed[block.id]?.top ?? 0),
+                left: _gridLeft,
+                right: 0,
+                height:
+                    _offsetFor(block.end) -
+                    _offsetFor(block.start) +
+                    (resizeBleed[block.id]?.top ?? 0) +
+                    (resizeBleed[block.id]?.bottom ?? 0),
+                // Stays mounted even while its own drag is in progress
+                // (rather than being filtered out of this loop), so the
+                // recognizer that detected the drag's start is not disposed
+                // out from under the gesture; only its visible content is
+                // swapped for an empty placeholder, leaving the landzone
+                // shadow to represent the block's drag position instead.
+                //
+                // The placeholder is invisible, not inert: this Positioned
+                // still gives _DraggableBlock's opaque detector a hit-test
+                // region at the block's original rect for the duration of
+                // the drag. Harmless in practice — the landzone painted over
+                // it is IgnorePointer-wrapped, and a stray tap here only
+                // no-ops through _dismissDraft.
+                child: _DraggableBlock(
+                  block: block,
+                  column: widget.column,
+                  controller: widget.controller,
+                  date: widget.date,
                   settings: widget.settings,
                   slotHeight: widget.slotHeight,
-                  lineColor: scheme.outlineVariant,
-                  labelStyle: Theme.of(context).textTheme.labelSmall,
-                  gridLeft: _gridLeft,
-                  showLabels: widget.showHourLabels,
-                ),
-              ),
-            ),
-          ),
-          for (final block in widget.blocks)
-            Positioned(
-              key: ValueKey('day-grid-block-position-${block.id}'),
-              // Enlarged by up to `_DraggableBlock.hitBleed` on each
-              // side — clamped per [resizeBleedForBlocks] so a
-              // time-adjacent neighbor's true bounds are never intruded
-              // on — giving the touch resize zone (and, on a very short
-              // block, the mouse resize strips) room to bleed past the
-              // block's true edges. Hit-testing gates on a render
-              // object's own reported size, so that bleed only works if
-              // it's baked in here rather than attempted via `Clip.none`
-              // alone. `_DraggableBlock` insets its real visual content
-              // back to the true, unbled bounds.
-              top: _offsetFor(block.start) - (resizeBleed[block.id]?.top ?? 0),
-              left: _gridLeft,
-              right: 0,
-              height:
-                  _offsetFor(block.end) -
-                  _offsetFor(block.start) +
-                  (resizeBleed[block.id]?.top ?? 0) +
-                  (resizeBleed[block.id]?.bottom ?? 0),
-              // Stays mounted even while its own drag is in progress
-              // (rather than being filtered out of this loop), so the
-              // recognizer that detected the drag's start is not disposed
-              // out from under the gesture; only its visible content is
-              // swapped for an empty placeholder, leaving the landzone
-              // shadow to represent the block's drag position instead.
-              //
-              // The placeholder is invisible, not inert: this Positioned
-              // still gives _DraggableBlock's opaque detector a hit-test
-              // region at the block's original rect for the duration of
-              // the drag. Harmless in practice — the landzone painted over
-              // it is IgnorePointer-wrapped, and a stray tap here only
-              // no-ops through _dismissDraft.
-              child: _DraggableBlock(
-                block: block,
-                column: widget.column,
-                controller: widget.controller,
-                date: widget.date,
-                settings: widget.settings,
-                slotHeight: widget.slotHeight,
-                topBleed: resizeBleed[block.id]?.top ?? 0,
-                bottomBleed: resizeBleed[block.id]?.bottom ?? 0,
-                onDismissDraft: _dismissDraft,
-                onOpenEdit: _openEditModal,
-                child: block.id == hiddenBlockId
-                    ? const SizedBox.shrink()
-                    : _maybeHighlighted(
-                        block: block,
-                        child: Container(
-                          color: scheme.surface,
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: BlockView(
-                            block: block,
-                            showTitle: false,
-                            category: _categoryFor(block),
+                  topBleed: resizeBleed[block.id]?.top ?? 0,
+                  bottomBleed: resizeBleed[block.id]?.bottom ?? 0,
+                  onDismissDraft: _dismissDraft,
+                  onOpenEdit: _openEditModal,
+                  child: block.id == hiddenBlockId
+                      ? const SizedBox.shrink()
+                      : _maybeHighlighted(
+                          block: block,
+                          child: Container(
+                            color: scheme.surface,
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: BlockView(
+                              block: block,
+                              showTitle: false,
+                              category: _categoryFor(block),
+                            ),
                           ),
                         ),
+                ),
+              ),
+            // Every block's title, drawn in its own layer *after* every
+            // block's own box above — so a short block's title always paints
+            // on top of a neighbor's box, never underneath it. Sorted by
+            // start so that when two adjacent short blocks' title boxes
+            // overlap, the later one wins rather than an arbitrary list
+            // order.
+            for (final block in _blocksSortedByStart)
+              if (block.id != hiddenBlockId)
+                _titleOverlay(
+                  key: ValueKey('day-grid-block-title-${block.id}'),
+                  block: block,
+                  trueTop: _offsetFor(block.start),
+                  trueHeight: _offsetFor(block.end) - _offsetFor(block.start),
+                ),
+            if (draft != null)
+              Positioned(
+                top: _offsetFor(draft.start),
+                left: _gridLeft,
+                right: 0,
+                height: _offsetFor(draft.end) - _offsetFor(draft.start),
+                child: Container(
+                  color: scheme.surface,
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: _DraftOverlay(
+                    onCreateEvent: () => _create(BlockKind.anchor),
+                    onCreateFrame: () => _create(BlockKind.frame),
+                  ),
+                ),
+              ),
+            if (dragState != null && landzoneStart != null) ...[
+              Positioned(
+                key: const Key('day-grid-landzone'),
+                top: _offsetFor(landzoneStart),
+                left: _gridLeft,
+                right: 0,
+                height: _landzoneHeightFor(landzoneStart, dragState.block),
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _DashedBorderPainter(color: scheme.primary),
+                    child: Container(
+                      color: scheme.surface,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: BlockView(
+                        block: dragState.block,
+                        showTitle: false,
+                        category: _categoryFor(dragState.block),
                       ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          // Every block's title, drawn in its own layer *after* every
-          // block's own box above — so a short block's title always paints
-          // on top of a neighbor's box, never underneath it. Sorted by
-          // start so that when two adjacent short blocks' title boxes
-          // overlap, the later one wins rather than an arbitrary list
-          // order.
-          for (final block in _blocksSortedByStart)
-            if (block.id != hiddenBlockId)
               _titleOverlay(
-                key: ValueKey('day-grid-block-title-${block.id}'),
-                block: block,
-                trueTop: _offsetFor(block.start),
-                trueHeight: _offsetFor(block.end) - _offsetFor(block.start),
+                key: const Key('day-grid-landzone-title'),
+                block: dragState.block,
+                trueTop: _offsetFor(landzoneStart),
+                trueHeight: _landzoneHeightFor(landzoneStart, dragState.block),
               ),
-          if (draft != null)
-            Positioned(
-              top: _offsetFor(draft.start),
-              left: _gridLeft,
-              right: 0,
-              height: _offsetFor(draft.end) - _offsetFor(draft.start),
-              child: Container(
-                color: scheme.surface,
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: _DraftOverlay(
-                  onCreateEvent: () => _create(BlockKind.anchor),
-                  onCreateFrame: () => _create(BlockKind.frame),
-                ),
-              ),
-            ),
-          if (dragState != null && landzoneStart != null) ...[
-            Positioned(
-              key: const Key('day-grid-landzone'),
-              top: _offsetFor(landzoneStart),
-              left: _gridLeft,
-              right: 0,
-              height: _landzoneHeightFor(landzoneStart, dragState.block),
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _DashedBorderPainter(color: scheme.primary),
-                  child: Container(
-                    color: scheme.surface,
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: BlockView(
-                      block: dragState.block,
-                      showTitle: false,
-                      category: _categoryFor(dragState.block),
+            ],
+            if (resizeState != null && resizeState.column == widget.column) ...[
+              Positioned(
+                key: const Key('day-grid-resize-draft'),
+                top: _offsetFor(resizeState.draftStart),
+                left: _gridLeft,
+                right: 0,
+                height:
+                    _offsetFor(resizeState.draftEnd) -
+                    _offsetFor(resizeState.draftStart),
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _DashedBorderPainter(color: scheme.primary),
+                    child: Container(
+                      color: scheme.surface,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: BlockView(
+                        block: resizeState.block,
+                        showTitle: false,
+                        category: _categoryFor(resizeState.block),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            _titleOverlay(
-              key: const Key('day-grid-landzone-title'),
-              block: dragState.block,
-              trueTop: _offsetFor(landzoneStart),
-              trueHeight: _landzoneHeightFor(landzoneStart, dragState.block),
-            ),
-          ],
-          if (resizeState != null && resizeState.column == widget.column) ...[
-            Positioned(
-              key: const Key('day-grid-resize-draft'),
-              top: _offsetFor(resizeState.draftStart),
-              left: _gridLeft,
-              right: 0,
-              height:
-                  _offsetFor(resizeState.draftEnd) -
-                  _offsetFor(resizeState.draftStart),
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _DashedBorderPainter(color: scheme.primary),
-                  child: Container(
-                    color: scheme.surface,
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: BlockView(
-                      block: resizeState.block,
-                      showTitle: false,
-                      category: _categoryFor(resizeState.block),
-                    ),
+              _titleOverlay(
+                key: const Key('day-grid-resize-draft-title'),
+                block: resizeState.block,
+                trueTop: _offsetFor(resizeState.draftStart),
+                trueHeight:
+                    _offsetFor(resizeState.draftEnd) -
+                    _offsetFor(resizeState.draftStart),
+              ),
+            ],
+            if (nowLineY != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _NowLinePainter(y: nowLineY)),
+                ),
+              ),
+            for (final ghost in widget.ghosts)
+              Positioned(
+                key: Key('day-grid-ghost-${ghost.id}'),
+                top: _offsetFor(ghost.start),
+                left: _gridLeft,
+                right: 0,
+                height: _offsetFor(ghost.end) - _offsetFor(ghost.start),
+                child: IgnorePointer(
+                  child: _TemplateGhostOverlay(
+                    onDone: () => widget.onGhostAnimationEnd?.call(ghost.id),
                   ),
                 ),
               ),
-            ),
-            _titleOverlay(
-              key: const Key('day-grid-resize-draft-title'),
-              block: resizeState.block,
-              trueTop: _offsetFor(resizeState.draftStart),
-              trueHeight:
-                  _offsetFor(resizeState.draftEnd) -
-                  _offsetFor(resizeState.draftStart),
-            ),
           ],
-          if (nowLineY != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _NowLinePainter(y: nowLineY)),
-              ),
-            ),
-          for (final ghost in widget.ghosts)
-            Positioned(
-              key: Key('day-grid-ghost-${ghost.id}'),
-              top: _offsetFor(ghost.start),
-              left: _gridLeft,
-              right: 0,
-              height: _offsetFor(ghost.end) - _offsetFor(ghost.start),
-              child: IgnorePointer(
-                child: _TemplateGhostOverlay(
-                  onDone: () => widget.onGhostAnimationEnd?.call(ghost.id),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }

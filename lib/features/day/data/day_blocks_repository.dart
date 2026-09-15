@@ -9,8 +9,8 @@ abstract class DayBlocksRepository {
   /// Returns the blocks for [date].
   Future<List<TimeObject>> load(DateTime date);
 
-  /// Creates a new block on [date] and returns it. [title] defaults to a
-  /// placeholder when omitted.
+  /// Creates a new block on [date] and returns it. [title] defaults to an
+  /// empty string when omitted.
   Future<TimeObject> add(
     DateTime date, {
     required DateTime start,
@@ -71,7 +71,7 @@ class InMemoryDayBlocksRepository implements DayBlocksRepository {
   }) async {
     final block = TimeObject(
       id: 'block-${_nextId++}',
-      title: title ?? 'title',
+      title: title ?? '',
       start: start,
       end: end,
       kind: kind,

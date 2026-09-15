@@ -98,6 +98,36 @@ Duration durationForNewBlock({
   return duration < remaining ? duration : remaining;
 }
 
+/// The `[start, end)` range a new block being drawn by dragging should span,
+/// given the fixed point where the drag began ([anchor]) and where the
+/// pointer currently is ([candidate]) — both already resolved to grid slots
+/// (see [slotStartForOffset]/[resizeCandidateForOffset]). The block always
+/// spans between the two, in whichever order they land, extended to at
+/// least [_minEditDuration] when the drag hasn't moved far enough yet —
+/// forward from [anchor] normally, or backward when forward would run past
+/// the day's own end.
+({DateTime start, DateTime end}) draftRangeForDrag({
+  required DateTime anchor,
+  required DateTime candidate,
+  required DateTime day,
+  required DaySettings settings,
+}) {
+  var start = anchor.isBefore(candidate) ? anchor : candidate;
+  var end = anchor.isBefore(candidate) ? candidate : anchor;
+
+  if (end.difference(start) < _minEditDuration) {
+    final dayEnd = dayEndFor(day, settings);
+    final extendedEnd = start.add(_minEditDuration);
+    if (!extendedEnd.isAfter(dayEnd)) {
+      end = extendedEnd;
+    } else {
+      start = end.subtract(_minEditDuration);
+    }
+  }
+
+  return (start: start, end: end);
+}
+
 /// The first [duration]-long free gap on [day], searching forward from
 /// [settings]'s day start through [existingBlocks] (sorted by start here
 /// regardless of the order given) and returning the first gap between two

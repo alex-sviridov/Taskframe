@@ -38,7 +38,7 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
   }) async {
     final block = TimeObject(
       id: _uuid.v4(),
-      title: title ?? 'title',
+      title: title ?? '',
       start: start,
       end: end,
       kind: kind,

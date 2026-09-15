@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/models/draft_state.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
@@ -106,6 +107,41 @@ void main() {
 
       expect(
         resizeStateForColumn(state, DayColumn(DateTime(2026, 9, 10))),
+        isNull,
+      );
+    });
+  });
+
+  group('draftStateForColumn', () {
+    test('returns null when there is no draft', () {
+      expect(
+        draftStateForColumn(null, DayColumn(DateTime(2026, 9, 9))),
+        isNull,
+      );
+    });
+
+    test('returns the state when the column matches', () {
+      final state = DraftState(
+        column: DayColumn(DateTime(2026, 9, 9)),
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 30),
+      );
+
+      expect(
+        draftStateForColumn(state, DayColumn(DateTime(2026, 9, 9))),
+        same(state),
+      );
+    });
+
+    test('returns null for a different column', () {
+      final state = DraftState(
+        column: DayColumn(DateTime(2026, 9, 9)),
+        start: DateTime(2026, 9, 9, 9),
+        end: DateTime(2026, 9, 9, 9, 30),
+      );
+
+      expect(
+        draftStateForColumn(state, DayColumn(DateTime(2026, 9, 10))),
         isNull,
       );
     });
