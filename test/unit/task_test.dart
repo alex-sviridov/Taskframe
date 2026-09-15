@@ -5,25 +5,25 @@ import 'package:taskframe/features/task/models/task.dart';
 void main() {
   group('Task', () {
     test('closed defaults to false', () {
-      const task = Task(id: 'task-1', title: 'Buy milk');
+      final task = Task(id: 'task-1', title: 'Buy milk');
 
       expect(task.closed, isFalse);
     });
 
     test('categoryId defaults to Category.defaultId', () {
-      const task = Task(id: 'task-1', title: 'Buy milk');
+      final task = Task(id: 'task-1', title: 'Buy milk');
 
       expect(task.categoryId, Category.defaultId);
     });
 
     test('tags defaults to empty', () {
-      const task = Task(id: 'task-1', title: 'Buy milk');
+      final task = Task(id: 'task-1', title: 'Buy milk');
 
       expect(task.tags, isEmpty);
     });
 
     test('copyWith replaces only the given fields', () {
-      const task = Task(
+      final task = Task(
         id: 'task-1',
         title: 'Buy milk',
         categoryId: 'category-1',
@@ -38,7 +38,7 @@ void main() {
     });
 
     test('copyWith replaces tags', () {
-      const task = Task(id: 'task-1', title: 'Buy milk', tags: ['home']);
+      final task = Task(id: 'task-1', title: 'Buy milk', tags: ['home']);
 
       final updated = task.copyWith(tags: ['home', 'errands']);
 
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('copyWith with no arguments returns equivalent fields', () {
-      const task = Task(
+      final task = Task(
         id: 'task-1',
         title: 'Buy milk',
         closed: true,
@@ -66,7 +66,7 @@ void main() {
 
   group('toMap/fromMap', () {
     test('fromMap(toMap()) round-trips every field', () {
-      const task = Task(
+      final task = Task(
         id: 'task-1',
         title: 'Buy milk',
         closed: true,
@@ -93,6 +93,30 @@ void main() {
       });
 
       expect(restored.tags, isEmpty);
+    });
+
+    test('toMap/fromMap round-trip updatedAt and deleted', () {
+      final updatedAt = DateTime.utc(2026, 9, 15, 12);
+      final task = Task(
+        id: 't1',
+        title: 'Buy milk',
+        updatedAt: updatedAt,
+        deleted: true,
+      );
+      final restored = Task.fromMap(task.toMap());
+      expect(restored.updatedAt, updatedAt);
+      expect(restored.deleted, isTrue);
+    });
+
+    test('fromMap defaults deleted to false and updatedAt to epoch when absent', () {
+      final restored = Task.fromMap({
+        'id': 't1',
+        'title': 'Buy milk',
+        'closed': false,
+        'categoryId': Category.defaultId,
+      });
+      expect(restored.deleted, isFalse);
+      expect(restored.updatedAt, DateTime.fromMillisecondsSinceEpoch(0));
     });
   });
 }

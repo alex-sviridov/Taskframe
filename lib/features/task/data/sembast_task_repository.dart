@@ -18,7 +18,10 @@ class SembastTaskRepository implements TaskRepository {
 
   @override
   Future<List<Task>> load() async {
-    final finder = Finder(sortOrders: [SortOrder('order')]);
+    final finder = Finder(
+      filter: Filter.notEquals('deleted', true),
+      sortOrders: [SortOrder('order')],
+    );
     final records = await tasksStore.find(_db, finder: finder);
     return [for (final record in records) Task.fromMap(record.value)];
   }
@@ -29,6 +32,7 @@ class SembastTaskRepository implements TaskRepository {
       id: _uuid.v4(),
       title: title,
       categoryId: categoryId ?? Category.defaultId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await tasksStore.record(task.id).put(_db, {
       ...task.toMap(),
@@ -54,6 +58,7 @@ class SembastTaskRepository implements TaskRepository {
       closed: closed,
       categoryId: categoryId,
       tags: tags,
+      updatedAt: DateTime.now().toUtc(),
     );
     final order =
         existingRecord?['order'] ?? DateTime.now().microsecondsSinceEpoch;
@@ -66,6 +71,17 @@ class SembastTaskRepository implements TaskRepository {
 
   @override
   Future<void> delete(Task task) async {
-    await tasksStore.record(task.id).delete(_db);
+    final existingRecord = await tasksStore.record(task.id).get(_db);
+    final current = existingRecord == null
+        ? task
+        : Task.fromMap(existingRecord);
+    final tombstone = current.copyWith(
+      deleted: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await tasksStore.record(task.id).put(_db, {
+      ...tombstone.toMap(),
+      'order': existingRecord?['order'] ?? 0,
+    });
   }
 }

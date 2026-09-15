@@ -116,5 +116,24 @@ void main() {
       final tasks = await repository.load();
       expect(tasks.where((t) => t.id == added.id), isEmpty);
     });
+
+    test('delete soft-deletes: record stays but is excluded from load', () async {
+      final added = await repository.add(title: 'Buy milk');
+
+      await repository.delete(added);
+
+      expect(await repository.load(), isEmpty);
+      final record = await tasksStore.record(added.id).get(db);
+      expect(record, isNotNull);
+      expect(record!['deleted'], isTrue);
+    });
+
+    test('add and update stamp updatedAt', () async {
+      final added = await repository.add(title: 'Buy milk');
+      expect(added.updatedAt, isNotNull);
+
+      final updated = await repository.update(added, title: 'Buy oat milk');
+      expect(updated.updatedAt.isAtSameMomentAs(added.updatedAt), isFalse);
+    });
   });
 }
