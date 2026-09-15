@@ -66,6 +66,8 @@ class AppShell extends StatelessWidget {
           children: [
             ..._drawerDestinations(),
             const _SavedViewsSection(isNarrow: true),
+            const Divider(),
+            _SyncDevicesEntry(isNarrow: true),
           ],
         ),
         body: Column(
@@ -123,12 +125,36 @@ class AppShell extends StatelessWidget {
             children: [
               ..._drawerDestinations(),
               const _SavedViewsSection(isNarrow: false),
+              const Divider(),
+              _SyncDevicesEntry(isNarrow: false),
             ],
           ),
         ),
         const VerticalDivider(width: 1),
         Expanded(child: navigationShell),
       ],
+    );
+  }
+}
+
+/// Entry point for the `/pairing` screen, listed at the bottom of the
+/// nav drawer/sidebar (the only way to reach it — it's a top-level route
+/// outside the branch shell, so it isn't one of [_destinations]).
+class _SyncDevicesEntry extends StatelessWidget {
+  const _SyncDevicesEntry({required this.isNarrow});
+
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.sync),
+      title: const Text('Sync devices'),
+      onTap: () {
+        if (isNarrow) Navigator.pop(context);
+        context.push('/pairing');
+      },
     );
   }
 }

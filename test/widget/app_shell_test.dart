@@ -52,6 +52,10 @@ GoRouter _buildTestRouter() => GoRouter(
         ),
       ],
     ),
+    GoRoute(
+      path: '/pairing',
+      builder: (context, state) => const Text('Pairing screen'),
+    ),
   ],
 );
 
@@ -177,6 +181,41 @@ void main() {
 
       expect(find.text('Branch three'), findsOneWidget);
       expect(find.text('Branch one'), findsNothing);
+    });
+
+    testWidgets(
+      'narrow: tapping "Sync devices" in the open drawer navigates to '
+      'pairing',
+      (tester) async {
+        _setViewportWidth(tester, 600);
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp.router(routerConfig: _buildTestRouter()),
+          ),
+        );
+
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sync devices'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Pairing screen'), findsOneWidget);
+      },
+    );
+
+    testWidgets('wide: tapping "Sync devices" in the sidebar navigates to '
+        'pairing', (tester) async {
+      _setViewportWidth(tester, 1000);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
+      );
+
+      await tester.tap(find.text('Sync devices'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pairing screen'), findsOneWidget);
     });
   });
 }
