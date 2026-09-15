@@ -308,10 +308,10 @@ void main() {
         }
 
         // Also assert left-to-right order matches the expected sequence.
-        // `.last` picks the outermost matching `Row` (the header row laid
-        // out by `ScheduleColumnsPage`) — the label's nearest `Row`
-        // ancestor is now the header content row wrapping the apply-
-        // template button alongside it.
+        // `.last` picks the outermost matching `Row` — the header row laid
+        // out by `ScheduleColumnsPage`, which is now the label's only `Row`
+        // ancestor: a week-view header centers the date label and overlays
+        // the apply-template button via a `Stack`, not a nested `Row`.
         final headerRow = tester.widget<Row>(
           find
               .ancestor(
@@ -332,10 +332,8 @@ void main() {
             .map((center) => center.child)
             .whereType<Semantics>()
             .map((semantics) => semantics.child)
-            .whereType<Row>()
-            .map((row) => row.children.whereType<Flexible>().single)
-            .map((flexible) => flexible.child)
-            .whereType<Text>()
+            .whereType<Stack>()
+            .map((stack) => stack.children.whereType<Text>().single)
             .map((text) => text.key)
             .toList();
         expect(
