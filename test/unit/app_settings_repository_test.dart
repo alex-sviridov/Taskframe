@@ -17,6 +17,20 @@ void main() {
 
       expect(await repository.getInstallHintDismissedAt(), time);
     });
+
+    test('getValue returns null for an unset key', () async {
+      final repository = InMemoryAppSettingsRepository();
+      expect(await repository.getValue('missing'), isNull);
+    });
+
+    test('setValue then getValue round-trips', () async {
+      final repository = InMemoryAppSettingsRepository();
+      await repository.setValue('sync_pull_tasks', '2026-09-15T00:00:00.000Z');
+      expect(
+        await repository.getValue('sync_pull_tasks'),
+        '2026-09-15T00:00:00.000Z',
+      );
+    });
   });
 
   group('SembastAppSettingsRepository', () {
@@ -37,6 +51,18 @@ void main() {
       await repository.setInstallHintDismissedAt(time);
 
       expect(await repository.getInstallHintDismissedAt(), time);
+    });
+
+    test('getValue returns null for an unset key', () async {
+      expect(await repository.getValue('missing'), isNull);
+    });
+
+    test('setValue then getValue round-trips', () async {
+      await repository.setValue('sync_pull_tasks', '2026-09-15T00:00:00.000Z');
+      expect(
+        await repository.getValue('sync_pull_tasks'),
+        '2026-09-15T00:00:00.000Z',
+      );
     });
   });
 }

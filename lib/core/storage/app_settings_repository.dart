@@ -10,12 +10,20 @@ abstract class AppSettingsRepository {
 
   /// Records that the install hint was dismissed at [time].
   Future<void> setInstallHintDismissedAt(DateTime time);
+
+  /// A single stored string value, e.g. a sync cursor or pairing
+  /// identity, keyed by [key]. `null` when never set.
+  Future<String?> getValue(String key);
+
+  /// Stores [value] under [key], overwriting any previous value.
+  Future<void> setValue(String key, String value);
 }
 
 /// An [AppSettingsRepository] that keeps its value in memory for the
 /// life of the app.
 class InMemoryAppSettingsRepository implements AppSettingsRepository {
   DateTime? _dismissedAt;
+  final Map<String, String> _values = {};
 
   @override
   Future<DateTime?> getInstallHintDismissedAt() async => _dismissedAt;
@@ -23,6 +31,14 @@ class InMemoryAppSettingsRepository implements AppSettingsRepository {
   @override
   Future<void> setInstallHintDismissedAt(DateTime time) async {
     _dismissedAt = time;
+  }
+
+  @override
+  Future<String?> getValue(String key) async => _values[key];
+
+  @override
+  Future<void> setValue(String key, String value) async {
+    _values[key] = value;
   }
 }
 
@@ -48,6 +64,17 @@ class SembastAppSettingsRepository implements AppSettingsRepository {
     await settingsStore.record(_key).put(_db, {
       'value': time.toIso8601String(),
     });
+  }
+
+  @override
+  Future<String?> getValue(String key) async {
+    final record = await settingsStore.record(key).get(_db);
+    return record?['value'] as String?;
+  }
+
+  @override
+  Future<void> setValue(String key, String value) async {
+    await settingsStore.record(key).put(_db, {'value': value});
   }
 }
 
