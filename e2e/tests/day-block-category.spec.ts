@@ -1,6 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { clickCenter, fillTextboxUntilSet, gotoAndWaitForBoot } from './support/gestures';
+import {
+  clickCenter,
+  dismissModalByBarrier,
+  fillTextboxUntilSet,
+  gotoAndWaitForBoot,
+} from './support/gestures';
 
 /**
  * Creates a category named [name] via the Categories screen's add action,
@@ -18,12 +23,11 @@ async function addCategoryAndGoToDay(page: Page, name: string): Promise<void> {
   await enableFlutterAccessibility(page);
 
   await page.getByRole('button', { name: 'Add category' }).click();
-  await fillTextboxUntilSet(page.getByRole('textbox'), name);
-  await page.getByRole('button', { name: 'Save' }).click();
-  // The sheet's closing animation can transiently leave both its own
-  // "Work" text field and the newly added list row matching `getByText`
-  // at once; wait for the sheet itself to fully close first.
-  await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+  const field = page.getByRole('textbox');
+  await fillTextboxUntilSet(field, name);
+  // The sheet has no Save/Cancel button of its own — every field applies
+  // live — so it's dismissed by tapping its barrier instead.
+  await dismissModalByBarrier(page, field);
 
   // A hash-only navigation doesn't reload the page, so accessibility
   // (enabled once above) is still active here — enabling it again would

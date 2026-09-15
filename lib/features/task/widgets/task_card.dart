@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
@@ -11,9 +12,9 @@ import 'package:taskframe/features/task/widgets/tag_pills.dart';
 /// category's emoji prefixed onto the title, with a leading checkbox that
 /// toggles [Task.closed] directly — no need to open the edit modal just
 /// to close a task. Closed tasks show their title struck through and
-/// dimmed. Tapping the rest of the card calls [onTap]. Uses a plain
-/// [Container]/[BoxDecoration] rather than [Card] so its background is
-/// the category color itself, matching `BlockView`'s own approach.
+/// dimmed. Tapping the rest of the card calls [onTap]. Built on
+/// [ColoredListCard], shared with the categories list, so its background
+/// is the category color itself, matching `BlockView`'s own approach.
 class TaskCard extends ConsumerWidget {
   /// Creates a [TaskCard] for [task].
   const new({required this.task, required this.onTap, super.key});
@@ -34,41 +35,31 @@ class TaskCard extends ConsumerWidget {
     final categoryColor = category == null ? null : Color(category.colorValue);
     final title = category?.formatTitle(task.title) ?? task.title;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: categoryColor ?? scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
+    return ColoredListCard(
+      color: categoryColor ?? scheme.primaryContainer,
+      leading: Checkbox(
+        shape: const CircleBorder(),
+        value: task.closed,
+        onChanged: (value) => ref
+            .read(taskListProvider.notifier)
+            .updateTask(task, closed: value ?? !task.closed),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: ListTile(
-          leading: Checkbox(
-            shape: const CircleBorder(),
-            value: task.closed,
-            onChanged: (value) => ref
-                .read(taskListProvider.notifier)
-                .updateTask(task, closed: value ?? !task.closed),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              decoration: task.closed ? TextDecoration.lineThrough : null,
+              color: task.closed ? Theme.of(context).disabledColor : null,
+            ),
           ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  decoration: task.closed ? TextDecoration.lineThrough : null,
-                  color: task.closed ? Theme.of(context).disabledColor : null,
-                ),
-              ),
-              if (task.tags.isNotEmpty) const SizedBox(height: 4),
-              TagPills(tags: task.tags),
-            ],
-          ),
-          onTap: onTap,
-        ),
+          if (task.tags.isNotEmpty) const SizedBox(height: 4),
+          TagPills(tags: task.tags),
+        ],
       ),
+      onTap: onTap,
     );
   }
 }

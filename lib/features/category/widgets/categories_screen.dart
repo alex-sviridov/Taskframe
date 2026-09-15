@@ -1,42 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
-import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_edit_sheet.dart';
 
-/// Lists all categories and lets the user add, edit, or delete them. The
-/// default category is always first and has no delete affordance.
+/// Lists all categories and lets the user add or edit them — deleting a
+/// non-default category happens inside its edit sheet, matching
+/// `TasksScreen`/`TaskEditModal`. The default category is always first.
 class CategoriesScreen extends ConsumerWidget {
   /// Creates a [CategoriesScreen].
   const new({super.key});
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    Category category,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this category?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (!context.mounted) return;
-    if (confirmed ?? false) {
-      await ref.read(categoryListProvider.notifier).deleteCategory(category);
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,25 +40,16 @@ class CategoriesScreen extends ConsumerWidget {
                   : const EdgeInsets.symmetric(vertical: 8),
               children: [
                 for (final category in value)
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Color(category.colorValue),
-                      child: category.emoji != null
-                          ? Text(category.emoji!)
-                          : null,
-                    ),
+                  ColoredListCard(
+                    color: Color(category.colorValue),
+                    leading: category.emoji != null
+                        ? CircleAvatar(child: Text(category.emoji!))
+                        : null,
                     title: Text(category.name),
                     onTap: () => showCategoryEditSheet(
                       context: context,
                       category: category,
                     ),
-                    trailing: category.isDefault
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () =>
-                                _confirmDelete(context, ref, category),
-                          ),
                   ),
               ],
             );

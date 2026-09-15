@@ -122,6 +122,23 @@ export async function clickUntilHidden(
 }
 
 /**
+ * Dismisses a modal/sheet with no Save/Cancel button of its own (every
+ * field applies live) by clicking its barrier/scrim, well outside its own
+ * bounds, and waiting for [marker] to disappear — retried via
+ * {@link clickUntilHidden} for the same "click silently dropped under CI
+ * load" reason documented there. The barrier point is derived from the
+ * current viewport: near the top of a narrow viewport (above a bottom
+ * sheet, which only covers the lower portion of the screen) or the
+ * top-right corner of a wide one (outside a centered dialog).
+ */
+export async function dismissModalByBarrier(page: Page, marker: Locator): Promise<void> {
+  const viewport = page.viewportSize();
+  const width = viewport?.width ?? 800;
+  const point = width < 600 ? { x: width / 2, y: 10 } : { x: width - 30, y: 20 };
+  await clickUntilHidden(page, point, marker);
+}
+
+/**
  * Runs [openDraft] (a raw click or drag gesture that opens a block draft,
  * performed before Flutter's semantics tree activates) and confirms it
  * worked by waiting for [marker] (typically the "Create Event" button).
