@@ -27,7 +27,10 @@ class TimeObject {
     required this.kind,
     required this.locked,
     this.categoryId = Category.defaultId,
-  }) : assert(_isOnGrid(start), 'start must be on the 15-minute grid'),
+    DateTime? updatedAt,
+    this.deleted = false,
+  }) : updatedAt = updatedAt ?? _epoch,
+       assert(_isOnGrid(start), 'start must be on the 15-minute grid'),
        assert(_isOnGrid(end), 'end must be on the 15-minute grid'),
        assert(end.isAfter(start), 'end must be after start');
 
@@ -40,7 +43,13 @@ class TimeObject {
     kind: BlockKind.values.byName(map['kind']! as String),
     locked: map['locked']! as bool,
     categoryId: map['categoryId']! as String,
+    updatedAt: map['updatedAt'] == null
+        ? _epoch
+        : DateTime.parse(map['updatedAt']! as String),
+    deleted: map['deleted'] as bool? ?? false,
   );
+
+  static final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Unique identifier for this block.
   final String id;
@@ -64,6 +73,14 @@ class TimeObject {
   /// [Category.defaultId], so every block always resolves to some category.
   final String categoryId;
 
+  /// When this block's record was last modified, used for sync
+  /// conflict resolution. Defaults to the Unix epoch for
+  /// pre-existing records that predate this field.
+  final DateTime updatedAt;
+
+  /// Whether this block has been soft-deleted.
+  final bool deleted;
+
   static bool _isOnGrid(DateTime time) =>
       time.second == 0 &&
       time.millisecond == 0 &&
@@ -84,5 +101,7 @@ class TimeObject {
     'kind': kind.name,
     'locked': locked,
     'categoryId': categoryId,
+    'updatedAt': updatedAt.toIso8601String(),
+    'deleted': deleted,
   };
 }

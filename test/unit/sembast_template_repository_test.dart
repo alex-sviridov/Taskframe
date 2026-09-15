@@ -83,9 +83,10 @@ void main() {
 
   group('SembastTemplateBlocksRepository', () {
     late SembastTemplateBlocksRepository repository;
+    late Database db;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastTemplateBlocksRepository(db);
     });
 
@@ -181,6 +182,22 @@ void main() {
 
       expect(await repository.load('t1'), isEmpty);
       expect(await repository.load('t2'), hasLength(1));
+    });
+
+    test('delete soft-deletes: block stays in the store but excluded from '
+        'load', () async {
+      final added = await repository.add(
+        'tpl1',
+        start: DateTime(2026, 1, 1, 9),
+        end: DateTime(2026, 1, 1, 10),
+        kind: BlockKind.frame,
+      );
+
+      await repository.delete(added, templateId: 'tpl1');
+
+      expect(await repository.load('tpl1'), isEmpty);
+      final record = await templateBlocksStore.record(added.id).get(db);
+      expect(record!['deleted'], isTrue);
     });
   });
 }

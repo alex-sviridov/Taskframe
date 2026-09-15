@@ -20,7 +20,10 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
   @override
   Future<List<TimeObject>> load(DateTime date) async {
     final finder = Finder(
-      filter: Filter.equals('dateKey', dateKeyFor(date)),
+      filter: Filter.and([
+        Filter.equals('dateKey', dateKeyFor(date)),
+        Filter.notEquals('deleted', true),
+      ]),
       sortOrders: [SortOrder('start')],
     );
     final records = await dayBlocksStore.find(_db, finder: finder);
@@ -44,6 +47,7 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       kind: kind,
       locked: false,
       categoryId: categoryId ?? Category.defaultId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await dayBlocksStore.record(block.id).put(_db, {
       ...block.toMap(),
@@ -68,6 +72,7 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       kind: block.kind,
       locked: block.locked,
       categoryId: block.categoryId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await dayBlocksStore.record(block.id).put(_db, {
       ...moved.toMap(),
@@ -94,6 +99,7 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
       kind: kind ?? block.kind,
       locked: block.locked,
       categoryId: categoryId ?? block.categoryId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await dayBlocksStore.record(block.id).put(_db, {
       ...updated.toMap(),
@@ -104,6 +110,15 @@ class SembastDayBlocksRepository implements DayBlocksRepository {
 
   @override
   Future<void> delete(TimeObject block, {required DateTime date}) async {
-    await dayBlocksStore.record(block.id).delete(_db);
+    final existingRecord = await dayBlocksStore.record(block.id).get(_db);
+    final current = existingRecord == null
+        ? block
+        : TimeObject.fromMap(existingRecord);
+    await dayBlocksStore.record(block.id).put(_db, {
+      ...current.toMap(),
+      'deleted': true,
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      'dateKey': existingRecord?['dateKey'] ?? dateKeyFor(date),
+    });
   }
 }

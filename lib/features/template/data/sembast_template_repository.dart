@@ -90,7 +90,10 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
   @override
   Future<List<TimeObject>> load(String templateId) async {
     final finder = Finder(
-      filter: Filter.equals('templateId', templateId),
+      filter: Filter.and([
+        Filter.equals('templateId', templateId),
+        Filter.notEquals('deleted', true),
+      ]),
       sortOrders: [SortOrder('start')],
     );
     final records = await templateBlocksStore.find(_db, finder: finder);
@@ -114,6 +117,7 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       kind: kind,
       locked: false,
       categoryId: categoryId ?? Category.defaultId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await templateBlocksStore.record(block.id).put(_db, {
       ...block.toMap(),
@@ -138,6 +142,7 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       kind: block.kind,
       locked: block.locked,
       categoryId: block.categoryId,
+      updatedAt: DateTime.now().toUtc(),
     );
     await templateBlocksStore.record(block.id).put(_db, {
       ...moved.toMap(),
@@ -164,6 +169,7 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
       kind: kind ?? block.kind,
       locked: block.locked,
       categoryId: categoryId ?? block.categoryId,
+      updatedAt: DateTime.now().toUtc(),
     );
     final existing = await templateBlocksStore.record(block.id).get(_db);
     if (existing == null) return updated;
@@ -176,12 +182,30 @@ class SembastTemplateBlocksRepository implements TemplateBlocksRepository {
 
   @override
   Future<void> delete(TimeObject block, {required String templateId}) async {
-    await templateBlocksStore.record(block.id).delete(_db);
+    final existingRecord = await templateBlocksStore.record(block.id).get(_db);
+    final current = existingRecord == null
+        ? block
+        : TimeObject.fromMap(existingRecord);
+    await templateBlocksStore.record(block.id).put(_db, {
+      ...current.toMap(),
+      'deleted': true,
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      'templateId': existingRecord?['templateId'] ?? templateId,
+    });
   }
 
   @override
   Future<void> deleteAll(String templateId) async {
     final finder = Finder(filter: Filter.equals('templateId', templateId));
-    await templateBlocksStore.delete(_db, finder: finder);
+    final records = await templateBlocksStore.find(_db, finder: finder);
+    for (final record in records) {
+      final current = TimeObject.fromMap(record.value);
+      await templateBlocksStore.record(record.key).put(_db, {
+        ...current.toMap(),
+        'deleted': true,
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        'templateId': templateId,
+      });
+    }
   }
 }
