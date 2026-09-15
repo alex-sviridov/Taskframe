@@ -4,7 +4,7 @@ import 'package:taskframe/features/category/models/category.dart';
 void main() {
   group('Category', () {
     test('isDefault is true when id equals Category.defaultId', () {
-      const category = Category(
+      final category = Category(
         id: Category.defaultId,
         name: 'Default',
         colorValue: 0xFF009688,
@@ -14,7 +14,7 @@ void main() {
     });
 
     test('isDefault is false for any other id', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -25,7 +25,7 @@ void main() {
     });
 
     test('copyWith replaces only the given fields', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -41,7 +41,7 @@ void main() {
     });
 
     test('formatTitle prefixes the emoji when the category has one', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -53,7 +53,7 @@ void main() {
 
     test('formatTitle returns the title unchanged when the category has no '
         'emoji', () {
-      const category = Category(
+      final category = Category(
         id: Category.defaultId,
         name: 'Default',
         colorValue: 0xFF009688,
@@ -63,7 +63,7 @@ void main() {
     });
 
     test('copyWith with no arguments returns equivalent fields', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -81,7 +81,7 @@ void main() {
 
   group('toMap/fromMap', () {
     test('fromMap(toMap()) round-trips every field', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -97,13 +97,27 @@ void main() {
     });
 
     test('fromMap restores a null emoji', () {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
       );
 
       expect(Category.fromMap(category.toMap()).emoji, isNull);
+    });
+
+    test('toMap/fromMap round-trip updatedAt and deleted', () {
+      final updatedAt = DateTime.utc(2026, 9, 15, 12);
+      final category = Category(
+        id: 'c1',
+        name: 'Work',
+        colorValue: 0xFF000000,
+        updatedAt: updatedAt,
+        deleted: true,
+      );
+      final restored = Category.fromMap(category.toMap());
+      expect(restored.updatedAt, updatedAt);
+      expect(restored.deleted, isTrue);
     });
   });
 }

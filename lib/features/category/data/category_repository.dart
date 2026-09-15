@@ -38,7 +38,7 @@ class InMemoryCategoryRepository implements CategoryRepository {
   final List<Category> _added = [];
   int _nextId = 1;
 
-  Category _defaultCategory = const Category(
+  Category _defaultCategory = Category(
     id: Category.defaultId,
     name: 'Default',
     colorValue: 0xFF009688,

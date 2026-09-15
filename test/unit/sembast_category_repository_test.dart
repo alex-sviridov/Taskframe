@@ -1,14 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sembast/sembast_memory.dart';
+import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';
 import 'package:taskframe/features/category/models/category.dart';
 
 void main() {
   group('SembastCategoryRepository', () {
     late SembastCategoryRepository repository;
+    late dynamic db;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastCategoryRepository(db);
     });
 
@@ -128,6 +130,16 @@ void main() {
       final categories = await repository.load();
       expect(categories, hasLength(1));
       expect(categories.single.isDefault, isTrue);
+    });
+
+    test('delete soft-deletes a non-default category', () async {
+      final added = await repository.add(name: 'Work', colorValue: 0xFF000000);
+
+      await repository.delete(added);
+
+      expect(await repository.load(), hasLength(1)); // default only
+      final record = await categoriesStore.record(added.id).get(db);
+      expect(record!['deleted'], isTrue);
     });
   });
 }

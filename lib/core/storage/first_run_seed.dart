@@ -25,7 +25,7 @@ Future<void> seedIfEmpty(Database db) async {
   if (alreadySeeded?['value'] == true) return;
 
   if (await categoriesStore.count(db) == 0) {
-    const defaultCategory = Category(
+    final defaultCategory = Category(
       id: Category.defaultId,
       name: 'Default',
       colorValue: 0xFF009688,
