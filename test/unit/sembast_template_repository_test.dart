@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_memory.dart';
+import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/template/data/sembast_template_repository.dart';
 import 'package:taskframe/features/template/models/template.dart';
@@ -7,9 +9,10 @@ import 'package:taskframe/features/template/models/template.dart';
 void main() {
   group('SembastTemplateRepository', () {
     late SembastTemplateRepository repository;
+    late Database db;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastTemplateRepository(db);
     });
 
@@ -51,7 +54,7 @@ void main() {
     });
 
     test('rename throws StateError if the template is not found', () async {
-      const missing = Template(id: 't-missing', name: 'Weekday');
+      final missing = Template(id: 't-missing', name: 'Weekday');
 
       expect(
         () => repository.rename(missing, name: 'Renamed'),
@@ -65,6 +68,16 @@ void main() {
       await repository.delete(added);
 
       expect(await repository.load(), isEmpty);
+    });
+
+    test('delete soft-deletes: record stays but is excluded from load', () async {
+      final added = await repository.add(name: 'Weekday');
+
+      await repository.delete(added);
+
+      expect(await repository.load(), isEmpty);
+      final record = await templatesStore.record(added.id).get(db);
+      expect(record!['deleted'], isTrue);
     });
   });
 

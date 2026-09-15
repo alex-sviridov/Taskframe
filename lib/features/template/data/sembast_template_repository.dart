@@ -21,14 +21,21 @@ class SembastTemplateRepository implements TemplateRepository {
 
   @override
   Future<List<Template>> load() async {
-    final finder = Finder(sortOrders: [SortOrder('order')]);
+    final finder = Finder(
+      filter: Filter.notEquals('deleted', true),
+      sortOrders: [SortOrder('order')],
+    );
     final records = await templatesStore.find(_db, finder: finder);
     return [for (final record in records) Template.fromMap(record.value)];
   }
 
   @override
   Future<Template> add({required String name}) async {
-    final template = Template(id: _uuid.v4(), name: name);
+    final template = Template(
+      id: _uuid.v4(),
+      name: name,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await templatesStore.record(template.id).put(_db, {
       ...template.toMap(),
       'order': DateTime.now().microsecondsSinceEpoch,
@@ -42,7 +49,10 @@ class SembastTemplateRepository implements TemplateRepository {
     if (existingRecord == null) {
       throw StateError('Template ${template.id} not found');
     }
-    final renamed = template.copyWith(name: name);
+    final renamed = template.copyWith(
+      name: name,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await templatesStore.record(renamed.id).put(_db, {
       ...renamed.toMap(),
       'order': existingRecord['order'],
@@ -52,7 +62,18 @@ class SembastTemplateRepository implements TemplateRepository {
 
   @override
   Future<void> delete(Template template) async {
-    await templatesStore.record(template.id).delete(_db);
+    final existingRecord = await templatesStore.record(template.id).get(_db);
+    final current = existingRecord == null
+        ? template
+        : Template.fromMap(existingRecord);
+    final tombstone = current.copyWith(
+      deleted: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await templatesStore.record(template.id).put(_db, {
+      ...tombstone.toMap(),
+      'order': existingRecord?['order'] ?? 0,
+    });
   }
 }
 
