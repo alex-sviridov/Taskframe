@@ -140,6 +140,33 @@ void main() {
     );
 
     testWidgets(
+      'at a wide width, an 8th template pages to a second, capped-at-7 page',
+      (tester) async {
+        _resizeViewport(tester, const Size(1200, 1000));
+        await _pump(tester);
+        for (var i = 0; i < 8; i++) {
+          await tester.tap(find.byTooltip('Add template'));
+          await tester.pumpAndSettle();
+        }
+        // Adding opens straight to the new template's page, so "Template 8"
+        // is alone on page two; templates 1-7 are on page one.
+        expect(find.text('Template 8'), findsOneWidget);
+        for (var i = 1; i <= 7; i++) {
+          expect(find.text('Template $i'), findsNothing);
+        }
+        expect(find.byTooltip('Previous templates'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Previous templates'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Template 8'), findsNothing);
+        for (var i = 1; i <= 7; i++) {
+          expect(find.text('Template $i'), findsOneWidget);
+        }
+      },
+    );
+
+    testWidgets(
       'tapping a column opens the block edit modal without a date row or '
       'copy button',
       (tester) async {

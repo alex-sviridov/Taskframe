@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import {
-  clickCenter,
+  clickUntilVisible,
   fillTextboxAndSubmit,
   gotoAndWaitForBoot,
   openDraftWithRetry,
@@ -58,15 +58,17 @@ test.beforeEach(async ({ page }) => {
   await gotoAndWaitForBoot(page, '/#/templates');
 });
 
-test('creating an event adds a block titled "title" and opens its edit '
-  + 'modal', async ({ page }) => {
+test('creating an event adds a block with an empty title and opens its '
+  + 'edit modal', async ({ page }) => {
   await addTemplateAndOpenDraft(page);
 
   await page.getByRole('button', { name: 'Create Event' }).click();
 
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await expect(page.getByRole('textbox').first()).toHaveValue('');
   await page.getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByText('title')).toBeVisible();
+  // No placeholder text leaks onto the grid for an empty-titled block.
+  await expect(page.getByText('title')).toHaveCount(0);
 });
 
 test('a template block\'s edit modal has no date row and no "Copy to '
@@ -125,6 +127,11 @@ test('a Frame block can be created and reopened', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Frame' })).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  await clickCenter(page, page.getByText('title'));
-  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  // The block has no title text to locate it by, but it's the only block
+  // on this template's grid, sitting where the draft was opened.
+  await clickUntilVisible(
+    page,
+    freeSpace,
+    page.getByRole('button', { name: 'Close' }),
+  );
 });

@@ -21,5 +21,13 @@ jobs:
           cache: npm
           cache-dependency-path: e2e/package-lock.json
       - run: make setup
-      - run: make check
-      - run: make build-web
+      - name: Format check
+        run: make format-check
+      - name: Analyze
+        run: make analyze
+      - name: Unit tests
+        run: make test
+      - name: E2E tests
+        run: make e2e
+      - name: Build web
+        run: make build-web

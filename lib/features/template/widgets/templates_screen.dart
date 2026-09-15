@@ -13,10 +13,21 @@ import 'package:taskframe/features/day/widgets/schedule_columns_page.dart';
 import 'package:taskframe/features/template/models/template.dart';
 import 'package:taskframe/features/template/providers.dart';
 
+/// How many template columns one page shows: one at narrow widths (swipe
+/// or arrows page between templates one at a time), or up to seven at wide
+/// widths — matching `DayScreen`'s week-view cap — with further templates
+/// on additional pages reached the same way.
+int _itemsPerPageFor(bool narrow) => narrow ? 1 : 7;
+
+/// How many pages [templateCount] templates need at [itemsPerPage] per
+/// page.
+int _pageCountFor(int templateCount, int itemsPerPage) =>
+    templateCount == 0 ? 0 : (templateCount - 1) ~/ itemsPerPage + 1;
+
 /// The templates screen: a set of named templates, each with its own
-/// full schedule editor reusing `DayGrid`. Narrow widths show one
-/// template per page (swipe or arrows between templates); wide widths
-/// show every template as a side-by-side column.
+/// full schedule editor reusing `DayGrid`, paged [_itemsPerPageFor] at a
+/// time (swipe or arrows between pages) exactly like `DayScreen` pages
+/// between days/weeks.
 class TemplatesScreen extends ConsumerStatefulWidget {
   /// Creates a [TemplatesScreen].
   const new({super.key});
@@ -26,14 +37,13 @@ class TemplatesScreen extends ConsumerStatefulWidget {
 }
 
 class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
-  /// Only actually attached to a `PageView` at narrow widths — see
-  /// [_syncPageControllerSoon].
   late final PageController _pageController;
   late final PageSwipeForwarder _swipeForwarder;
 
-  /// The last width class this screen was built at, used to detect a
-  /// narrow/wide breakpoint crossing.
-  bool? _wasNarrow;
+  /// The last [_itemsPerPageFor] value this screen was built at, used to
+  /// detect a narrow/wide breakpoint crossing so [_pageIndex] can be
+  /// converted to keep roughly the same template in view.
+  int? _lastItemsPerPage;
 
   int _pageIndex = 0;
 
@@ -55,16 +65,12 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     super.dispose();
   }
 
-  /// Jumps [_pageController] to [_pageIndex] once it's actually attached
-  /// to a mounted `PageView` (i.e. once the screen is narrow).
-  ///
-  /// A `PageController`'s own `initialPage` only takes effect the first
-  /// time it attaches to a scroll view — since this screen only mounts a
-  /// `PageView` at narrow widths, a `_pageIndex` change made while wide
-  /// (add/delete a template) would otherwise be silently lost the next
-  /// time the viewport narrows and the `PageView` attaches for the first
-  /// time. Scheduled as a post-frame callback so it runs after whatever
-  /// build just attached (or re-attached) the controller.
+  /// Jumps [_pageController] to [_pageIndex] once it's attached to a
+  /// mounted `PageView`. A `PageController`'s own `initialPage` only takes
+  /// effect the first time it attaches to a scroll view, so a `_pageIndex`
+  /// change made elsewhere (add/delete a template, a breakpoint crossing)
+  /// needs this to actually move it. Scheduled as a post-frame callback so
+  /// it runs after whatever build just changed `_pageIndex`.
   void _syncPageControllerSoon() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_pageController.hasClients) return;
@@ -77,7 +83,9 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     final name = 'Template ${_nextTemplateNumber++}';
     await ref.read(templateListProvider.notifier).addTemplate(name: name);
     if (!mounted) return;
-    setState(() => _pageIndex = templates.length);
+    final itemsPerPage = _itemsPerPageFor(isNarrow(context));
+    // templates.length (the pre-add count) is the new template's index.
+    setState(() => _pageIndex = templates.length ~/ itemsPerPage);
     _syncPageControllerSoon();
   }
 
@@ -86,9 +94,11 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     await ref.read(templateListProvider.notifier).deleteTemplate(template);
     if (!mounted) return;
     final remaining = templates.length - 1;
-    if (_pageIndex >= remaining && remaining > 0) {
-      setState(() => _pageIndex = remaining - 1);
-    } else if (remaining == 0) {
+    final itemsPerPage = _itemsPerPageFor(isNarrow(context));
+    final pageCount = _pageCountFor(remaining, itemsPerPage);
+    if (_pageIndex >= pageCount && pageCount > 0) {
+      setState(() => _pageIndex = pageCount - 1);
+    } else if (pageCount == 0) {
       setState(() => _pageIndex = 0);
     }
     _syncPageControllerSoon();
@@ -106,16 +116,19 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     final templates = templatesAsync.value ?? const <Template>[];
     final narrow = isNarrow(context);
     final settings = ref.watch(daySettingsProvider);
-    final currentIndex = templates.isEmpty
-        ? 0
-        : _pageIndex.clamp(0, templates.length - 1);
+    final itemsPerPage = _itemsPerPageFor(narrow);
+    final pageCount = _pageCountFor(templates.length, itemsPerPage);
+    final currentPage = pageCount == 0 ? 0 : _pageIndex.clamp(0, pageCount - 1);
 
-    // Only matters the moment the viewport *becomes* narrow — see
-    // _syncPageControllerSoon's docs.
-    if (_wasNarrow != null && _wasNarrow != narrow && narrow) {
+    // Convert the page index across an itemsPerPage change (a narrow/wide
+    // breakpoint crossing) so roughly the same template stays in view —
+    // see _syncPageControllerSoon's docs.
+    if (_lastItemsPerPage != null && _lastItemsPerPage != itemsPerPage) {
+      final anchorTemplateIndex = _pageIndex * _lastItemsPerPage!;
+      _pageIndex = anchorTemplateIndex ~/ itemsPerPage;
       _syncPageControllerSoon();
     }
-    _wasNarrow = narrow;
+    _lastItemsPerPage = itemsPerPage;
 
     return Scaffold(
       appBar: AppBar(
@@ -137,28 +150,6 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
             return const Center(child: Text('No templates yet'));
           }
 
-          if (!narrow) {
-            return ScheduleColumnsPage(
-              columnCount: templates.length,
-              settings: settings,
-              headerBuilder: (context, i) => _ColumnHeader(
-                key: ValueKey(templates[i].id),
-                template: templates[i],
-                onDelete: () => unawaited(_deleteTemplate(templates[i])),
-              ),
-              gridBuilder:
-                  (context, i, slotHeight, {required showHourLabels}) =>
-                      Expanded(
-                        child: _TemplateColumnGrid(
-                          template: templates[i],
-                          settings: settings,
-                          slotHeight: slotHeight,
-                          showHourLabels: showHourLabels,
-                        ),
-                      ),
-            );
-          }
-
           return Stack(
             children: [
               PageView.builder(
@@ -170,31 +161,37 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 physics: const NeverScrollableScrollPhysics(
                   parent: PageScrollPhysics(),
                 ),
-                itemCount: templates.length,
+                itemCount: pageCount,
                 onPageChanged: (i) => setState(() => _pageIndex = i),
-                itemBuilder: (context, i) => ScheduleColumnsPage(
-                  columnCount: 1,
-                  settings: settings,
-                  headerBuilder: (context, _) => _ColumnHeader(
-                    key: ValueKey(templates[i].id),
-                    template: templates[i],
-                    onDelete: () => unawaited(_deleteTemplate(templates[i])),
-                  ),
-                  gridBuilder:
-                      (context, _, slotHeight, {required showHourLabels}) =>
-                          Expanded(
-                            child: _TemplateColumnGrid(
-                              template: templates[i],
-                              settings: settings,
-                              slotHeight: slotHeight,
-                              showHourLabels: showHourLabels,
-                              onSwipeStart: _swipeForwarder.onSwipeStart,
-                              onSwipeUpdate: _swipeForwarder.onSwipeUpdate,
-                              onSwipeEnd: _swipeForwarder.onSwipeEnd,
-                              onSwipeCancel: _swipeForwarder.onSwipeCancel,
+                itemBuilder: (context, page) {
+                  final start = page * itemsPerPage;
+                  final end = (start + itemsPerPage).clamp(0, templates.length);
+                  final pageTemplates = templates.sublist(start, end);
+                  return ScheduleColumnsPage(
+                    columnCount: pageTemplates.length,
+                    settings: settings,
+                    headerBuilder: (context, i) => _ColumnHeader(
+                      key: ValueKey(pageTemplates[i].id),
+                      template: pageTemplates[i],
+                      onDelete: () =>
+                          unawaited(_deleteTemplate(pageTemplates[i])),
+                    ),
+                    gridBuilder:
+                        (context, i, slotHeight, {required showHourLabels}) =>
+                            Expanded(
+                              child: _TemplateColumnGrid(
+                                template: pageTemplates[i],
+                                settings: settings,
+                                slotHeight: slotHeight,
+                                showHourLabels: showHourLabels,
+                                onSwipeStart: _swipeForwarder.onSwipeStart,
+                                onSwipeUpdate: _swipeForwarder.onSwipeUpdate,
+                                onSwipeEnd: _swipeForwarder.onSwipeEnd,
+                                onSwipeCancel: _swipeForwarder.onSwipeCancel,
+                              ),
                             ),
-                          ),
-                ),
+                  );
+                },
               ),
               // Fades the sliding header content to the background color
               // before it reaches either arrow, matching DayScreen.
@@ -212,20 +209,22 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 height: scheduleHeaderHeight,
                 child: IgnorePointer(child: ScheduleEdgeFade(alignLeft: false)),
               ),
-              if (templates.length > 1) ...[
+              if (pageCount > 1) ...[
                 Positioned(
                   top: 0,
                   left: 8,
                   height: scheduleHeaderHeight,
                   child: IconButton(
-                    tooltip: 'Previous template',
+                    tooltip: itemsPerPage > 1
+                        ? 'Previous templates'
+                        : 'Previous template',
                     icon: const Icon(Icons.chevron_left),
                     style: IconButton.styleFrom(
                       elevation: 0,
                       shadowColor: Colors.transparent,
                     ),
-                    onPressed: currentIndex > 0
-                        ? () => unawaited(_animateTo(currentIndex - 1))
+                    onPressed: currentPage > 0
+                        ? () => unawaited(_animateTo(currentPage - 1))
                         : null,
                   ),
                 ),
@@ -234,14 +233,16 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                   right: 8,
                   height: scheduleHeaderHeight,
                   child: IconButton(
-                    tooltip: 'Next template',
+                    tooltip: itemsPerPage > 1
+                        ? 'Next templates'
+                        : 'Next template',
                     icon: const Icon(Icons.chevron_right),
                     style: IconButton.styleFrom(
                       elevation: 0,
                       shadowColor: Colors.transparent,
                     ),
-                    onPressed: currentIndex < templates.length - 1
-                        ? () => unawaited(_animateTo(currentIndex + 1))
+                    onPressed: currentPage < pageCount - 1
+                        ? () => unawaited(_animateTo(currentPage + 1))
                         : null,
                   ),
                 ),

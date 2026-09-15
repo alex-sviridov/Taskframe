@@ -123,7 +123,7 @@ class InMemoryTemplateBlocksRepository implements TemplateBlocksRepository {
   }) async {
     final block = TimeObject(
       id: 'template-block-${_nextId++}',
-      title: title ?? 'title',
+      title: title ?? '',
       start: start,
       end: end,
       kind: kind,

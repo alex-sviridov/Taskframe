@@ -1,13 +1,24 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
-import { dragMouseUntilMoved, gotoAndWaitForBoot, openDraftWithRetry, waitForBoundingBox } from './support/gestures';
+import {
+  dragMouseUntilMoved,
+  fillTextboxAndSubmit,
+  gotoAndWaitForBoot,
+  openDraftWithRetry,
+  waitForBoundingBox,
+} from './support/gestures';
+
+// A new block's title starts empty, so it can't be located by text right
+// after creation; every test in this suite names it this instead, purely
+// so the drag logic below has stable text to locate the block by.
+const blockTitle = 'Block';
 
 /**
  * Adds a template (raw click — see the comment in
  * templates-edit-block.spec.ts for why this must run before accessibility
- * is enabled) and creates one "title"-named event block on it via a
- * double-click draft, leaving accessibility enabled and the modal closed
- * so the block is ready to drag.
+ * is enabled) and creates one event block on it via a double-click draft,
+ * naming it [blockTitle] and leaving accessibility enabled and the modal
+ * closed so the block is ready to drag.
  */
 async function addTemplateWithBlock(
   page: Page,
@@ -31,8 +42,9 @@ async function addTemplateWithBlock(
   );
   await page.getByRole('button', { name: 'Create Event' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await fillTextboxAndSubmit(page.getByRole('textbox').first(), blockTitle);
   await page.getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByText('title')).toBeVisible();
+  await expect(page.getByText(blockTitle)).toBeVisible();
 }
 
 test.describe('single template', () => {
@@ -47,14 +59,14 @@ test.describe('single template', () => {
   test('dragging a block to a new time moves it there', async ({ page }) => {
     await addTemplateWithBlock(page, addTemplateButton, blockPosition);
 
-    const block = page.getByText('title');
+    const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);
 
     const movedBox = await dragMouseUntilMoved(
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: box.x + box.width / 2, y: box.y + box.height / 2 + 150 },
-      page.getByText('title'),
+      page.getByText(blockTitle),
       box,
     );
     expect(movedBox.y).toBeGreaterThan(box.y + 50);
@@ -83,7 +95,7 @@ test.describe('two templates side by side', () => {
       page.getByRole('button', { name: 'Delete template' }),
     ).toHaveCount(2);
 
-    const block = page.getByText('title');
+    const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);
     expect(box.x).toBeLessThan(rightColumnX);
 
@@ -91,7 +103,7 @@ test.describe('two templates side by side', () => {
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: rightColumnX, y: box.y + box.height / 2 },
-      page.getByText('title'),
+      page.getByText(blockTitle),
       box,
     );
     expect(movedBox.x).toBeGreaterThan(box.x + 200);
@@ -135,7 +147,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
     await page.goto('/#/templates');
 
-    const block = page.getByText('title');
+    const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);
 
     // The block genuinely moved, rather than the drag silently failing.
@@ -143,7 +155,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
       page,
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       { x: box.x + box.width / 2, y: box.y + box.height / 2 + 150 },
-      page.getByText('title'),
+      page.getByText(blockTitle),
       box,
     );
     expect(movedBox.y).toBeGreaterThan(box.y + 50);

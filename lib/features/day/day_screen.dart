@@ -394,11 +394,33 @@ class _SchedulePage extends ConsumerWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );
+
+        if (dayCount > 1) {
+          // Week-view columns are narrow, so the apply-template button
+          // (hover-only here) overlays the cell instead of reserving Row
+          // space — reserving space for it left the date text with barely
+          // half the column's width to work with.
+          return Semantics(
+            header: true,
+            container: true,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                label,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ApplyTemplateButton(date: date, alwaysVisible: false),
+                ),
+              ],
+            ),
+          );
+        }
+
         final trailingCluster = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(width: 4),
-            ApplyTemplateButton(date: date, alwaysVisible: dayCount == 1),
+            ApplyTemplateButton(date: date, alwaysVisible: true),
           ],
         );
         // A plain Row would center the label-plus-button pair as a
@@ -407,7 +429,7 @@ class _SchedulePage extends ConsumerWidget {
         // invisible copy of the trailing button cluster on the leading
         // side keeps the whole row symmetric around the label, so the
         // label itself lands back on the header's true center.
-        final content = Row(
+        return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Visibility(
@@ -421,9 +443,6 @@ class _SchedulePage extends ConsumerWidget {
             trailingCluster,
           ],
         );
-        return dayCount == 1
-            ? content
-            : Semantics(header: true, container: true, child: content);
       },
       gridBuilder: (context, i, slotHeight, {required showHourLabels}) =>
           _buildColumn(context, ref, dates[i], slotHeight, showHourLabels),

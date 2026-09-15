@@ -228,6 +228,28 @@ export async function clickCenter(page: Page, locator: Locator): Promise<void> {
 }
 
 /**
+ * Clicks [locator] (a text field) near the top of its bounding box rather
+ * than its vertical center, and waits for a non-null box first via
+ * {@link waitForBoundingBox} (guarding the same transient detach/reattach
+ * gap as {@link clickCenter}'s plain `boundingBox()` call, e.g. right
+ * after an action that rebuilds the underlying widget).
+ *
+ * A text field nested inside a `PageView` (as any per-page header field
+ * is, e.g. a template's rename field) gets a semantics bounding box whose
+ * *height* Flutter inflates all the way to the bottom of the page's
+ * content — its reported `y`/`width` stay correct, only `height` balloons
+ * — so a true center click can land past the field, on whatever's
+ * underneath it lower in the page (e.g. the schedule grid), stealing
+ * focus instead of the field. Clicking near the top, inside the field's
+ * real (small) rendered height regardless of whether this bug is in play,
+ * avoids that.
+ */
+export async function clickNearFieldTop(page: Page, locator: Locator): Promise<void> {
+  const box = await waitForBoundingBox(locator);
+  await page.mouse.click(box.x + box.width / 2, box.y + 10);
+}
+
+/**
  * Drags the mouse from [from] to [to] in [steps] intermediate moves,
  * holding the button down for the whole path and releasing at [to].
  * Used to simulate a desktop block drag, which starts immediately on
