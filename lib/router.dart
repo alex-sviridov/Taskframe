@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/widgets/app_shell.dart';
 import 'package:taskframe/features/category/widgets/categories_screen.dart';
 import 'package:taskframe/features/day/day_screen.dart';
+import 'package:taskframe/features/pairing/widgets/pairing_screen.dart';
 import 'package:taskframe/features/task/widgets/tasks_screen.dart';
 import 'package:taskframe/features/template/widgets/templates_screen.dart';
 
@@ -44,6 +45,10 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+    GoRoute(
+      path: '/pairing',
+      builder: (context, state) => const PairingScreen(),
     ),
   ],
 );

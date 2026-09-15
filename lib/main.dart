@@ -3,8 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/app.dart';
 import 'package:taskframe/core/platform/persistent_storage.dart';
 import 'package:taskframe/core/storage/app_database.dart';
+import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/storage/first_run_seed.dart';
 import 'package:taskframe/core/storage/sembast_overrides.dart';
+import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
+import 'package:taskframe/core/sync/sync_engine.dart';
+import 'package:taskframe/core/sync/sync_trigger.dart';
+import 'package:taskframe/features/pairing/pairing_providers.dart';
 
 /// Entry point: opens the local database, seeds it on first run, then
 /// boots the app inside a [ProviderScope] that overrides every repository
@@ -21,5 +26,21 @@ Future<void> main() async {
   await seedIfEmpty(db);
   await requestPersistentStorage();
 
-  runApp(ProviderScope(overrides: sembastOverrides(db), child: const App()));
+  final appSettings = SembastAppSettingsRepository(db);
+  final syncClient = PocketBaseSyncClient(
+    baseUrl: 'http://localhost:8090',
+    settings: appSettings,
+  );
+  final syncEngine = SyncEngine(db: db, settings: appSettings, backend: syncClient);
+  startSyncTriggers(engine: syncEngine);
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        ...sembastOverrides(db),
+        pocketBaseSyncClientProvider.overrideWithValue(syncClient),
+      ],
+      child: const App(),
+    ),
+  );
 }
