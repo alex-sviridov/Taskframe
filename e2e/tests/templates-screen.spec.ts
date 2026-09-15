@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import {
-  clickCenter,
+  clickNearFieldTop,
   dragMouseUntilTrue,
   fillTextboxAndSubmit,
   gotoAndWaitForBoot,
@@ -18,7 +18,7 @@ import {
  */
 async function readTemplateName(page: import('@playwright/test').Page) {
   const input = page.getByRole('textbox');
-  await clickCenter(page, input);
+  await clickNearFieldTop(page, input);
   // The DOM/value sync on focus isn't instantaneous; reading immediately
   // after the click can still observe the pre-sync empty value.
   await page.waitForTimeout(200);
@@ -56,7 +56,7 @@ test.describe('wide viewport', () => {
   test('renaming a template persists the new name', async ({ page }) => {
     await page.getByRole('button', { name: 'Add template' }).click();
     const input = page.getByRole('textbox');
-    await clickCenter(page, input);
+    await clickNearFieldTop(page, input);
 
     await fillTextboxAndSubmit(input, 'Weekday');
 
@@ -97,6 +97,43 @@ test.describe('wide viewport with two templates', () => {
     await expect(
       page.getByRole('button', { name: 'Delete template' }),
     ).toHaveCount(2);
+  });
+});
+
+test.describe('wide viewport with eight templates', () => {
+  test.use({ viewport: { width: 1200, height: 800 } });
+
+  test('the 8th template pages to a second, capped-at-7 page', async ({
+    page,
+  }) => {
+    await gotoAndWaitForBoot(page, '/#/templates');
+    await enableFlutterAccessibility(page);
+
+    for (let i = 0; i < 8; i++) {
+      await page.getByRole('button', { name: 'Add template' }).click();
+    }
+
+    // Only 7 columns show per page, so with 8 templates there are two
+    // pages: adding opens straight to the new (last) template, so we
+    // start on page two with only the 8th template's column.
+    await expect(
+      page.getByRole('button', { name: 'Delete template' }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: 'Next templates' }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Previous templates' }),
+    ).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Previous templates' }).click();
+
+    await expect(
+      page.getByRole('button', { name: 'Delete template' }),
+    ).toHaveCount(7);
+    await expect(
+      page.getByRole('button', { name: 'Previous templates' }),
+    ).toBeDisabled();
   });
 });
 
