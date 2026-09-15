@@ -1,0 +1,11 @@
+# docker-compose.yml
+services:
+  pocketbase:
+    build: ./pocketbase
+    ports:
+      - "8090:8090"
+    volumes:
+      - pocketbase_data:/pb/pb_data
+
+volumes:
+  pocketbase_data:
