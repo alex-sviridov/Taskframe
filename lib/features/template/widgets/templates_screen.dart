@@ -118,9 +118,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     final settings = ref.watch(daySettingsProvider);
     final itemsPerPage = _itemsPerPageFor(narrow);
     final pageCount = _pageCountFor(templates.length, itemsPerPage);
-    final currentPage = pageCount == 0
-        ? 0
-        : _pageIndex.clamp(0, pageCount - 1);
+    final currentPage = pageCount == 0 ? 0 : _pageIndex.clamp(0, pageCount - 1);
 
     // Convert the page index across an itemsPerPage change (a narrow/wide
     // breakpoint crossing) so roughly the same template stays in view —
@@ -167,10 +165,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 onPageChanged: (i) => setState(() => _pageIndex = i),
                 itemBuilder: (context, page) {
                   final start = page * itemsPerPage;
-                  final end = (start + itemsPerPage).clamp(
-                    0,
-                    templates.length,
-                  );
+                  final end = (start + itemsPerPage).clamp(0, templates.length);
                   final pageTemplates = templates.sublist(start, end);
                   return ScheduleColumnsPage(
                     columnCount: pageTemplates.length,
