@@ -77,13 +77,34 @@ Future<void> main(List<String> args) async {
         {
           'name': 'sync_groups',
           'type': 'auth',
+          // No accounts: the pairing code IS the username and password
+          // (see the design doc's "no-login pairing" decision), so this
+          // collection overrides three of PocketBase's auth-collection
+          // defaults, which otherwise assume real user accounts:
+          //  - createRule: PocketBase defaults new auth collections to
+          //    superuser-only create. Pairing must let an unauthenticated
+          //    device create its own group, so this is public ("").
+          //  - email: required by default; unused here, so not required.
+          //  - password min length: PocketBase defaults to 8, but
+          //    generatePairingCode() produces 6-character codes.
+          'createRule': '',
           'fields': [
             {'name': 'username', 'type': 'text', 'required': true},
+            {'name': 'email', 'type': 'email', 'required': false},
+            {
+              'name': 'password',
+              'type': 'password',
+              'required': true,
+              'min': 6,
+            },
           ],
           'indexes': [
             'CREATE UNIQUE INDEX idx_sync_groups_username ON sync_groups (username)',
           ],
-          'passwordAuth': {'enabled': true, 'identityFields': ['username']},
+          'passwordAuth': {
+            'enabled': true,
+            'identityFields': ['username'],
+          },
         },
         for (final name in collectionNames) baseCollection(name),
       ],
