@@ -70,11 +70,16 @@ test('picking a new date via the calendar keeps the modal open and moves '
   const dateBefore = await dateRow.textContent();
   await clickCenter(page, dateRow);
 
-  // "15" is a valid day in every month, so this reliably picks the 15th
-  // of whichever month the calendar opened on. The Material date picker's
-  // accessible name for a day cell is verbose (e.g. "15, Tuesday,
-  // September 15, 2026"), so match on the leading day number only.
-  await page.getByRole('button', { name: /^15,/ }).click();
+  // Pick a day guaranteed to differ from today's, so the click always
+  // actually changes the date regardless of which day the suite runs on
+  // (a fixed "15" would no-op on the 15th of the month, since the
+  // calendar opens on the currently selected date). "1" and "2" are both
+  // valid in every month, so exactly one of them always differs from
+  // today's day-of-month. The Material date picker's accessible name for
+  // a day cell is verbose (e.g. "15, Tuesday, September 15, 2026"), so
+  // match on the leading day number only.
+  const targetDay = new Date().getDate() === 1 ? 2 : 1;
+  await page.getByRole('button', { name: new RegExp(`^${targetDay},`) }).click();
   await page.getByRole('button', { name: 'OK' }).click();
 
   // Only the calendar closes — the edit modal (and the block it's
