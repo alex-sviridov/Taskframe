@@ -70,15 +70,18 @@ void main() {
       expect(await repository.load(), isEmpty);
     });
 
-    test('delete soft-deletes: record stays but is excluded from load', () async {
-      final added = await repository.add(name: 'Weekday');
+    test(
+      'delete soft-deletes: record stays but is excluded from load',
+      () async {
+        final added = await repository.add(name: 'Weekday');
 
-      await repository.delete(added);
+        await repository.delete(added);
 
-      expect(await repository.load(), isEmpty);
-      final record = await templatesStore.record(added.id).get(db);
-      expect(record!['deleted'], isTrue);
-    });
+        expect(await repository.load(), isEmpty);
+        final record = await templatesStore.record(added.id).get(db);
+        expect(record!['deleted'], isTrue);
+      },
+    );
   });
 
   group('SembastTemplateBlocksRepository', () {
