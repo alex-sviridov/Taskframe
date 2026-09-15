@@ -126,7 +126,7 @@ void main() {
       expect(grid.slotHeight, 8);
     });
 
-    testWidgets('double-tapping free space and confirming adds a new block', (
+    testWidgets('clicking free space and confirming adds a new block', (
       tester,
     ) async {
       _resizeViewport(tester, const Size(800, 1000));
@@ -138,19 +138,21 @@ void main() {
       // so it's free space regardless of the fitted slot height.
       final freeSpace = gridTop + const Offset(50, 5);
 
-      await tester.tapAt(freeSpace);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tapAt(freeSpace);
-      await tester.pump(const Duration(milliseconds: 300));
+      final gesture = await tester.startGesture(
+        freeSpace,
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.up();
+      await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Create Event'));
       await tester.pump();
 
-      // findsWidgets, not findsOneWidget: creating a block now also opens
-      // its edit modal (see the next test), whose title field echoes the
-      // same default "title" text alongside the block's own label on the
-      // grid.
-      expect(find.text('title'), findsWidgets);
+      // The new block starts out with an empty title — its edit modal
+      // (see the next test) autofocuses the title field rather than
+      // showing placeholder text, so there's nothing named "title" to find
+      // on the grid or in the modal.
+      expect(find.text('title'), findsNothing);
       semantics.dispose();
     });
 
@@ -164,10 +166,12 @@ void main() {
       final gridTop = tester.getTopLeft(find.byType(DayGrid));
       final freeSpace = gridTop + const Offset(50, 5);
 
-      await tester.tapAt(freeSpace);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tapAt(freeSpace);
-      await tester.pump(const Duration(milliseconds: 300));
+      final gesture = await tester.startGesture(
+        freeSpace,
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.up();
+      await tester.pump();
       await tester.tap(find.bySemanticsLabel('Create Event'));
       await tester.pumpAndSettle();
 

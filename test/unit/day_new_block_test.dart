@@ -173,6 +173,59 @@ void main() {
     });
   });
 
+  group('draftRangeForDrag', () {
+    test('dragging down from the anchor extends the end forward', () {
+      final range = draftRangeForDrag(
+        anchor: DateTime(2026, 9, 9, 9),
+        candidate: DateTime(2026, 9, 9, 10),
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 9));
+      expect(range.end, DateTime(2026, 9, 9, 10));
+    });
+
+    test('dragging up from the anchor extends the start backward, keeping '
+        'the anchor as the end', () {
+      final range = draftRangeForDrag(
+        anchor: DateTime(2026, 9, 9, 9),
+        candidate: DateTime(2026, 9, 9, 8),
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 8));
+      expect(range.end, DateTime(2026, 9, 9, 9));
+    });
+
+    test('a candidate at the same slot as the anchor still gets the minimum '
+        '15-minute duration, extended forward', () {
+      final range = draftRangeForDrag(
+        anchor: DateTime(2026, 9, 9, 9),
+        candidate: DateTime(2026, 9, 9, 9),
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 9));
+      expect(range.end, DateTime(2026, 9, 9, 9, 15));
+    });
+
+    test('extends backward instead when forward would overshoot the day '
+        'end', () {
+      final range = draftRangeForDrag(
+        anchor: DateTime(2026, 9, 9, _settings.dayEndHour),
+        candidate: DateTime(2026, 9, 9, _settings.dayEndHour),
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+      );
+
+      expect(range.start, DateTime(2026, 9, 9, 22, 45));
+      expect(range.end, DateTime(2026, 9, 9, _settings.dayEndHour));
+    });
+  });
+
   group('isValidBlockEdit', () {
     test('accepts an ordered range within the day bounds with no overlap', () {
       final valid = isValidBlockEdit(

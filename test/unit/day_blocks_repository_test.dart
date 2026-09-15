@@ -48,7 +48,7 @@ void main() {
       expect(added.start, DateTime(date.year, date.month, date.day, 10));
       expect(added.end, DateTime(date.year, date.month, date.day, 10, 30));
       expect(added.kind, BlockKind.anchor);
-      expect(added.title, 'title');
+      expect(added.title, '');
       expect(added.locked, isFalse);
     });
 

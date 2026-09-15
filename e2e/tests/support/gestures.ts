@@ -1,28 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 
 /**
- * Double-clicks at [x, y] by sending two clicks far enough apart to clear
- * Flutter's minimum gap between taps of a double tap (40ms), but well
- * within its double-tap timeout (300ms).
- *
- * Must run before {@link enableFlutterAccessibility}: once Flutter's full
- * semantics tree is active, the raw double-tap gesture stops being
- * recognized (the semantics layer intercepts the pointer events instead of
- * letting them reach the app's gesture detector), so any test that needs
- * both a double-click and semantics-based assertions has to do the
- * double-click first.
- */
-export async function doubleClickFreeSpace(
-  page: Page,
-  x: number,
-  y: number,
-): Promise<void> {
-  await page.mouse.click(x, y);
-  await page.waitForTimeout(60);
-  await page.mouse.click(x, y);
-}
-
-/**
  * Fills [textbox] with [value], retrying if it didn't stick. Under CI
  * load, a synthetic `fill()` occasionally lands on the field without the
  * app's text-editing client actually picking it up — confirmed by tracing
@@ -144,16 +122,15 @@ export async function clickUntilHidden(
 }
 
 /**
- * Runs [openDraft] (a raw double-click gesture that opens a block draft,
- * performed before Flutter's semantics tree activates — see
- * {@link doubleClickFreeSpace}) and confirms it worked by waiting for
- * [marker] (typically the "Create Event" button). Under CI load, Flutter's
- * double-tap recognizer occasionally misses the gesture entirely: the
- * marker never appears even after Playwright's full 5s poll, and by then
- * accessibility is already enabled, which permanently stops raw double-taps
- * from being recognized — so retrying the gesture on the same page can't
- * recover it. The only reliable recovery is reloading the page and
- * rerunning [openDraft] from scratch.
+ * Runs [openDraft] (a raw click or drag gesture that opens a block draft,
+ * performed before Flutter's semantics tree activates) and confirms it
+ * worked by waiting for [marker] (typically the "Create Event" button).
+ * Under CI load, Flutter's gesture recognizer occasionally misses the
+ * gesture entirely: the marker never appears even after Playwright's full
+ * 5s poll, and by then accessibility is already enabled, which permanently
+ * stops raw pointer gestures from being recognized — so retrying the
+ * gesture on the same page can't recover it. The only reliable recovery is
+ * reloading the page and rerunning [openDraft] from scratch.
  */
 export async function openDraftWithRetry(
   page: Page,

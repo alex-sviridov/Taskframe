@@ -106,14 +106,25 @@ test('an overlapping template event is skipped, leaving the existing '
 
   await page.getByRole('button', { name: 'Add block' }).click();
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  // New blocks default to an empty title, so there's no placeholder text
+  // to assert on — check the title field itself instead.
+  await expect(page.getByRole('textbox').first()).toHaveValue('');
   await page.getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByText('title')).toBeVisible();
 
   await page.getByRole('button', { name: 'Apply template' }).click();
   await clickCenter(page, page.getByText('Template 1'));
 
   await expect(page.getByText('Conflict')).toHaveCount(0);
-  await expect(page.getByText('title')).toBeVisible();
+  // Re-open the day block (same spot "Add block" placed it, near the
+  // day's start hour) to confirm it's still there, untouched by the
+  // skipped conflicting template event.
+  await clickUntilVisible(
+    page,
+    { x: 300, y: 126 },
+    page.getByRole('button', { name: 'Close' }),
+  );
+  await expect(page.getByRole('textbox').first()).toHaveValue('');
+  await page.getByRole('button', { name: 'Close' }).click();
 });
 
 test('the apply-template button is disabled when there are no templates', async ({
