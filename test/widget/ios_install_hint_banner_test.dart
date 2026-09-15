@@ -8,6 +8,7 @@ import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
 class _FakeAppSettingsRepository implements AppSettingsRepository {
   new({this._dismissedAt});
   DateTime? _dismissedAt;
+  final Map<String, String> _values = {};
 
   @override
   Future<DateTime?> getInstallHintDismissedAt() async => _dismissedAt;
@@ -15,6 +16,14 @@ class _FakeAppSettingsRepository implements AppSettingsRepository {
   @override
   Future<void> setInstallHintDismissedAt(DateTime time) async {
     _dismissedAt = time;
+  }
+
+  @override
+  Future<String?> getValue(String key) async => _values[key];
+
+  @override
+  Future<void> setValue(String key, String value) async {
+    _values[key] = value;
   }
 }
 
