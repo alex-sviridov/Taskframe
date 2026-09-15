@@ -1,13 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_memory.dart';
+import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/saved_search/data/sembast_saved_search_repository.dart';
 
 void main() {
   group('SembastSavedSearchRepository', () {
     late SembastSavedSearchRepository repository;
+    late Database db;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastSavedSearchRepository(db);
     });
 
@@ -78,5 +81,15 @@ void main() {
         expect(orders.toSet(), hasLength(orders.length));
       },
     );
+
+    test('delete soft-deletes: view stays but is excluded from load', () async {
+      final added = await repository.add(name: 'Work', query: '#work');
+
+      await repository.delete(added);
+
+      expect(await repository.load(), isEmpty);
+      final record = await savedSearchesStore.record(added.id).get(db);
+      expect(record!['deleted'], isTrue);
+    });
   });
 }

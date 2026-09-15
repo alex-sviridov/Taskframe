@@ -4,7 +4,7 @@ import 'package:taskframe/features/saved_search/models/saved_search.dart';
 
 void main() {
   group('SavedSearch', () {
-    const view = SavedSearch(
+    final view = SavedSearch(
       id: 'view-1',
       name: 'Tasks view 1',
       query: '#urgent /work',
@@ -21,6 +21,21 @@ void main() {
       expect(renamed.name, 'Urgent work');
       expect(renamed.query, view.query);
       expect(renamed.order, view.order);
+    });
+
+    test('toMap/fromMap round-trip updatedAt and deleted', () {
+      final updatedAt = DateTime.utc(2026, 9, 15, 12);
+      final view = SavedSearch(
+        id: 's1',
+        name: 'Work',
+        query: '#work',
+        order: 0,
+        updatedAt: updatedAt,
+        deleted: true,
+      );
+      final restored = SavedSearch.fromMap(view.toMap());
+      expect(restored.updatedAt, updatedAt);
+      expect(restored.deleted, isTrue);
     });
   });
 }
