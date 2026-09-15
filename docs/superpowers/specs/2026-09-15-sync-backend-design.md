@@ -59,7 +59,11 @@ Out of scope:
   single-person, multi-device feature.
 - **One collection per entity type, each with a flexible `data` JSON
   field.** Collections: `tasks`, `categories`, `templates`,
-  `saved_searches`, `day_blocks`. Each record has `id`, `sync_group`,
+  `template_blocks`, `saved_searches`, `day_blocks`. `template_blocks`
+  (the events inside a template, currently stored separately via
+  `TemplateBlocksRepository`) is included alongside `templates` so a
+  synced template actually carries its contents, not just its name.
+  Each record has `id`, `sync_group`,
   `updated` (PocketBase-managed), `deleted` (bool tombstone), and `data`
   (JSON blob holding the entity's actual fields, mirroring the shape
   already produced by each feature's existing sembast serialization).
