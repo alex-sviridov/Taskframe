@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';
@@ -7,7 +8,7 @@ import 'package:taskframe/features/category/models/category.dart';
 void main() {
   group('SembastCategoryRepository', () {
     late SembastCategoryRepository repository;
-    late dynamic db;
+    late Database db;
 
     setUp(() async {
       db = await newDatabaseFactoryMemory().openDatabase('test.db');

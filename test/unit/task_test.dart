@@ -108,15 +108,18 @@ void main() {
       expect(restored.deleted, isTrue);
     });
 
-    test('fromMap defaults deleted to false and updatedAt to epoch when absent', () {
-      final restored = Task.fromMap({
-        'id': 't1',
-        'title': 'Buy milk',
-        'closed': false,
-        'categoryId': Category.defaultId,
-      });
-      expect(restored.deleted, isFalse);
-      expect(restored.updatedAt, DateTime.fromMillisecondsSinceEpoch(0));
-    });
+    test(
+      'fromMap defaults deleted to false and updatedAt to epoch when absent',
+      () {
+        final restored = Task.fromMap({
+          'id': 't1',
+          'title': 'Buy milk',
+          'closed': false,
+          'categoryId': Category.defaultId,
+        });
+        expect(restored.deleted, isFalse);
+        expect(restored.updatedAt, DateTime.fromMillisecondsSinceEpoch(0));
+      },
+    );
   });
 }

@@ -56,15 +56,14 @@ class SavedSearch {
     int? order,
     DateTime? updatedAt,
     bool? deleted,
-  }) =>
-      SavedSearch(
-        id: id,
-        name: name ?? this.name,
-        query: query ?? this.query,
-        order: order ?? this.order,
-        updatedAt: updatedAt ?? this.updatedAt,
-        deleted: deleted ?? this.deleted,
-      );
+  }) => SavedSearch(
+    id: id,
+    name: name ?? this.name,
+    query: query ?? this.query,
+    order: order ?? this.order,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deleted: deleted ?? this.deleted,
+  );
 
   /// This view's field values as a JSON-safe map, for storage.
   Map<String, Object?> toMap() => {
@@ -87,6 +86,5 @@ class SavedSearch {
       other.deleted == deleted;
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, query, order, updatedAt, deleted);
+  int get hashCode => Object.hash(id, name, query, order, updatedAt, deleted);
 }

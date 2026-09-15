@@ -43,7 +43,10 @@ class SembastSavedSearchRepository implements SavedSearchRepository {
 
   @override
   Future<SavedSearch> rename(SavedSearch view, String name) async {
-    final updated = view.copyWith(name: name, updatedAt: DateTime.now().toUtc());
+    final updated = view.copyWith(
+      name: name,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await savedSearchesStore.record(updated.id).put(_db, updated.toMap());
     return updated;
   }

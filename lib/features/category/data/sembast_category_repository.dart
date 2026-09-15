@@ -71,14 +71,15 @@ class SembastCategoryRepository implements CategoryRepository {
     final current = existingRecord == null
         ? category
         : Category.fromMap(existingRecord);
-    final updated = (current.isDefault
-            ? current.copyWith(colorValue: colorValue)
-            : current.copyWith(
-                name: name,
-                colorValue: colorValue,
-                emoji: emoji,
-              ))
-        .copyWith(updatedAt: DateTime.now().toUtc());
+    final updated =
+        (current.isDefault
+                ? current.copyWith(colorValue: colorValue)
+                : current.copyWith(
+                    name: name,
+                    colorValue: colorValue,
+                    emoji: emoji,
+                  ))
+            .copyWith(updatedAt: DateTime.now().toUtc());
     final order =
         existingRecord?['order'] ??
         (current.isDefault ? 0 : DateTime.now().microsecondsSinceEpoch);

@@ -36,11 +36,13 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
   Future<void> _joinGroup() async {
     setState(() => _error = null);
     try {
-      await ref.read(pairingProvider.notifier).joinGroup(
-        _codeController.text.trim().toUpperCase(),
-      );
+      await ref
+          .read(pairingProvider.notifier)
+          .joinGroup(_codeController.text.trim().toUpperCase());
     } catch (_) {
-      setState(() => _error = 'That code wasn\'t found. Check it and try again.');
+      setState(
+        () => _error = 'That code wasn\'t found. Check it and try again.',
+      );
     }
   }
 
@@ -76,7 +78,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 16),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
           ],
         ),
