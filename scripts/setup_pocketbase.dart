@@ -44,10 +44,22 @@ Future<void> main(List<String> args) async {
       {'name': 'updated_at', 'type': 'text', 'required': true},
       {'name': 'deleted', 'type': 'bool', 'required': false},
       {'name': 'data', 'type': 'json', 'required': true},
+      // PocketBase no longer auto-adds `created`/`updated` unless they're
+      // explicitly declared as autodate fields. `updated` is what
+      // PocketBaseSyncClient.listChangedSince/SyncEngine._pull use as the
+      // pull cursor (server-managed, immune to client clock skew) — see
+      // the sync design doc's data flow.
+      {'name': 'created', 'type': 'autodate', 'onCreate': true},
+      {
+        'name': 'updated',
+        'type': 'autodate',
+        'onCreate': true,
+        'onUpdate': true,
+      },
     ],
     'indexes': [
       'CREATE INDEX idx_${name}_sync_group_updated ON $name (sync_group, updated_at)',
-      'CREATE UNIQUE INDEX idx_${name}_entity ON $name (entity_id)',
+      'CREATE UNIQUE INDEX idx_${name}_entity ON $name (sync_group, entity_id)',
     ],
     'listRule': 'sync_group = @request.auth.id',
     'viewRule': 'sync_group = @request.auth.id',

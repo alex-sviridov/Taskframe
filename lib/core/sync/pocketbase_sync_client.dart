@@ -56,20 +56,54 @@ class PocketBaseSyncClient implements SyncBackend {
   }
 
   /// Restores a previously-saved auth session, if any, so the app
-  /// doesn't need to re-pair on every restart. Returns whether a session
-  /// was restored.
+  /// doesn't need to re-pair on every restart. Also attempts to refresh
+  /// the token against PocketBase (tokens expire — PocketBase's default
+  /// is roughly 2 weeks — and a silently-dead session would otherwise
+  /// stop syncing forever with no way to recover short of re-pairing).
+  /// Returns whether a valid, usable session was restored.
   Future<bool> restoreSession() async {
     final token = await settings.getValue(_tokenKey);
     if (token == null) return false;
     _pb.authStore.save(token, null);
-    return _pb.authStore.isValid;
+    if (!_pb.authStore.isValid) return false;
+
+    try {
+      final auth = await _pb.collection('sync_groups').authRefresh();
+      await settings.setValue(_tokenKey, auth.token);
+      _pb.authStore.save(auth.token, auth.record);
+      return true;
+    } catch (_) {
+      // Refresh failed - the session is genuinely dead (expired/revoked).
+      // Leave the stale token in place; callers should treat this as "no
+      // usable session" without throwing out of restoreSession.
+      return false;
+    }
+  }
+
+  /// Formats [dt] the way PocketBase's own `updated`/`created` autodate
+  /// fields are formatted (space-separated, not the `T`-separated form
+  /// [DateTime.toIso8601String] produces) — PocketBase's filter parser
+  /// only recognizes its own format as a datetime literal; a `T`-separated
+  /// value silently matches nothing instead of erroring.
+  String _filterDateTime(DateTime dt) =>
+      dt.toUtc().toIso8601String().replaceFirst('T', ' ');
+
+  /// Requires an authenticated session, throwing rather than silently
+  /// no-op'ing. A caller (e.g. [SyncEngine]) that silently succeeded with
+  /// no session would wrongly treat unsynced records as pushed, advancing
+  /// its cursor past them and losing them permanently.
+  String _requireSyncGroup() {
+    final syncGroup = _pb.authStore.record?.id;
+    if (syncGroup == null) {
+      throw StateError('Not paired: no authenticated sync group session.');
+    }
+    return syncGroup;
   }
 
   @override
   Future<void> upsert(String collection, Map<String, Object?> record) async {
     final entityId = record['id']! as String;
-    final syncGroup = _pb.authStore.record?.id;
-    if (syncGroup == null) return;
+    final syncGroup = _requireSyncGroup();
 
     final body = {
       'entity_id': entityId,
@@ -81,7 +115,11 @@ class PocketBaseSyncClient implements SyncBackend {
 
     final existing = await _pb
         .collection(collection)
-        .getList(page: 1, perPage: 1, filter: 'entity_id = "$entityId"');
+        .getList(
+          page: 1,
+          perPage: 1,
+          filter: 'entity_id = "$entityId" && sync_group = "$syncGroup"',
+        );
     if (existing.items.isEmpty) {
       await _pb.collection(collection).create(body: body);
     } else {
@@ -96,19 +134,21 @@ class PocketBaseSyncClient implements SyncBackend {
     String collection,
     DateTime cursor,
   ) async {
+    _requireSyncGroup();
     final result = await _pb
         .collection(collection)
         .getList(
           page: 1,
           perPage: 200,
-          filter: 'updated_at > "${cursor.toIso8601String()}"',
-          sort: 'updated_at',
+          filter: 'updated > "${_filterDateTime(cursor)}"',
+          sort: 'updated',
         );
     return [
       for (final item in result.items)
         {
           'entity_id': item.data['entity_id'],
           'updated_at': item.data['updated_at'],
+          'server_updated': item.get<String>('updated'),
           'deleted': item.data['deleted'],
           'data': item.data['data'],
         },

@@ -31,7 +31,17 @@ Future<void> main() async {
     baseUrl: 'http://localhost:8090',
     settings: appSettings,
   );
-  final syncEngine = SyncEngine(db: db, settings: appSettings, backend: syncClient);
+  final syncEngine = SyncEngine(
+    db: db,
+    settings: appSettings,
+    backend: syncClient,
+  );
+  // Restore (and, if needed, refresh) any previously-paired session before
+  // the first sync trigger fires, so an already-paired device doesn't
+  // spuriously throw/skip its first sync of this session. A genuinely
+  // unpaired device still legitimately fails-and-retries here - it has
+  // nothing to sync to yet.
+  await syncClient.restoreSession();
   startSyncTriggers(engine: syncEngine);
 
   runApp(

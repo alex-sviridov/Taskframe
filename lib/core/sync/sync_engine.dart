@@ -12,10 +12,12 @@ abstract class SyncBackend {
   /// `updatedAt`, `deleted`).
   Future<void> upsert(String collection, Map<String, Object?> record);
 
-  /// Returns every remote record in [collection] whose `updated_at` is
-  /// strictly after [cursor]. Each returned map has `entity_id`,
-  /// `updated_at`, `deleted`, and `data` (the original local sembast map
-  /// as pushed by [upsert]).
+  /// Returns every remote record in [collection] whose PocketBase-managed
+  /// `server_updated` timestamp is strictly after [cursor]. Each returned
+  /// map has `entity_id`, `updated_at` (the client-set last-write-wins
+  /// timestamp), `server_updated` (PocketBase's own `updated` field, used
+  /// only for cursor advancement — immune to client clock skew), `deleted`,
+  /// and `data` (the original local sembast map as pushed by [upsert]).
   Future<List<Map<String, Object?>>> listChangedSince(
     String collection,
     DateTime cursor,
@@ -65,19 +67,32 @@ class SyncEngine {
 
   Future<void> _push(SyncCollection collection) async {
     final cursor = await _cursor('sync_push_${collection.name}');
+    // Sorted ascending by updatedAt so a mid-batch failure (see below)
+    // stops at a deterministic point: everything before it in time has
+    // been confirmed pushed, everything from it onward is retried next
+    // trigger - never skipping past a not-yet-pushed record.
     final finder = Finder(
       filter: Filter.greaterThan('updatedAt', cursor.toIso8601String()),
+      sortOrders: [SortOrder('updatedAt')],
     );
     final records = await collection.store.find(_db, finder: finder);
     if (records.isEmpty) return;
 
     DateTime? maxSeen;
     for (final record in records) {
-      await _backend.upsert(collection.name, {
-        ...record.value,
-        'entity_id': record.key,
-      });
       final updatedAt = DateTime.parse(record.value['updatedAt']! as String);
+      try {
+        await _backend.upsert(collection.name, {
+          ...record.value,
+          'entity_id': record.key,
+        });
+      } on Object {
+        // Stop here rather than propagating: everything up to this point
+        // already succeeded and its cursor progress below must not be
+        // lost. This record (and anything after it) is retried on the
+        // next trigger.
+        break;
+      }
       if (maxSeen == null || updatedAt.isAfter(maxSeen)) maxSeen = updatedAt;
     }
     if (maxSeen != null) {
@@ -99,11 +114,18 @@ class SyncEngine {
     DateTime? maxSeen;
     for (final remote in remoteRecords) {
       final entityId = remote['entity_id']! as String;
-      final remoteUpdatedAt = DateTime.parse(remote['updated_at']! as String);
-      if (maxSeen == null || remoteUpdatedAt.isAfter(maxSeen)) {
-        maxSeen = remoteUpdatedAt;
+      // Cursor advancement uses PocketBase's own server-assigned
+      // `server_updated` (monotonic, immune to client clock skew), not
+      // the client-set `updated_at` used below for LWW.
+      final serverUpdated = DateTime.parse(remote['server_updated']! as String);
+      if (maxSeen == null || serverUpdated.isAfter(maxSeen)) {
+        maxSeen = serverUpdated;
       }
 
+      // LWW comparison uses the client-set `updated_at` — when each
+      // device's user actually made the edit, not when it happened to
+      // reach the server.
+      final remoteUpdatedAt = DateTime.parse(remote['updated_at']! as String);
       final localRecord = await collection.store.record(entityId).get(_db);
       final localUpdatedAt = localRecord == null
           ? _epoch
