@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { enableFlutterAccessibility } from './support/accessibility';
 import {
+  clickUntilVisible,
   fillTextboxAndSubmit,
   gotoAndWaitForBoot,
   openDraftWithRetry,
@@ -128,6 +129,9 @@ test('a Frame block can be created and reopened', async ({ page }) => {
 
   // The block has no title text to locate it by, but it's the only block
   // on this template's grid, sitting where the draft was opened.
-  await page.mouse.click(freeSpace.x, freeSpace.y);
-  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await clickUntilVisible(
+    page,
+    freeSpace,
+    page.getByRole('button', { name: 'Close' }),
+  );
 });
