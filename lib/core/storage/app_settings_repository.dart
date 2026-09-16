@@ -17,6 +17,10 @@ abstract class AppSettingsRepository {
 
   /// Stores [value] under [key], overwriting any previous value.
   Future<void> setValue(String key, String value);
+
+  /// Removes any stored value under [key]. A no-op if nothing was
+  /// stored there.
+  Future<void> deleteValue(String key);
 }
 
 /// An [AppSettingsRepository] that keeps its value in memory for the
@@ -39,6 +43,11 @@ class InMemoryAppSettingsRepository implements AppSettingsRepository {
   @override
   Future<void> setValue(String key, String value) async {
     _values[key] = value;
+  }
+
+  @override
+  Future<void> deleteValue(String key) async {
+    _values.remove(key);
   }
 }
 
@@ -75,6 +84,11 @@ class SembastAppSettingsRepository implements AppSettingsRepository {
   @override
   Future<void> setValue(String key, String value) async {
     await settingsStore.record(key).put(_db, {'value': value});
+  }
+
+  @override
+  Future<void> deleteValue(String key) async {
+    await settingsStore.record(key).delete(_db);
   }
 }
 
