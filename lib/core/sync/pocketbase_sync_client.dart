@@ -1,26 +1,12 @@
-import 'dart:math';
-
 import 'package:pocketbase/pocketbase.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
 
-const _codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+const _identityKey = 'account_identity';
+const _tokenKey = 'account_token';
 
-/// A random 6-character pairing code, e.g. `K7QX2P`. Excludes visually
-/// ambiguous characters (0/O, 1/I) since a person types this by hand.
-String generatePairingCode() {
-  final random = Random.secure();
-  return List.generate(
-    6,
-    (_) => _codeAlphabet[random.nextInt(_codeAlphabet.length)],
-  ).join();
-}
-
-const _identityKey = 'sync_group_identity';
-const _tokenKey = 'sync_group_token';
-
-/// Talks to a self-hosted PocketBase instance: pairing (create/join a
-/// sync group) and the push/pull operations [SyncEngine] needs.
+/// Talks to a self-hosted PocketBase instance: account registration/login
+/// and the push/pull operations [SyncEngine] needs.
 class PocketBaseSyncClient implements SyncBackend {
   PocketBaseSyncClient({required String baseUrl, required this.settings})
     : _pb = PocketBase(baseUrl);
@@ -28,39 +14,55 @@ class PocketBaseSyncClient implements SyncBackend {
   final PocketBase _pb;
   final AppSettingsRepository settings;
 
-  /// Creates a new sync group with a fresh pairing code, authenticates
-  /// as it, and returns the code for the user to share with other
-  /// devices.
-  Future<String> createGroup() async {
-    final code = generatePairingCode();
+  /// Registers a new account with [email]/[password], authenticates, and
+  /// persists the session.
+  Future<void> register(String email, String password) async {
     await _pb
-        .collection('sync_groups')
+        .collection('users')
         .create(
-          body: {'username': code, 'password': code, 'passwordConfirm': code},
+          body: {
+            'email': email,
+            'password': password,
+            'passwordConfirm': password,
+          },
         );
-    await _authenticate(code);
-    return code;
+    await _authenticate(email, password);
   }
 
-  /// Authenticates as the sync group identified by [code], entered by
-  /// the user from another device.
-  Future<void> joinGroup(String code) => _authenticate(code);
+  /// Authenticates as an existing account, entered by the user.
+  Future<void> login(String email, String password) =>
+      _authenticate(email, password);
 
-  Future<void> _authenticate(String code) async {
+  Future<void> _authenticate(String email, String password) async {
     final auth = await _pb
-        .collection('sync_groups')
-        .authWithPassword(code, code);
-    await settings.setValue(_identityKey, code);
+        .collection('users')
+        .authWithPassword(email, password);
+    await settings.setValue(_identityKey, email);
     await settings.setValue(_tokenKey, auth.token);
     _pb.authStore.save(auth.token, auth.record);
   }
 
+  /// Clears this device's stored session (identity/token) and PocketBase
+  /// auth state, without touching any local sembast data — see
+  /// `account_service.dart`'s `logout()` for the full "return to guest
+  /// mode" flow, which calls this as one step.
+  Future<void> clearSession() async {
+    await settings.deleteValue(_identityKey);
+    await settings.deleteValue(_tokenKey);
+    _pb.authStore.clear();
+  }
+
+  /// The logged-in account's email, or `null` if there's no session
+  /// (guest mode, or the stored session was never successfully
+  /// restored/refreshed).
+  Future<String?> currentEmail() => settings.getValue(_identityKey);
+
   /// Restores a previously-saved auth session, if any, so the app
-  /// doesn't need to re-pair on every restart. Also attempts to refresh
+  /// doesn't need to log in on every restart. Also attempts to refresh
   /// the token against PocketBase (tokens expire — PocketBase's default
   /// is roughly 2 weeks — and a silently-dead session would otherwise
-  /// stop syncing forever with no way to recover short of re-pairing).
-  /// Returns whether a valid, usable session was restored.
+  /// stop syncing forever with no way to recover short of logging in
+  /// again). Returns whether a valid, usable session was restored.
   Future<bool> restoreSession() async {
     final token = await settings.getValue(_tokenKey);
     if (token == null) return false;
@@ -68,7 +70,7 @@ class PocketBaseSyncClient implements SyncBackend {
     if (!_pb.authStore.isValid) return false;
 
     try {
-      final auth = await _pb.collection('sync_groups').authRefresh();
+      final auth = await _pb.collection('users').authRefresh();
       await settings.setValue(_tokenKey, auth.token);
       _pb.authStore.save(auth.token, auth.record);
       return true;
@@ -92,22 +94,22 @@ class PocketBaseSyncClient implements SyncBackend {
   /// no-op'ing. A caller (e.g. [SyncEngine]) that silently succeeded with
   /// no session would wrongly treat unsynced records as pushed, advancing
   /// its cursor past them and losing them permanently.
-  String _requireSyncGroup() {
-    final syncGroup = _pb.authStore.record?.id;
-    if (syncGroup == null) {
-      throw StateError('Not paired: no authenticated sync group session.');
+  String _requireOwner() {
+    final owner = _pb.authStore.record?.id;
+    if (owner == null) {
+      throw StateError('Not logged in: no authenticated account session.');
     }
-    return syncGroup;
+    return owner;
   }
 
   @override
   Future<void> upsert(String collection, Map<String, Object?> record) async {
     final entityId = record['id']! as String;
-    final syncGroup = _requireSyncGroup();
+    final owner = _requireOwner();
 
     final body = {
       'entity_id': entityId,
-      'sync_group': syncGroup,
+      'owner': owner,
       'updated_at': record['updatedAt'],
       'deleted': record['deleted'] ?? false,
       'data': record,
@@ -118,7 +120,7 @@ class PocketBaseSyncClient implements SyncBackend {
         .getList(
           page: 1,
           perPage: 1,
-          filter: 'entity_id = "$entityId" && sync_group = "$syncGroup"',
+          filter: 'entity_id = "$entityId" && owner = "$owner"',
         );
     if (existing.items.isEmpty) {
       await _pb.collection(collection).create(body: body);
@@ -134,7 +136,7 @@ class PocketBaseSyncClient implements SyncBackend {
     String collection,
     DateTime cursor,
   ) async {
-    _requireSyncGroup();
+    _requireOwner();
     final result = await _pb
         .collection(collection)
         .getList(
