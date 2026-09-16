@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sembast/sembast.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
@@ -43,26 +45,59 @@ class SyncEngine {
 
   static final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Simple async mutex: chains work onto whatever's currently running so
+  /// callers never interleave with each other. Guards against a sync in
+  /// flight racing `logout()`'s store wipe (see [runExclusive]) and also
+  /// serializes concurrent `syncAll` calls against each other (e.g. the
+  /// manual "sync now" trigger and the 30s timer firing close together).
+  ///
+  /// `null` until first use, then lazily created on the first call to
+  /// [runExclusive] — deliberately NOT eagerly initialized with
+  /// `Future.value()` in this field's declaration, which would bind that
+  /// initial Future to whatever zone happens to be active when the
+  /// [SyncEngine] is constructed (e.g. a plain `setUp()`, outside any
+  /// `fakeAsync` zone a test later runs the actual calls in). Creating it
+  /// lazily, inside the first [runExclusive] call, ties it to the zone
+  /// that's actually driving the async work.
+  Future<void>? _lock;
+
+  /// Runs [action] exclusively with respect to any other call to
+  /// [runExclusive] (including [syncAll], which routes through this) on
+  /// this [SyncEngine]: waits for anything currently running/queued, runs
+  /// [action], then lets the next queued caller proceed. Errors from
+  /// [action] don't poison the lock for subsequent callers.
+  Future<T> runExclusive<T>(Future<T> Function() action) {
+    final previous = _lock ?? Future.value();
+    final completer = Completer<void>();
+    _lock = completer.future;
+    return previous.then((_) => action()).whenComplete(completer.complete);
+  }
+
   /// Runs pull then push for every collection in [collections], so a
   /// concurrently-newer remote change is absorbed locally before this
   /// device publishes its own changes (avoiding a stale local push
   /// clobbering a fresher remote record). A failure syncing one
   /// collection (e.g. a network error) is swallowed so the others still
   /// get a chance — matches the spec's "push/pull fail silently,
-  /// retried on the next trigger".
-  Future<void> syncAll(List<SyncCollection> collections) async {
-    for (final collection in collections) {
-      try {
-        await _pull(collection);
-      } on Object {
-        // Best-effort; retried on the next trigger.
+  /// retried on the next trigger". Runs exclusively of any other
+  /// `syncAll`/[runExclusive] call on this engine (e.g. `logout()`'s
+  /// store wipe), so a sync never races a concurrent operation that
+  /// wipes the very stores it's reading/writing.
+  Future<void> syncAll(List<SyncCollection> collections) {
+    return runExclusive(() async {
+      for (final collection in collections) {
+        try {
+          await _pull(collection);
+        } on Object {
+          // Best-effort; retried on the next trigger.
+        }
+        try {
+          await _push(collection);
+        } on Object {
+          // Best-effort; retried on the next trigger.
+        }
       }
-      try {
-        await _push(collection);
-      } on Object {
-        // Best-effort; retried on the next trigger.
-      }
-    }
+    });
   }
 
   Future<void> _push(SyncCollection collection) async {

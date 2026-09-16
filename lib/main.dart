@@ -51,7 +51,12 @@ Future<void> main() async {
         ...sembastOverrides(db),
         pocketBaseSyncClientProvider.overrideWithValue(syncClient),
         accountLogoutProvider.overrideWithValue(
-          () => logout(db: db, settings: appSettings, client: syncClient),
+          () => logout(
+            db: db,
+            settings: appSettings,
+            client: syncClient,
+            syncEngine: syncEngine,
+          ),
         ),
       ],
       child: const App(),
