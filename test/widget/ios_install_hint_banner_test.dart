@@ -25,6 +25,11 @@ class _FakeAppSettingsRepository implements AppSettingsRepository {
   Future<void> setValue(String key, String value) async {
     _values[key] = value;
   }
+
+  @override
+  Future<void> deleteValue(String key) async {
+    _values.remove(key);
+  }
 }
 
 Future<void> _pump(WidgetTester tester, List<Override> overrides) async {

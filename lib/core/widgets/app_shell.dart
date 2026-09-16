@@ -67,7 +67,7 @@ class AppShell extends StatelessWidget {
             ..._drawerDestinations(),
             const _SavedViewsSection(isNarrow: true),
             const Divider(),
-            _SyncDevicesEntry(isNarrow: true),
+            _AccountEntry(isNarrow: true),
           ],
         ),
         body: Column(
@@ -126,7 +126,7 @@ class AppShell extends StatelessWidget {
               ..._drawerDestinations(),
               const _SavedViewsSection(isNarrow: false),
               const Divider(),
-              _SyncDevicesEntry(isNarrow: false),
+              _AccountEntry(isNarrow: false),
             ],
           ),
         ),
@@ -137,11 +137,11 @@ class AppShell extends StatelessWidget {
   }
 }
 
-/// Entry point for the `/pairing` screen, listed at the bottom of the
+/// Entry point for the `/account` screen, listed at the bottom of the
 /// nav drawer/sidebar (the only way to reach it — it's a top-level route
 /// outside the branch shell, so it isn't one of [_destinations]).
-class _SyncDevicesEntry extends StatelessWidget {
-  const _SyncDevicesEntry({required this.isNarrow});
+class _AccountEntry extends StatelessWidget {
+  const _AccountEntry({required this.isNarrow});
 
   final bool isNarrow;
 
@@ -149,11 +149,11 @@ class _SyncDevicesEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       dense: true,
-      leading: const Icon(Icons.sync),
-      title: const Text('Sync devices'),
+      leading: const Icon(Icons.account_circle),
+      title: const Text('Account'),
       onTap: () {
         if (isNarrow) Navigator.pop(context);
-        context.push('/pairing');
+        context.push('/account');
       },
     );
   }

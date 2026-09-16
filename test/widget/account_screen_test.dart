@@ -34,9 +34,7 @@ class _LoggedInAccountNotifier extends AccountNotifier {
 }
 
 void main() {
-  testWidgets('guest mode shows register/login form controls', (
-    tester,
-  ) async {
+  testWidgets('guest mode shows register/login form controls', (tester) async {
     final client = PocketBaseSyncClient(
       baseUrl: 'http://localhost:8090',
       settings: InMemoryAppSettingsRepository(),
@@ -54,9 +52,7 @@ void main() {
     expect(find.byType(TextField), findsNWidgets(2));
   });
 
-  testWidgets('shows a plain error in the UI when login fails', (
-    tester,
-  ) async {
+  testWidgets('shows a plain error in the UI when login fails', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

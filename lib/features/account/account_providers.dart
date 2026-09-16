@@ -14,9 +14,7 @@ const pocketBaseBaseUrl = String.fromEnvironment(
 );
 
 /// Riverpod-accessible form of [pocketBaseBaseUrl], for widgets/tests.
-final pocketBaseBaseUrlProvider = Provider<String>(
-  (ref) => pocketBaseBaseUrl,
-);
+final pocketBaseBaseUrlProvider = Provider<String>((ref) => pocketBaseBaseUrl);
 
 final pocketBaseSyncClientProvider = Provider<PocketBaseSyncClient>((ref) {
   throw UnimplementedError(

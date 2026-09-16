@@ -6,10 +6,11 @@ import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/storage/first_run_seed.dart';
 import 'package:taskframe/core/storage/sembast_overrides.dart';
+import 'package:taskframe/core/sync/account_service.dart';
 import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
 import 'package:taskframe/core/sync/sync_trigger.dart';
-import 'package:taskframe/features/pairing/pairing_providers.dart';
+import 'package:taskframe/features/account/account_providers.dart';
 
 /// Entry point: opens the local database, seeds it on first run, then
 /// boots the app inside a [ProviderScope] that overrides every repository
@@ -36,11 +37,11 @@ Future<void> main() async {
     settings: appSettings,
     backend: syncClient,
   );
-  // Restore (and, if needed, refresh) any previously-paired session before
-  // the first sync trigger fires, so an already-paired device doesn't
-  // spuriously throw/skip its first sync of this session. A genuinely
-  // unpaired device still legitimately fails-and-retries here - it has
-  // nothing to sync to yet.
+  // Restore (and, if needed, refresh) any previously-authenticated
+  // session before the first sync trigger fires, so an already-logged-in
+  // device doesn't spuriously throw/skip its first sync of this session.
+  // A genuinely unauthenticated (guest) device still legitimately
+  // fails-and-retries here - it has nothing to sync to yet.
   await syncClient.restoreSession();
   startSyncTriggers(engine: syncEngine);
 
@@ -49,6 +50,9 @@ Future<void> main() async {
       overrides: [
         ...sembastOverrides(db),
         pocketBaseSyncClientProvider.overrideWithValue(syncClient),
+        accountLogoutProvider.overrideWithValue(
+          () => logout(db: db, settings: appSettings, client: syncClient),
+        ),
       ],
       child: const App(),
     ),
