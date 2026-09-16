@@ -46,6 +46,11 @@ Out of scope:
   group)
 - Any change to `SyncEngine`'s push/pull/LWW logic, the six collections'
   `data`/`updated_at`/`deleted` shape, or sync trigger cadence
+- Rate limiting or other signup-abuse controls on registration: the
+  `users` collection's `createRule: ''` means self-registration is fully
+  open with no verification, so anyone who finds the PocketBase URL can
+  create unlimited accounts. Not addressed in this pass — add before any
+  non-personal deployment.
 
 ## Decisions
 
