@@ -1,6 +1,6 @@
 // scripts/setup_pocketbase.dart
 //
-// One-time setup: creates the sync_groups auth collection and the six
+// One-time setup: creates the users auth collection and the six
 // base sync collections via PocketBase's admin import API. Safe to
 // re-run — import replaces collections by name, it doesn't duplicate
 // them. Run with:
@@ -40,7 +40,7 @@ Future<void> main(List<String> args) async {
     'type': 'base',
     'fields': [
       {'name': 'entity_id', 'type': 'text', 'required': true},
-      {'name': 'sync_group', 'type': 'text', 'required': true},
+      {'name': 'owner', 'type': 'text', 'required': true},
       {'name': 'updated_at', 'type': 'text', 'required': true},
       {'name': 'deleted', 'type': 'bool', 'required': false},
       {'name': 'data', 'type': 'json', 'required': true},
@@ -58,14 +58,14 @@ Future<void> main(List<String> args) async {
       },
     ],
     'indexes': [
-      'CREATE INDEX idx_${name}_sync_group_updated ON $name (sync_group, updated_at)',
-      'CREATE UNIQUE INDEX idx_${name}_entity ON $name (sync_group, entity_id)',
+      'CREATE INDEX idx_${name}_owner_updated ON $name (owner, updated_at)',
+      'CREATE UNIQUE INDEX idx_${name}_entity ON $name (owner, entity_id)',
     ],
-    'listRule': 'sync_group = @request.auth.id',
-    'viewRule': 'sync_group = @request.auth.id',
-    'createRule': 'sync_group = @request.auth.id',
-    'updateRule': 'sync_group = @request.auth.id',
-    'deleteRule': 'sync_group = @request.auth.id',
+    'listRule': 'owner = @request.auth.id',
+    'viewRule': 'owner = @request.auth.id',
+    'createRule': 'owner = @request.auth.id',
+    'updateRule': 'owner = @request.auth.id',
+    'deleteRule': 'owner = @request.auth.id',
   };
 
   const collectionNames = [
@@ -87,35 +87,28 @@ Future<void> main(List<String> args) async {
     jsonEncode({
       'collections': [
         {
-          'name': 'sync_groups',
+          'name': 'users',
           'type': 'auth',
-          // No accounts: the pairing code IS the username and password
-          // (see the design doc's "no-login pairing" decision), so this
-          // collection overrides three of PocketBase's auth-collection
-          // defaults, which otherwise assume real user accounts:
-          //  - createRule: PocketBase defaults new auth collections to
-          //    superuser-only create. Pairing must let an unauthenticated
-          //    device create its own group, so this is public ("").
-          //  - email: required by default; unused here, so not required.
-          //  - password min length: PocketBase defaults to 8, but
-          //    generatePairingCode() produces 6-character codes.
+          // Real accounts: standard PocketBase auth-collection posture, unlike
+          // the old pairing-code collection — public self-registration
+          // (createRule: '' — anyone can sign up, same posture PocketBase
+          // ships by default for a fresh auth collection's create), email as
+          // the identity field, and PocketBase's default password rules (min
+          // 8) instead of the old 6-char minimum that only existed to match
+          // 6-character pairing codes.
           'createRule': '',
           'fields': [
-            {'name': 'username', 'type': 'text', 'required': true},
-            {'name': 'email', 'type': 'email', 'required': false},
+            {'name': 'email', 'type': 'email', 'required': true},
             {
               'name': 'password',
               'type': 'password',
               'required': true,
-              'min': 6,
+              'min': 8,
             },
-          ],
-          'indexes': [
-            'CREATE UNIQUE INDEX idx_sync_groups_username ON sync_groups (username)',
           ],
           'passwordAuth': {
             'enabled': true,
-            'identityFields': ['username'],
+            'identityFields': ['email'],
           },
         },
         for (final name in collectionNames) baseCollection(name),
