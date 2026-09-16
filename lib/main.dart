@@ -28,7 +28,7 @@ Future<void> main() async {
 
   final appSettings = SembastAppSettingsRepository(db);
   final syncClient = PocketBaseSyncClient(
-    baseUrl: 'http://localhost:8090',
+    baseUrl: pocketBaseBaseUrl,
     settings: appSettings,
   );
   final syncEngine = SyncEngine(

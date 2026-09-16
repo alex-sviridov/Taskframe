@@ -1,13 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
 
-/// The PocketBase base URL. Overridden at the composition root
-/// (`main.dart`) once a real deployment URL is known; defaults to the
-/// local dev server started by `docker compose up pocketbase` (see
-/// Task 1).
-final pocketBaseBaseUrlProvider = Provider<String>(
-  (ref) => 'http://localhost:8090',
+/// The PocketBase base URL. Defaults to `/` (same-origin) — nginx
+/// (`nginx.conf`) proxies `/api/` to the `pocketbase` service, so the web
+/// app never needs to know PocketBase's real host. Override at build time
+/// with `--dart-define=POCKETBASE_URL=...` for a deployment where the app
+/// isn't served through that proxy (e.g. a native build talking to a
+/// PocketBase host directly).
+const pocketBaseBaseUrl = String.fromEnvironment(
+  'POCKETBASE_URL',
+  defaultValue: '/',
 );
+
+/// Riverpod-accessible form of [pocketBaseBaseUrl], for widgets/tests.
+final pocketBaseBaseUrlProvider = Provider<String>((ref) => pocketBaseBaseUrl);
 
 final pocketBaseSyncClientProvider = Provider<PocketBaseSyncClient>((ref) {
   throw UnimplementedError(
