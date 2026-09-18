@@ -21,15 +21,19 @@ const pocketBaseBaseUrl = String.fromEnvironment(
 /// Riverpod-accessible form of [pocketBaseBaseUrl], for widgets/tests.
 final pocketBaseBaseUrlProvider = Provider<String>((ref) => pocketBaseBaseUrl);
 
+/// The app's single [PocketBaseSyncClient]. Thrown by default; overridden
+/// at the composition root (`main.dart`) once the real database/settings
+/// it needs are available.
 final pocketBaseSyncClientProvider = Provider<PocketBaseSyncClient>((ref) {
   throw UnimplementedError(
-    'Override with a PocketBaseSyncClient built from appSettingsRepositoryProvider '
-    'at the composition root — see sembastOverrides in main.dart.',
+    'Override with a PocketBaseSyncClient built from '
+    'appSettingsRepositoryProvider at the composition root — see '
+    'sembastOverrides in main.dart.',
   );
 });
 
 /// Runs the full "return to guest mode" flow (`logout()` in
-/// `account_service.dart`, which needs the raw [Database] this provider
+/// `account_service.dart`, which needs the raw `Database` this provider
 /// doesn't have direct access to). Overridden at the composition root,
 /// where that database is available — see `main.dart`.
 final accountLogoutProvider = Provider<Future<void> Function()>((ref) {
@@ -40,13 +44,18 @@ final accountLogoutProvider = Provider<Future<void> Function()>((ref) {
 });
 
 /// Every provider that caches a list/family read from one of the six
-/// synced sembast stores, keyed by the [SyncCollection.name] it's backed
+/// synced sembast stores, keyed by the `SyncCollection.name` it's backed
 /// by. Invalidating one after a mutation to local storage that didn't
 /// originate from the provider's own repository calls (a logout/
 /// account-switch wipe, or a background sync pull — see
 /// `sync_trigger.dart`'s `onSynced`) is what makes that mutation visible
 /// in the already-running UI instead of staying invisible until a full
 /// reload rebuilds every provider from scratch.
+// The value type here is Riverpod's `ProviderOrFamily`, which isn't
+// exported from `package:flutter_riverpod` for us to name explicitly —
+// left uninferred rather than referencing an internal `package:riverpod`
+// path.
+// ignore: specify_nonobvious_property_types
 final syncedProvidersByCollection = {
   'tasks': taskListProvider,
   'categories': categoryListProvider,
@@ -71,7 +80,7 @@ class AccountNotifier extends AsyncNotifier<String?> {
     // stored identity key regardless of refresh outcome, so use that as
     // the source of truth for "am I logged in" instead.
     await client.restoreSession();
-    return client.currentEmail();
+    return await client.currentEmail();
   }
 
   /// Registers a new account, uploading any local guest data to it on
@@ -133,12 +142,11 @@ class AccountNotifier extends AsyncNotifier<String?> {
   /// instantiated member of a family, which is what's needed for
   /// `dayBlocksProvider`/`templateBlocksProvider`.
   void _invalidateSyncedProviders() {
-    for (final provider in syncedProvidersByCollection.values) {
-      ref.invalidate(provider);
-    }
+    syncedProvidersByCollection.values.forEach(ref.invalidate);
   }
 }
 
+/// This device's account state — see [AccountNotifier].
 final accountProvider = AsyncNotifierProvider<AccountNotifier, String?>(
   AccountNotifier.new,
 );

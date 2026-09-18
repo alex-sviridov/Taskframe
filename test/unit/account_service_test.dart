@@ -53,7 +53,7 @@ void main() {
     await settings.setValue('sync_pull_tasks', '2026-01-01T00:00:00.000Z');
     await settings.setValue('account_identity', 'me@example.com');
     await settings.setValue('account_token', 'a-token');
-    await settings.setInstallHintDismissedAt(DateTime(2026, 1, 1));
+    await settings.setInstallHintDismissedAt(DateTime(2026));
 
     await logout(
       db: db,
@@ -72,7 +72,7 @@ void main() {
     expect(await settings.getValue('sync_pull_tasks'), isNull);
     expect(await settings.getValue('account_identity'), isNull);
     expect(await settings.getValue('account_token'), isNull);
-    expect(await settings.getInstallHintDismissedAt(), DateTime(2026, 1, 1));
+    expect(await settings.getInstallHintDismissedAt(), DateTime(2026));
   });
 
   test(

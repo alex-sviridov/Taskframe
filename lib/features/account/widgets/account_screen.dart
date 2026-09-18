@@ -8,7 +8,8 @@ import 'package:taskframe/features/account/account_providers.dart';
 /// logged in, shows the account's email and a way to log out. See spec:
 /// account-based sync replaces the pairing-code identity model.
 class AccountScreen extends ConsumerStatefulWidget {
-  const AccountScreen({super.key});
+  /// Creates an [AccountScreen].
+  const new({super.key});
 
   @override
   ConsumerState<AccountScreen> createState() => _AccountScreenState();
@@ -37,7 +38,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       } else {
         await ref.read(accountProvider.notifier).login(email, password);
       }
-    } catch (_) {
+    } on Object {
       setState(
         () => _error = _isRegisterMode
             ? 'Could not register. That email may already be in use.'

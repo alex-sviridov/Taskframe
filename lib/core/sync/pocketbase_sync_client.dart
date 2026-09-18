@@ -8,10 +8,15 @@ const _tokenKey = 'account_token';
 /// Talks to a self-hosted PocketBase instance: account registration/login
 /// and the push/pull operations [SyncEngine] needs.
 class PocketBaseSyncClient implements SyncBackend {
-  PocketBaseSyncClient({required String baseUrl, required this.settings})
+  /// Creates a [PocketBaseSyncClient] talking to the PocketBase instance
+  /// at [baseUrl], persisting sessions/cursors via [settings].
+  new({required String baseUrl, required this.settings})
     : _pb = PocketBase(baseUrl);
 
   final PocketBase _pb;
+
+  /// Where sessions/cursors are persisted — also read by [SyncEngine]'s
+  /// caller for its own cursor bookkeeping.
   final AppSettingsRepository settings;
 
   /// Registers a new account with [email]/[password], authenticates, and
@@ -74,7 +79,7 @@ class PocketBaseSyncClient implements SyncBackend {
       await settings.setValue(_tokenKey, auth.token);
       _pb.authStore.save(auth.token, auth.record);
       return true;
-    } catch (_) {
+    } on Object {
       // Refresh failed - the session is genuinely dead (expired/revoked).
       // Leave the stale token in place; callers should treat this as "no
       // usable session" without throwing out of restoreSession.

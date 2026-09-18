@@ -2,14 +2,16 @@ import 'package:sembast/sembast.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 
 /// One synced sembast store, paired with the PocketBase collection name
-/// it syncs against. [SyncEngine.syncAll] iterates a list of these.
+/// it syncs against. `SyncEngine.syncAll` iterates a list of these.
 class SyncCollection {
-  const SyncCollection({required this.name, required this.store});
+  /// Creates a [SyncCollection].
+  const new({required this.name, required this.store});
 
   /// The PocketBase collection name — also the key prefix for this
   /// collection's push/pull cursors.
   final String name;
 
+  /// The local sembast store this collection syncs.
   final StoreRef<String, Map<String, Object?>> store;
 }
 

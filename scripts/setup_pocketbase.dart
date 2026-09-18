@@ -28,7 +28,9 @@ Future<void> main(List<String> args) async {
     request.headers.contentType = ContentType.json;
     request.write(jsonEncode({'identity': email, 'password': password}));
     final response = await request.close();
-    final body = jsonDecode(await response.transform(utf8.decoder).join());
+    final body = jsonDecode(
+      await response.transform(utf8.decoder).join(),
+    ) as Map<String, dynamic>;
     if (response.statusCode != 200) {
       throw StateError('Auth failed (${response.statusCode}): $body');
     }

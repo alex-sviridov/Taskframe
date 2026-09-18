@@ -7,14 +7,19 @@ import 'package:taskframe/core/sync/sync_engine.dart';
 /// Handle returned by [startSyncTriggers], to stop triggering sync
 /// (tests, or a future "sign out").
 class SyncTriggerHandle {
-  SyncTriggerHandle._(this._timer, this._connectivitySubscription);
+  /// Creates a [SyncTriggerHandle] owning [_timer] and
+  /// [_connectivitySubscription].
+  new(this._timer, this._connectivitySubscription);
 
   final Timer _timer;
   final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
 
+  /// Stops both the periodic timer and the connectivity subscription.
   void dispose() {
     _timer.cancel();
-    _connectivitySubscription.cancel();
+    // dispose() isn't async and has nothing to wait for; cancellation
+    // completing is not something a caller needs to observe here.
+    unawaited(_connectivitySubscription.cancel());
   }
 }
 
@@ -48,6 +53,9 @@ SyncTriggerHandle startSyncTriggers({
     unawaited(sync());
   });
 
+  // Cancelled in SyncTriggerHandle.dispose(), not here — the lint can't
+  // see that this subscription is handed off to the returned handle.
+  // ignore: cancel_subscriptions
   final subscription = connectivityChecker.onConnectivityChanged.listen((
     results,
   ) {
@@ -56,5 +64,5 @@ SyncTriggerHandle startSyncTriggers({
     }
   });
 
-  return SyncTriggerHandle._(timer, subscription);
+  return SyncTriggerHandle(timer, subscription);
 }

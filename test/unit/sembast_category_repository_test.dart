@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';

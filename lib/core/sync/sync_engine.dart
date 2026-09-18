@@ -4,7 +4,7 @@ import 'package:sembast/sembast.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
 
-/// What [SyncEngine] needs from a remote backend. [PocketBaseSyncClient]
+/// What [SyncEngine] needs from a remote backend. `PocketBaseSyncClient`
 /// (see `pocketbase_sync_client.dart`) is the real implementation; tests
 /// use an in-memory fake.
 abstract class SyncBackend {
@@ -31,12 +31,23 @@ abstract class SyncBackend {
 /// (last-write-wins). Never throws on a single collection's failure —
 /// see [syncAll].
 class SyncEngine {
-  SyncEngine({
+  /// Creates a [SyncEngine].
+  new({
     required Database db,
     required AppSettingsRepository settings,
     required SyncBackend backend,
+    // The public parameter names (db/settings/backend) are kept distinct
+    // from the private field names (_db/_settings/_backend) on purpose —
+    // an initializing formal would force the param name to match the
+    // field name exactly, making every call site pass `_db:`/`_settings:`
+    // /`_backend:`, which reads worse than the current, deliberate names.
+    // ignore: prefer_initializing_formals
   }) : _db = db,
+       // Same reasoning as above: keep the public param name `settings`.
+       // ignore: prefer_initializing_formals
        _settings = settings,
+       // Same reasoning as above: keep the public param name `backend`.
+       // ignore: prefer_initializing_formals
        _backend = backend;
 
   final Database _db;

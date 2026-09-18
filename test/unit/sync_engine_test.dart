@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
@@ -70,7 +69,7 @@ void main() {
     () async {
       await store.record('a').put(db, {
         'id': 'a',
-        'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updatedAt': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
       });
 
@@ -87,7 +86,7 @@ void main() {
     () async {
       await store.record('a').put(db, {
         'id': 'a',
-        'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updatedAt': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
       });
       await engine.syncAll([things]);
@@ -105,7 +104,7 @@ void main() {
       await store.record('a').put(db, {
         'id': 'a',
         'title': 'old',
-        'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updatedAt': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
       });
       backend.remote['things'] = [
@@ -142,13 +141,13 @@ void main() {
       backend.remote['things'] = [
         {
           'entity_id': 'a',
-          'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-          'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'updated_at': DateTime.utc(2026).toIso8601String(),
+          'server_updated': DateTime.utc(2026).toIso8601String(),
           'deleted': false,
           'data': {
             'id': 'a',
             'title': 'old-remote',
-            'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+            'updatedAt': DateTime.utc(2026).toIso8601String(),
             'deleted': false,
           },
         },
@@ -164,7 +163,7 @@ void main() {
   test(
     'keeps the local record when remote and local timestamps are equal',
     () async {
-      final tied = DateTime.utc(2026, 1, 1);
+      final tied = DateTime.utc(2026);
       await store.record('a').put(db, {
         'id': 'a',
         'title': 'local',
@@ -198,7 +197,7 @@ void main() {
     await store.record('a').put(db, {
       'id': 'a',
       'title': 'still here',
-      'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
       'deleted': false,
     });
     backend.remote['things'] = [
@@ -234,13 +233,13 @@ void main() {
       backend.remote['things'] = [
         {
           'entity_id': 'a',
-          'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-          'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'updated_at': DateTime.utc(2026).toIso8601String(),
+          'server_updated': DateTime.utc(2026).toIso8601String(),
           'deleted': false,
           'data': {
             'id': 'a',
             'title': 'remote-edit',
-            'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+            'updatedAt': DateTime.utc(2026).toIso8601String(),
             'deleted': false,
           },
         },
@@ -265,7 +264,7 @@ void main() {
     await store.record('a').put(db, {
       'id': 'a',
       'title': 'old',
-      'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
       'deleted': false,
     });
     backend.remote['things'] = [
@@ -299,13 +298,13 @@ void main() {
     backend.remote['things'] = [
       {
         'entity_id': 'a',
-        'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-        'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updated_at': DateTime.utc(2026).toIso8601String(),
+        'server_updated': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
         'data': {
           'id': 'a',
           'title': 'old-remote',
-          'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'updatedAt': DateTime.utc(2026).toIso8601String(),
           'deleted': false,
         },
       },
@@ -330,13 +329,13 @@ void main() {
     backend.remote['things'] = [
       {
         'entity_id': 'a',
-        'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
-        'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updated_at': DateTime.utc(2026).toIso8601String(),
+        'server_updated': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
         'data': {
           'id': 'a',
           'title': 'from-remote',
-          'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'updatedAt': DateTime.utc(2026).toIso8601String(),
           'deleted': false,
         },
       },
@@ -355,7 +354,7 @@ void main() {
       await store.record('a').put(db, {
         'id': 'a',
         'title': 'first',
-        'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'updatedAt': DateTime.utc(2026).toIso8601String(),
         'deleted': false,
       });
       await store.record('b').put(db, {
@@ -373,7 +372,7 @@ void main() {
       // The push cursor only advanced past 'a', not 'b'.
       expect(
         await settings.getValue('sync_push_things'),
-        DateTime.utc(2026, 1, 1).toIso8601String(),
+        DateTime.utc(2026).toIso8601String(),
       );
 
       // Retrying (failure lifted) picks up 'b', proving it was never

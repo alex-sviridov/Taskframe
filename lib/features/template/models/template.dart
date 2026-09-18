@@ -39,7 +39,8 @@ class Template {
   /// Whether this template has been soft-deleted. Defaults to `false`.
   final bool deleted;
 
-  /// Returns a copy of this template with [name], [updatedAt], or [deleted] replaced.
+  /// Returns a copy of this template with [name], [updatedAt], or
+  /// [deleted] replaced.
   Template copyWith({String? name, DateTime? updatedAt, bool? deleted}) =>
       Template(
         id: id,
