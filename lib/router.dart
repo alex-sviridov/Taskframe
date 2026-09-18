@@ -1,14 +1,14 @@
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/widgets/app_shell.dart';
+import 'package:taskframe/features/account/widgets/account_screen.dart';
 import 'package:taskframe/features/category/widgets/categories_screen.dart';
 import 'package:taskframe/features/day/day_screen.dart';
-import 'package:taskframe/features/account/widgets/account_screen.dart';
 import 'package:taskframe/features/task/widgets/tasks_screen.dart';
 import 'package:taskframe/features/template/widgets/templates_screen.dart';
 
-/// Application router: a shell with four branches (Day/Week, Templates,
-/// Categories, Tasks), each keeping its own state alive when the others are
-/// shown.
+/// Application router: a shell with five branches (Day/Week, Templates,
+/// Categories, Tasks, Account), each keeping its own state alive when the
+/// others are shown.
 final GoRouter appRouter = GoRouter(
   routes: [
     StatefulShellRoute.indexedStack(
@@ -44,11 +44,15 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/account',
+              builder: (context, state) => const AccountScreen(),
+            ),
+          ],
+        ),
       ],
-    ),
-    GoRoute(
-      path: '/account',
-      builder: (context, state) => const AccountScreen(),
     ),
   ],
 );
