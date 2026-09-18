@@ -1,6 +1,7 @@
 // lib/features/account/widgets/account_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/account/account_providers.dart';
 
 /// Lets a guest register a new account or log into an existing one; once
@@ -52,15 +53,26 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final account = ref.watch(accountProvider);
+    final content = account.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => _buildForm(context),
+      data: (email) =>
+          email != null ? _buildLoggedIn(email) : _buildForm(context),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: account.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => _buildForm(context),
-          data: (email) =>
-              email != null ? _buildLoggedIn(email) : _buildForm(context),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < narrowBreakpoint) return content;
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: content,
+              ),
+            );
+          },
         ),
       ),
     );
