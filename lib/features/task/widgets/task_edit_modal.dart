@@ -512,48 +512,29 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Repeat',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Theme.of(context).hintColor),
-                        ),
-                        Row(
+                    child: TextField(
+                      key: const Key('task-repeat-number-field'),
+                      controller: _repeatCountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: 'Repeat',
+                        hintText: '0',
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(
-                              width: 28,
-                              child: TextField(
-                                key: const Key('task-repeat-number-field'),
-                                controller: _repeatCountController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration: const InputDecoration(
-                                  border: UnderlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                                onChanged: _onRepeatCountChanged,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: DropdownButton<String>(
-                                key: const Key('task-repeat-unit-dropdown'),
-                                value: _repeatUnit,
-                                isExpanded: true,
-                                items: [
-                                  for (final entry in _repeatUnits.entries)
-                                    DropdownMenuItem(
-                                      value: entry.key,
-                                      child: Text(entry.value),
-                                    ),
-                                ],
-                                onChanged: _onRepeatUnitChanged,
-                              ),
+                            DropdownButton<String>(
+                              key: const Key('task-repeat-unit-dropdown'),
+                              value: _repeatUnit,
+                              underline: const SizedBox.shrink(),
+                              items: [
+                                for (final entry in _repeatUnits.entries)
+                                  DropdownMenuItem(
+                                    value: entry.key,
+                                    child: Text(entry.value),
+                                  ),
+                              ],
+                              onChanged: _onRepeatUnitChanged,
                             ),
                             if (_repeatCountController.text.isNotEmpty)
                               IconButton(
@@ -564,7 +545,8 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                               ),
                           ],
                         ),
-                      ],
+                      ),
+                      onChanged: _onRepeatCountChanged,
                     ),
                   ),
                 ],

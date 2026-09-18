@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/task_edit_modal.dart';
@@ -152,7 +153,12 @@ void main() {
 
           await tester.tap(find.text('Open'));
           await tester.pumpAndSettle();
-          await tester.tap(find.byType(DropdownButtonFormField<String>));
+          await tester.tap(
+            find.descendant(
+              of: find.byType(BlockCategoryPicker),
+              matching: find.byType(DropdownButtonFormField<String>),
+            ),
+          );
           await tester.pumpAndSettle();
           await tester.tap(find.text('Work').last);
           await tester.pumpAndSettle();
@@ -415,7 +421,12 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(BlockCategoryPicker),
+            matching: find.byType(DropdownButtonFormField<String>),
+          ),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Work').last);
         await tester.pumpAndSettle();
