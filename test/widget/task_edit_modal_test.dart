@@ -299,6 +299,14 @@ void main() {
           expect(tasks, hasLength(1));
           expect(tasks.single.title, 'Water plants ');
           expect(tasks.single.repeat, '1w');
+          final numberField = tester.widget<TextField>(
+            find.byKey(const Key('task-repeat-number-field')),
+          );
+          expect(numberField.controller?.text, '1');
+          final dropdown = tester.widget<DropdownButton<String>>(
+            find.byKey(const Key('task-repeat-unit-dropdown')),
+          );
+          expect(dropdown.value, 'w');
         },
       );
 
@@ -528,36 +536,69 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const Key('task-repeat-field')), findsOneWidget);
-      });
-
-      testWidgets('pre-fills the "Repeat" field with an existing repeat', (
-        tester,
-      ) async {
-        final container = await _seededContainer();
-        addTearDown(container.dispose);
-        final created = await container
-            .read(taskListProvider.notifier)
-            .addTask(title: 'Water plants');
-        await container
-            .read(taskListProvider.notifier)
-            .updateTask(created, repeat: '1w');
-        final repeating = container
-            .read(taskListProvider)
-            .value!
-            .singleWhere((t) => t.id == created.id);
-        await _pumpOpenButton(tester, container, task: repeating);
-
-        await tester.tap(find.text('Open'));
-        await tester.pumpAndSettle();
-
-        final field = tester.widget<TextField>(
-          find.byKey(const Key('task-repeat-field')),
+        expect(
+          find.byKey(const Key('task-repeat-number-field')),
+          findsOneWidget,
         );
-        expect(field.controller?.text, '1w');
+        expect(
+          find.byKey(const Key('task-repeat-unit-dropdown')),
+          findsOneWidget,
+        );
       });
 
-      testWidgets('typing a valid value into the field sets repeat', (
+      testWidgets(
+        'the unit dropdown defaults to "week" when the task has no repeat',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Water plants');
+          await _pumpOpenButton(tester, container, task: created);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+
+          final dropdown = tester.widget<DropdownButton<String>>(
+            find.byKey(const Key('task-repeat-unit-dropdown')),
+          );
+          expect(dropdown.value, 'w');
+        },
+      );
+
+      testWidgets(
+        'pre-fills the number field and unit dropdown with an existing '
+        'repeat',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Water plants');
+          await container
+              .read(taskListProvider.notifier)
+              .updateTask(created, repeat: '2m');
+          final repeating = container
+              .read(taskListProvider)
+              .value!
+              .singleWhere((t) => t.id == created.id);
+          await _pumpOpenButton(tester, container, task: repeating);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+
+          final numberField = tester.widget<TextField>(
+            find.byKey(const Key('task-repeat-number-field')),
+          );
+          expect(numberField.controller?.text, '2');
+          final dropdown = tester.widget<DropdownButton<String>>(
+            find.byKey(const Key('task-repeat-unit-dropdown')),
+          );
+          expect(dropdown.value, 'm');
+        },
+      );
+
+      testWidgets('typing a number with the default unit sets repeat', (
         tester,
       ) async {
         final container = await _seededContainer();
@@ -570,8 +611,8 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
         await tester.enterText(
-          find.byKey(const Key('task-repeat-field')),
-          '2w',
+          find.byKey(const Key('task-repeat-number-field')),
+          '2',
         );
         await tester.pump();
 
@@ -579,7 +620,31 @@ void main() {
         expect(tasks.singleWhere((t) => t.id == created.id).repeat, '2w');
       });
 
-      testWidgets('clearing the field removes repeat', (tester) async {
+      testWidgets('changing the unit dropdown updates repeat', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-repeat-number-field')),
+          '3',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('task-repeat-unit-dropdown')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Month').last);
+        await tester.pumpAndSettle();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).repeat, '3m');
+      });
+
+      testWidgets('clearing the number field removes repeat', (tester) async {
         final container = await _seededContainer();
         addTearDown(container.dispose);
         final created = await container
@@ -596,11 +661,47 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byKey(const Key('task-repeat-field')), '');
+        await tester.enterText(
+          find.byKey(const Key('task-repeat-number-field')),
+          '',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
         expect(tasks.singleWhere((t) => t.id == created.id).repeat, isNull);
+      });
+
+      testWidgets('tapping the clear button removes repeat and resets the '
+          'unit to "week"', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, repeat: '2m');
+        final repeating = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == created.id);
+        await _pumpOpenButton(tester, container, task: repeating);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('task-repeat-clear')));
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).repeat, isNull);
+        final numberField = tester.widget<TextField>(
+          find.byKey(const Key('task-repeat-number-field')),
+        );
+        expect(numberField.controller?.text, isEmpty);
+        final dropdown = tester.widget<DropdownButton<String>>(
+          find.byKey(const Key('task-repeat-unit-dropdown')),
+        );
+        expect(dropdown.value, 'w');
       });
 
       testWidgets('shows an existing tag as a pill', (tester) async {
