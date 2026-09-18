@@ -6,6 +6,7 @@ import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/task/active_from_parsing.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
+import 'package:taskframe/features/task/repeat_parsing.dart';
 import 'package:taskframe/features/task/tag_parsing.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
 
@@ -31,6 +32,16 @@ DateTime? _parseActiveFromField(String text) {
     return null;
   }
   return date;
+}
+
+/// Parses a compact `<n><unit>` string as typed into the "Repeat" field
+/// (no leading `every`, unlike the title-parsing helper). Returns `null`
+/// for anything that doesn't match.
+String? _parseRepeatField(String text) {
+  final match = RegExp(r'^(\d+)([dwmyDWMY])$').firstMatch(text);
+  return match == null
+      ? null
+      : '${match.group(1)}${match.group(2)!.toLowerCase()}';
 }
 
 /// Opens the edit modal for [task] (edit mode) or, when [task] is `null`,
@@ -69,10 +80,12 @@ class _TaskEditModalContent extends ConsumerStatefulWidget {
 class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   late final TextEditingController _titleController;
   late final TextEditingController _activeFromController;
+  late final TextEditingController _repeatController;
   late String _categoryId;
   late bool _closed;
   late List<String> _tags;
   DateTime? _activeFrom;
+  String? _repeat;
 
   /// The task backing this modal. Starts as `null` in create mode until
   /// [_onTitleChanged] creates it on the first non-empty keystroke — from
@@ -99,12 +112,15 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _activeFromController = TextEditingController(
       text: _activeFrom == null ? '' : formatActiveFrom(_activeFrom!),
     );
+    _repeat = widget.task?.repeat;
+    _repeatController = TextEditingController(text: _repeat ?? '');
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _activeFromController.dispose();
+    _repeatController.dispose();
     super.dispose();
   }
 
@@ -115,7 +131,8 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   ///
   /// When the cursor is at the end and the just-typed text ends with
   /// `#tag `, that chunk is stripped from the title and added as a tag.
-  /// Likewise for `from dd/mm[/yy]`, which sets [_activeFrom] instead.
+  /// Likewise for `from dd/mm[/yy]`, which sets [_activeFrom] instead, and
+  /// `every <n><unit>`/`every <n> <word>`, which sets [_repeat].
   Future<void> _onTitleChanged(String rawTitle) async {
     final atEnd = _titleController.selection.baseOffset == rawTitle.length;
     final tagExtraction = atEnd ? extractTrailingTag(rawTitle) : null;
@@ -123,8 +140,14 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final activeFromExtraction = atEnd
         ? extractTrailingActiveFrom(afterTag)
         : null;
-    final title = activeFromExtraction?.title ?? afterTag;
-    if (tagExtraction != null || activeFromExtraction != null) {
+    final afterActiveFrom = activeFromExtraction?.title ?? afterTag;
+    final repeatExtraction = atEnd
+        ? extractTrailingRepeat(afterActiveFrom)
+        : null;
+    final title = repeatExtraction?.title ?? afterActiveFrom;
+    if (tagExtraction != null ||
+        activeFromExtraction != null ||
+        repeatExtraction != null) {
       _titleController.value = TextEditingValue(
         text: title,
         selection: TextSelection.collapsed(offset: title.length),
@@ -141,6 +164,13 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         _activeFromController.text = formatActiveFrom(newActiveFrom);
       });
     }
+    final newRepeat = repeatExtraction?.repeat;
+    if (newRepeat != null) {
+      setState(() {
+        _repeat = newRepeat;
+        _repeatController.text = newRepeat;
+      });
+    }
 
     final notifier = ref.read(taskListProvider.notifier);
     if (_task != null) {
@@ -149,6 +179,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         title: title,
         tags: newTags,
         activeFrom: newActiveFrom,
+        repeat: newRepeat,
       );
       return;
     }
@@ -160,6 +191,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         title: title,
         tags: newTags,
         activeFrom: newActiveFrom,
+        repeat: newRepeat,
       );
       return;
     }
@@ -171,6 +203,9 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     if (newTags != null) await notifier.updateTask(created, tags: newTags);
     if (newActiveFrom != null) {
       await notifier.updateTask(created, activeFrom: newActiveFrom);
+    }
+    if (newRepeat != null) {
+      await notifier.updateTask(created, repeat: newRepeat);
     }
     if (!mounted) return;
     setState(() {
@@ -189,8 +224,20 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final activeFromExtraction = extractFinalActiveFrom(
       tagExtraction?.title ?? _titleController.text,
     );
-    if (tagExtraction == null && activeFromExtraction == null) return;
-    final title = activeFromExtraction?.title ?? tagExtraction!.title;
+    final repeatExtraction = extractFinalRepeat(
+      activeFromExtraction?.title ??
+          tagExtraction?.title ??
+          _titleController.text,
+    );
+    if (tagExtraction == null &&
+        activeFromExtraction == null &&
+        repeatExtraction == null) {
+      return;
+    }
+    final title =
+        repeatExtraction?.title ??
+        activeFromExtraction?.title ??
+        tagExtraction!.title;
     _titleController.value = TextEditingValue(
       text: title,
       selection: TextSelection.collapsed(offset: title.length),
@@ -199,11 +246,16 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         ? _tags
         : [..._tags, tagExtraction.tag];
     final newActiveFrom = activeFromExtraction?.activeFrom ?? _activeFrom;
+    final newRepeat = repeatExtraction?.repeat ?? _repeat;
     setState(() {
       _tags = newTags;
       if (activeFromExtraction != null) {
         _activeFrom = newActiveFrom;
         _activeFromController.text = formatActiveFrom(newActiveFrom!);
+      }
+      if (repeatExtraction != null) {
+        _repeat = newRepeat;
+        _repeatController.text = newRepeat!;
       }
     });
 
@@ -218,6 +270,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
           title: title,
           tags: newTags,
           activeFrom: activeFromExtraction?.activeFrom,
+          repeat: repeatExtraction?.repeat,
         );
   }
 
@@ -290,6 +343,37 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   Future<void> _clearActiveFrom() async {
     _activeFromController.clear();
     await _onActiveFromFieldChanged('');
+  }
+
+  /// Applies a typed `<n><unit>` value from the "Repeat" field. An empty
+  /// value clears [_repeat]; anything else that doesn't parse is left
+  /// alone (no update) until it does.
+  Future<void> _onRepeatFieldChanged(String text) async {
+    if (text.isEmpty) {
+      setState(() => _repeat = null);
+      final task = _task;
+      if (task != null) {
+        await ref
+            .read(taskListProvider.notifier)
+            .updateTask(task, clearRepeat: true);
+      }
+      return;
+    }
+    final parsed = _parseRepeatField(text);
+    if (parsed == null) return;
+    setState(() => _repeat = parsed);
+    final task = _task;
+    if (task != null) {
+      await ref
+          .read(taskListProvider.notifier)
+          .updateTask(task, repeat: parsed);
+    }
+  }
+
+  /// Clears the "Repeat" field and the task's [Task.repeat].
+  Future<void> _clearRepeat() async {
+    _repeatController.clear();
+    await _onRepeatFieldChanged('');
   }
 
   Future<void> _onClosedChanged(bool value) async {
@@ -394,6 +478,24 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                 ),
                 onTap: _pickActiveFrom,
                 onChanged: _onActiveFromFieldChanged,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('task-repeat-field'),
+                controller: _repeatController,
+                decoration: InputDecoration(
+                  labelText: 'Repeat',
+                  hintText: 'e.g. 1w',
+                  suffixIcon: _repeatController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          key: const Key('task-repeat-clear'),
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Clear repeat',
+                          onPressed: _clearRepeat,
+                        ),
+                ),
+                onChanged: _onRepeatFieldChanged,
               ),
               const SizedBox(height: 16),
               BlockCategoryPicker(

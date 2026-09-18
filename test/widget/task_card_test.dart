@@ -212,6 +212,42 @@ void main() {
       expect(titleText.style?.fontStyle, isNot(FontStyle.italic));
     });
 
+    testWidgets('shows a repeat pill for a task with repeat set', (
+      tester,
+    ) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final task = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Water plants');
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(task, repeat: '1w');
+      final repeating = container
+          .read(taskListProvider)
+          .value!
+          .singleWhere((t) => t.id == task.id);
+
+      await _pumpCard(tester, container, repeating);
+
+      expect(find.byIcon(Icons.repeat), findsOneWidget);
+      expect(find.text('1w'), findsOneWidget);
+    });
+
+    testWidgets('shows no repeat pill for a task without repeat', (
+      tester,
+    ) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final task = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+
+      await _pumpCard(tester, container, task);
+
+      expect(find.byIcon(Icons.repeat), findsNothing);
+    });
+
     testWidgets('tapping the card body (not the checkbox) calls onTap', (
       tester,
     ) async {

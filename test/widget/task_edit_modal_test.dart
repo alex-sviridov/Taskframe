@@ -281,6 +281,28 @@ void main() {
       });
 
       testWidgets(
+        'typing "every 1w " strips it from the title and sets repeat',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Water plants every 1w ',
+          );
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(tasks, hasLength(1));
+          expect(tasks.single.title, 'Water plants ');
+          expect(tasks.single.repeat, '1w');
+        },
+      );
+
+      testWidgets(
         'rapid same-tick keystrokes (real typing, faster than one addTask '
         'round-trip) still create only one task',
         (tester) async {
@@ -494,6 +516,92 @@ void main() {
           expect(titleField.style?.fontStyle, FontStyle.italic);
         },
       );
+
+      testWidgets('shows a "Repeat" field, always present', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('task-repeat-field')), findsOneWidget);
+      });
+
+      testWidgets('pre-fills the "Repeat" field with an existing repeat', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, repeat: '1w');
+        final repeating = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == created.id);
+        await _pumpOpenButton(tester, container, task: repeating);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        final field = tester.widget<TextField>(
+          find.byKey(const Key('task-repeat-field')),
+        );
+        expect(field.controller?.text, '1w');
+      });
+
+      testWidgets('typing a valid value into the field sets repeat', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-repeat-field')),
+          '2w',
+        );
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).repeat, '2w');
+      });
+
+      testWidgets('clearing the field removes repeat', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Water plants');
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, repeat: '1w');
+        final repeating = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == created.id);
+        await _pumpOpenButton(tester, container, task: repeating);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('task-repeat-field')), '');
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).repeat, isNull);
+      });
 
       testWidgets('shows an existing tag as a pill', (tester) async {
         final container = await _seededContainer();

@@ -55,6 +55,8 @@ class SembastTaskRepository implements TaskRepository {
     List<String>? tags,
     DateTime? activeFrom,
     bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   }) async {
     final existingRecord = await tasksStore.record(task.id).get(_db);
     final current = existingRecord == null
@@ -67,6 +69,8 @@ class SembastTaskRepository implements TaskRepository {
       tags: tags,
       activeFrom: activeFrom,
       clearActiveFrom: clearActiveFrom,
+      repeat: repeat,
+      clearRepeat: clearRepeat,
       updatedAt: DateTime.now().toUtc(),
     );
     final order =

@@ -19,9 +19,10 @@ abstract class TaskRepository {
   });
 
   /// Updates [task] in place, replacing any of [title]/[closed]/
-  /// [categoryId]/[tags]/[activeFrom] that are given and leaving the rest
-  /// unchanged. [activeFrom] is left unchanged when omitted; pass
-  /// [clearActiveFrom] to remove it instead. Returns the updated task.
+  /// [categoryId]/[tags]/[activeFrom]/[repeat] that are given and leaving
+  /// the rest unchanged. [activeFrom]/[repeat] are left unchanged when
+  /// omitted; pass [clearActiveFrom]/[clearRepeat] to remove them
+  /// instead. Returns the updated task.
   Future<Task> update(
     Task task, {
     String? title,
@@ -30,6 +31,8 @@ abstract class TaskRepository {
     List<String>? tags,
     DateTime? activeFrom,
     bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   });
 
   /// Removes [task].
@@ -70,6 +73,8 @@ class InMemoryTaskRepository implements TaskRepository {
     List<String>? tags,
     DateTime? activeFrom,
     bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   }) async {
     final updated = task.copyWith(
       title: title,
@@ -78,6 +83,8 @@ class InMemoryTaskRepository implements TaskRepository {
       tags: tags,
       activeFrom: activeFrom,
       clearActiveFrom: clearActiveFrom,
+      repeat: repeat,
+      clearRepeat: clearRepeat,
     );
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) {

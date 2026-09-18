@@ -60,7 +60,8 @@ class TaskCard extends ConsumerWidget {
               fontStyle: notYetActive ? FontStyle.italic : null,
             ),
           ),
-          if (task.tags.isNotEmpty || notYetActive) const SizedBox(height: 4),
+          if (task.tags.isNotEmpty || notYetActive || task.repeat != null)
+            const SizedBox(height: 4),
           Wrap(
             spacing: 8,
             runSpacing: 4,
@@ -68,6 +69,13 @@ class TaskCard extends ConsumerWidget {
               if (notYetActive)
                 Chip(
                   label: Text('from ${formatActiveFrom(task.activeFrom!)}'),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              if (task.repeat != null)
+                Chip(
+                  avatar: const Icon(Icons.repeat, size: 16),
+                  label: Text(task.repeat!),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),

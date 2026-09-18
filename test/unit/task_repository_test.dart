@@ -98,6 +98,23 @@ void main() {
       },
     );
 
+    test('update sets repeat', () async {
+      final added = await repository.add(title: 'Buy milk');
+
+      final updated = await repository.update(added, repeat: '1w');
+
+      expect(updated.repeat, '1w');
+    });
+
+    test('update(clearRepeat: true) removes an existing repeat', () async {
+      final added = await repository.add(title: 'Buy milk');
+      await repository.update(added, repeat: '1w');
+
+      final updated = await repository.update(added, clearRepeat: true);
+
+      expect(updated.repeat, isNull);
+    });
+
     test('update leaves fields unspecified as null unchanged', () async {
       final added = await repository.add(
         title: 'Buy milk',

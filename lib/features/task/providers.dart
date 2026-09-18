@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/features/task/data/task_repository.dart';
 import 'package:taskframe/features/task/models/task.dart';
+import 'package:taskframe/features/task/repeat_parsing.dart';
 
 /// The backing store for tasks.
 ///
@@ -33,9 +34,16 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
     return added;
   }
 
-  /// Updates [task]'s title/closed/category/tags/activeFrom, persisting
-  /// via the repository and refreshing state. [activeFrom] is left
-  /// unchanged when omitted; pass [clearActiveFrom] to remove it instead.
+  /// Updates [task]'s title/closed/category/tags/activeFrom/repeat,
+  /// persisting via the repository and refreshing state. [activeFrom]/
+  /// [repeat] are left unchanged when omitted; pass [clearActiveFrom]/
+  /// [clearRepeat] to remove them instead.
+  ///
+  /// Closing a task (`closed: true`, transitioning from an open task)
+  /// that has a [Task.repeat] set spawns its successor: a fresh task
+  /// with the same title/category/tags/repeat, open, and active from
+  /// [nextOccurrence] of now. Reopening a task, or closing one that's
+  /// already closed, never spawns.
   Future<void> updateTask(
     Task task, {
     String? title,
@@ -44,6 +52,8 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
     List<String>? tags,
     DateTime? activeFrom,
     bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   }) async {
     final repository = ref.read(taskRepositoryProvider);
     final updated = await repository.update(
@@ -54,11 +64,27 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
       tags: tags,
       activeFrom: activeFrom,
       clearActiveFrom: clearActiveFrom,
+      repeat: repeat,
+      clearRepeat: clearRepeat,
     );
     state = AsyncData([
       for (final t in state.value ?? <Task>[])
         if (t.id == task.id) updated else t,
     ]);
+
+    if (closed == true && !task.closed && updated.repeat != null) {
+      final successor = await repository.add(
+        title: updated.title,
+        categoryId: updated.categoryId,
+        activeFrom: nextOccurrence(DateTime.now(), updated.repeat!),
+      );
+      final withTagsAndRepeat = await repository.update(
+        successor,
+        tags: updated.tags,
+        repeat: updated.repeat,
+      );
+      state = AsyncData([...?state.value, withTagsAndRepeat]);
+    }
   }
 
   /// Removes [task], persisting via the repository and refreshing state.

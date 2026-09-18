@@ -63,6 +63,36 @@ void main() {
       expect(updated.activeFrom, isNull);
     });
 
+    test('repeat defaults to null', () {
+      final task = Task(id: 'task-1', title: 'Buy milk');
+
+      expect(task.repeat, isNull);
+    });
+
+    test('copyWith sets repeat', () {
+      final task = Task(id: 'task-1', title: 'Buy milk');
+
+      final updated = task.copyWith(repeat: '1w');
+
+      expect(updated.repeat, '1w');
+    });
+
+    test('copyWith with no arguments leaves an existing repeat unchanged', () {
+      final task = Task(id: 'task-1', title: 'Buy milk', repeat: '1w');
+
+      final copy = task.copyWith();
+
+      expect(copy.repeat, '1w');
+    });
+
+    test('copyWith(clearRepeat: true) removes an existing repeat', () {
+      final task = Task(id: 'task-1', title: 'Buy milk', repeat: '1w');
+
+      final updated = task.copyWith(clearRepeat: true);
+
+      expect(updated.repeat, isNull);
+    });
+
     test('copyWith replaces only the given fields', () {
       final task = Task(
         id: 'task-1',
@@ -186,6 +216,25 @@ void main() {
       });
 
       expect(restored.activeFrom, isNull);
+    });
+
+    test('fromMap(toMap()) round-trips a set repeat', () {
+      final task = Task(id: 'task-1', title: 'Buy milk', repeat: '1w');
+
+      final restored = Task.fromMap(task.toMap());
+
+      expect(restored.repeat, '1w');
+    });
+
+    test('fromMap defaults repeat to null when the map has no repeat key', () {
+      final restored = Task.fromMap({
+        'id': 'task-1',
+        'title': 'Buy milk',
+        'closed': false,
+        'categoryId': 'category-1',
+      });
+
+      expect(restored.repeat, isNull);
     });
 
     test('toMap/fromMap round-trip updatedAt and deleted', () {
