@@ -61,11 +61,38 @@ void main() {
       expect(parsed.freeText, '/opened');
     });
 
-    test('/other (not "opened") is left entirely as plain text', () {
+    test('/other (not "opened"/"active") is left entirely as plain text', () {
       final parsed = parseSearchQuery('/other');
       expect(parsed.statusToken, isNull);
+      expect(parsed.activeToken, isNull);
       expect(parsed.tagTokens, isEmpty);
       expect(parsed.freeText, '/other');
+    });
+
+    test('/active is an active token, not excluded', () {
+      final parsed = parseSearchQuery('/active');
+      expect(parsed.activeToken, isNotNull);
+      expect(parsed.activeToken!.excluded, isFalse);
+      expect(parsed.freeText, isEmpty);
+    });
+
+    test('/!active is an excluded active token', () {
+      final parsed = parseSearchQuery('/!active');
+      expect(parsed.activeToken!.excluded, isTrue);
+    });
+
+    test('only the first /active is recognized; a second is left as '
+        'plain text', () {
+      final parsed = parseSearchQuery('/active /active');
+      expect(parsed.activeToken!.excluded, isFalse);
+      expect(parsed.freeText, '/active');
+    });
+
+    test('/opened and /active coexist as independent tokens', () {
+      final parsed = parseSearchQuery('/opened /active');
+      expect(parsed.statusToken!.excluded, isFalse);
+      expect(parsed.activeToken!.excluded, isFalse);
+      expect(parsed.freeText, isEmpty);
     });
 
     test('a mixed query extracts tags and status, collapsing the '
@@ -123,6 +150,14 @@ void main() {
       final ranges = orderedTokenRanges(parsed);
       expect(ranges, hasLength(2));
       expect(ranges.first.range.start, 0); // "/opened"
+      expect(ranges.last.range.start, 8); // "#groceries"
+    });
+
+    test('also includes an active token, sorted by position', () {
+      final parsed = parseSearchQuery('/active #groceries');
+      final ranges = orderedTokenRanges(parsed);
+      expect(ranges, hasLength(2));
+      expect(ranges.first.range.start, 0); // "/active"
       expect(ranges.last.range.start, 8); // "#groceries"
     });
 

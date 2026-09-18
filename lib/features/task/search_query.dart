@@ -1,9 +1,14 @@
 import 'package:flutter/services.dart' show TextRange;
 
-/// The only status word currently recognized — a task has no other
-/// boolean field to filter by, so any other word after `/` is left
-/// alone as plain search text rather than treated as a token.
+/// The status words currently recognized — any other word after `/` is
+/// left alone as plain search text rather than treated as a token.
 const openedStatusWord = 'opened';
+
+/// The `/active`/`/!active` status word — filters by whether a task's
+/// `activeFrom` date has arrived (or is unset) rather than by its closed
+/// status. Recognized independently of [openedStatusWord], so both can
+/// appear in the same query.
+const activeStatusWord = 'active';
 
 /// A `#tag`/`#!tag` occurrence found anywhere in a unified search query
 /// string, together with the exact range of characters it occupies —
@@ -66,6 +71,7 @@ class ParsedQuery {
     required this.tagTokens,
     required this.categoryTokens,
     required this.statusToken,
+    required this.activeToken,
     required this.freeText,
   });
 
@@ -75,8 +81,13 @@ class ParsedQuery {
   /// Every category token found in the query, in order of appearance.
   final List<CategoryToken> categoryTokens;
 
-  /// The status token found in the query, if any (at most one).
+  /// The `/opened`/`/!opened` token found in the query, if any (at most
+  /// one).
   final StatusToken? statusToken;
+
+  /// The `/active`/`/!active` token found in the query, if any (at most
+  /// one) — independent of [statusToken], so both can be set together.
+  final StatusToken? activeToken;
 
   /// The remaining free text after all recognized tokens are removed,
   /// with whitespace normalized.
@@ -86,18 +97,20 @@ class ParsedQuery {
 final _tokenPattern = RegExp(r'(#|/|@)(!?)(\w+)');
 
 /// Parses [text] for every `#tag`/`#!tag`, every `@category`/
-/// `@!category`, and the first `/opened`/`/!opened` occurrence,
-/// returning their positions plus the leftover free text (every
-/// recognized token's characters removed, whitespace collapsed and
-/// trimmed).
+/// `@!category`, the first `/opened`/`/!opened` occurrence, and the
+/// first `/active`/`/!active` occurrence, returning their positions plus
+/// the leftover free text (every recognized token's characters removed,
+/// whitespace collapsed and trimmed).
 ///
-/// A `/word` where `word` isn't [openedStatusWord] is left alone as
-/// plain text. A second `/opened`/`/!opened` beyond the first is also
-/// left as plain text: only one status filter slot exists.
+/// A `/word` where `word` isn't [openedStatusWord] or [activeStatusWord]
+/// is left alone as plain text. A second occurrence of either beyond its
+/// first is also left as plain text: only one slot per status word
+/// exists, though the two words' slots are independent of each other.
 ParsedQuery parseSearchQuery(String text) {
   final tagTokens = <TagToken>[];
   final categoryTokens = <CategoryToken>[];
   StatusToken? statusToken;
+  StatusToken? activeToken;
   final removedRanges = <TextRange>[];
 
   for (final match in _tokenPattern.allMatches(text)) {
@@ -122,6 +135,9 @@ ParsedQuery parseSearchQuery(String text) {
     } else if (statusToken == null && word.toLowerCase() == openedStatusWord) {
       statusToken = StatusToken(excluded: excluded, range: range);
       removedRanges.add(range);
+    } else if (activeToken == null && word.toLowerCase() == activeStatusWord) {
+      activeToken = StatusToken(excluded: excluded, range: range);
+      removedRanges.add(range);
     }
   }
 
@@ -138,6 +154,7 @@ ParsedQuery parseSearchQuery(String text) {
     tagTokens: tagTokens,
     categoryTokens: categoryTokens,
     statusToken: statusToken,
+    activeToken: activeToken,
     freeText: freeText,
   );
 }
@@ -156,6 +173,11 @@ List<({TextRange range, bool excluded})> orderedTokenRanges(
       (
         range: parsed.statusToken!.range,
         excluded: parsed.statusToken!.excluded,
+      ),
+    if (parsed.activeToken != null)
+      (
+        range: parsed.activeToken!.range,
+        excluded: parsed.activeToken!.excluded,
       ),
   ];
   return ranges..sort((a, b) => a.range.start.compareTo(b.range.start));

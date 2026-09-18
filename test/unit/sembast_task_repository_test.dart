@@ -78,6 +78,40 @@ void main() {
       expect(updated.tags, ['errands']);
     });
 
+    test('add accepts an explicit activeFrom', () async {
+      final activeFrom = DateTime.utc(2026, 3, 5);
+      final added = await repository.add(
+        title: 'Buy milk',
+        activeFrom: activeFrom,
+      );
+
+      expect(added.activeFrom, activeFrom);
+    });
+
+    test('activeFrom persists through a later load', () async {
+      final activeFrom = DateTime.utc(2026, 3, 5);
+      final added = await repository.add(title: 'Buy milk');
+      await repository.update(added, activeFrom: activeFrom);
+
+      final tasks = await repository.load();
+
+      expect(tasks.singleWhere((t) => t.id == added.id).activeFrom, activeFrom);
+    });
+
+    test(
+      'update(clearActiveFrom: true) removes an existing activeFrom',
+      () async {
+        final added = await repository.add(
+          title: 'Buy milk',
+          activeFrom: DateTime.utc(2026, 3, 5),
+        );
+
+        final updated = await repository.update(added, clearActiveFrom: true);
+
+        expect(updated.activeFrom, isNull);
+      },
+    );
+
     test('tags persist through a later load', () async {
       final added = await repository.add(title: 'Buy milk');
       await repository.update(added, tags: ['errands']);

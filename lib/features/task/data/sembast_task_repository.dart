@@ -27,11 +27,16 @@ class SembastTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<Task> add({required String title, String? categoryId}) async {
+  Future<Task> add({
+    required String title,
+    String? categoryId,
+    DateTime? activeFrom,
+  }) async {
     final task = Task(
       id: _uuid.v4(),
       title: title,
       categoryId: categoryId ?? Category.defaultId,
+      activeFrom: activeFrom,
       updatedAt: DateTime.now().toUtc(),
     );
     await tasksStore.record(task.id).put(_db, {
@@ -48,6 +53,8 @@ class SembastTaskRepository implements TaskRepository {
     bool? closed,
     String? categoryId,
     List<String>? tags,
+    DateTime? activeFrom,
+    bool clearActiveFrom = false,
   }) async {
     final existingRecord = await tasksStore.record(task.id).get(_db);
     final current = existingRecord == null
@@ -58,6 +65,8 @@ class SembastTaskRepository implements TaskRepository {
       closed: closed,
       categoryId: categoryId,
       tags: tags,
+      activeFrom: activeFrom,
+      clearActiveFrom: clearActiveFrom,
       updatedAt: DateTime.now().toUtc(),
     );
     final order =

@@ -381,11 +381,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final statusMatch = _partialStatusPattern.firstMatch(beforeCursor);
     if (statusMatch != null) {
       final parsed = parseSearchQuery(_searchController.text);
-      if (parsed.statusToken == null) {
-        final partial = statusMatch.group(3)!.toLowerCase();
-        if (openedStatusWord.startsWith(partial)) {
-          return (options: [openedStatusWord], kind: _TokenKind.status);
-        }
+      final partial = statusMatch.group(3)!.toLowerCase();
+      final options = [
+        if (parsed.statusToken == null && openedStatusWord.startsWith(partial))
+          openedStatusWord,
+        if (parsed.activeToken == null && activeStatusWord.startsWith(partial))
+          activeStatusWord,
+      ];
+      if (options.isNotEmpty) {
+        return (options: options, kind: _TokenKind.status);
       }
     }
     return null;
@@ -597,6 +601,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         if ((query.isEmpty || task.title.toLowerCase().contains(query)) &&
             (parsed.statusToken == null ||
                 task.closed == parsed.statusToken!.excluded) &&
+            (parsed.activeToken == null ||
+                task.isNotYetActive == parsed.activeToken!.excluded) &&
             parsed.tagTokens.every(
               (t) => t.excluded
                   ? !task.tags.contains(t.tag)
@@ -667,7 +673,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                         onTap: _handleFieldTap,
                         decoration: InputDecoration(
                           hintText:
-                              'Search: #tag  @category  /opened  free text',
+                              'Search: #tag  @category  /opened  /active  '
+                              'free text',
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,

@@ -64,6 +64,40 @@ void main() {
       expect(updated.tags, ['errands']);
     });
 
+    test('add accepts an explicit activeFrom', () async {
+      final activeFrom = DateTime.utc(2026, 3, 5);
+      final added = await repository.add(
+        title: 'Buy milk',
+        activeFrom: activeFrom,
+      );
+
+      expect(added.activeFrom, activeFrom);
+    });
+
+    test('update sets activeFrom', () async {
+      final added = await repository.add(title: 'Buy milk');
+      final activeFrom = DateTime.utc(2026, 3, 5);
+
+      final updated = await repository.update(added, activeFrom: activeFrom);
+
+      expect(updated.activeFrom, activeFrom);
+    });
+
+    test(
+      'update(clearActiveFrom: true) removes an existing activeFrom',
+      () async {
+        final activeFrom = DateTime.utc(2026, 3, 5);
+        final added = await repository.add(
+          title: 'Buy milk',
+          activeFrom: activeFrom,
+        );
+
+        final updated = await repository.update(added, clearActiveFrom: true);
+
+        expect(updated.activeFrom, isNull);
+      },
+    );
+
     test('update leaves fields unspecified as null unchanged', () async {
       final added = await repository.add(
         title: 'Buy milk',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/task/active_from_parsing.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
@@ -34,6 +35,7 @@ class TaskCard extends ConsumerWidget {
         : categoryById(categories, task.categoryId);
     final categoryColor = category == null ? null : Color(category.colorValue);
     final title = category?.formatTitle(task.title) ?? task.title;
+    final notYetActive = task.isNotYetActive;
 
     return ColoredListCard(
       color: categoryColor ?? scheme.primaryContainer,
@@ -52,11 +54,26 @@ class TaskCard extends ConsumerWidget {
             title,
             style: TextStyle(
               decoration: task.closed ? TextDecoration.lineThrough : null,
-              color: task.closed ? Theme.of(context).disabledColor : null,
+              color: task.closed || notYetActive
+                  ? Theme.of(context).disabledColor
+                  : null,
+              fontStyle: notYetActive ? FontStyle.italic : null,
             ),
           ),
-          if (task.tags.isNotEmpty) const SizedBox(height: 4),
-          TagPills(tags: task.tags),
+          if (task.tags.isNotEmpty || notYetActive) const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (notYetActive)
+                Chip(
+                  label: Text('from ${formatActiveFrom(task.activeFrom!)}'),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              TagPills(tags: task.tags),
+            ],
+          ),
         ],
       ),
       onTap: onTap,

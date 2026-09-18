@@ -46,7 +46,9 @@ void main() {
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      final titleField = tester.widget<TextField>(find.byType(TextField));
+      final titleField = tester.widget<TextField>(
+        find.byKey(const Key('task-title-field')),
+      );
       expect(titleField.autofocus, isFalse);
     });
 
@@ -85,7 +87,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
@@ -101,7 +106,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk',
+        );
         await tester.pump();
 
         expect(find.text('Delete'), findsOneWidget);
@@ -118,7 +126,10 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.byType(Checkbox));
           await tester.pump();
-          await tester.enterText(find.byType(TextField), 'Buy milk');
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Buy milk',
+          );
           await tester.pump();
 
           final tasks = container.read(taskListProvider).value!;
@@ -145,7 +156,10 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Work').last);
           await tester.pumpAndSettle();
-          await tester.enterText(find.byType(TextField), 'Buy milk');
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Buy milk',
+          );
           await tester.pump();
 
           final tasks = container.read(taskListProvider).value!;
@@ -164,9 +178,15 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy',
+        );
         await tester.pump();
-        await tester.enterText(find.byType(TextField), 'Buy milk');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
@@ -183,7 +203,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy #groceries ');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy #groceries ',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
@@ -199,7 +222,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy #groceries ');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy #groceries ',
+        );
         await tester.pump();
         await tester.pumpAndSettle();
 
@@ -216,7 +242,10 @@ void main() {
 
           await tester.tap(find.text('Open'));
           await tester.pumpAndSettle();
-          await tester.enterText(find.byType(TextField), 'Buy #groceries');
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Buy #groceries',
+          );
           await tester.pump();
 
           // Dismiss by tapping the barrier, well outside the centered
@@ -230,6 +259,26 @@ void main() {
           expect(tasks.single.tags, ['groceries']);
         },
       );
+
+      testWidgets('typing "from dd/mm/yy " strips it from the title and sets '
+          'activeFrom', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk from 05/03/26 ',
+        );
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks, hasLength(1));
+        expect(tasks.single.title, 'Buy milk ');
+        expect(tasks.single.activeFrom, DateTime(2026, 3, 5));
+      });
 
       testWidgets(
         'rapid same-tick keystrokes (real typing, faster than one addTask '
@@ -248,7 +297,7 @@ void main() {
           // round-trip completes. Call the field's own onChanged directly,
           // back-to-back with no await between calls, to reproduce that.
           final onChanged = tester
-              .widget<TextField>(find.byType(TextField))
+              .widget<TextField>(find.byKey(const Key('task-title-field')))
               .onChanged!;
           onChanged('B');
           onChanged('Bu');
@@ -289,7 +338,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy oat milk');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy oat milk',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
@@ -314,7 +366,9 @@ void main() {
 
         final tasks = container.read(taskListProvider).value!;
         expect(tasks.singleWhere((t) => t.id == created.id).closed, isTrue);
-        final titleField = tester.widget<TextField>(find.byType(TextField));
+        final titleField = tester.widget<TextField>(
+          find.byKey(const Key('task-title-field')),
+        );
         expect(titleField.style?.decoration, TextDecoration.lineThrough);
       });
 
@@ -342,6 +396,104 @@ void main() {
           work.id,
         );
       });
+
+      testWidgets('shows an "Active from" field, always present', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('task-active-from-field')), findsOneWidget);
+      });
+
+      testWidgets('pre-fills the "Active from" field with an existing date', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk', activeFrom: DateTime(2026, 3, 5));
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        final field = tester.widget<TextField>(
+          find.byKey(const Key('task-active-from-field')),
+        );
+        expect(field.controller?.text, '05/03/26');
+      });
+
+      testWidgets('typing a valid date into the field sets activeFrom', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-active-from-field')),
+          '05/03/26',
+        );
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(
+          tasks.singleWhere((t) => t.id == created.id).activeFrom,
+          DateTime(2026, 3, 5),
+        );
+      });
+
+      testWidgets('clearing the field removes activeFrom', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk', activeFrom: DateTime(2026, 3, 5));
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('task-active-from-clear')));
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).activeFrom, isNull);
+      });
+
+      testWidgets(
+        'the title is grayish and italic when activeFrom is in the future',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final future = DateTime.now().add(const Duration(days: 30));
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Buy milk', activeFrom: future);
+          await _pumpOpenButton(tester, container, task: created);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+
+          final titleField = tester.widget<TextField>(
+            find.byKey(const Key('task-title-field')),
+          );
+          expect(titleField.style?.fontStyle, FontStyle.italic);
+        },
+      );
 
       testWidgets('shows an existing tag as a pill', (tester) async {
         final container = await _seededContainer();
@@ -376,7 +528,10 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'Buy milk #errands ');
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk #errands ',
+        );
         await tester.pump();
 
         final tasks = container.read(taskListProvider).value!;
@@ -398,7 +553,10 @@ void main() {
 
           await tester.tap(find.text('Open'));
           await tester.pumpAndSettle();
-          await tester.enterText(find.byType(TextField), 'Buy milk #errands');
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Buy milk #errands',
+          );
           await tester.pump();
           await tester.tapAt(const Offset(10, 10));
           await tester.pumpAndSettle();

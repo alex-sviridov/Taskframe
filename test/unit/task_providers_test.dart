@@ -60,6 +60,58 @@ void main() {
       expect(updated.closed, isTrue);
     });
 
+    test('addTask accepts an explicit activeFrom', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(taskListProvider.future);
+      final activeFrom = DateTime.utc(2026, 3, 5);
+
+      final created = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk', activeFrom: activeFrom);
+
+      expect(created.activeFrom, activeFrom);
+    });
+
+    test('updateTask persists an activeFrom change', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(taskListProvider.future);
+      final created = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+      final activeFrom = DateTime.utc(2026, 3, 5);
+
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(created, activeFrom: activeFrom);
+
+      final tasks = container.read(taskListProvider).value!;
+      expect(
+        tasks.singleWhere((t) => t.id == created.id).activeFrom,
+        activeFrom,
+      );
+    });
+
+    test(
+      'updateTask(clearActiveFrom: true) removes an existing activeFrom',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(taskListProvider.future);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk', activeFrom: DateTime.utc(2026, 3, 5));
+
+        await container
+            .read(taskListProvider.notifier)
+            .updateTask(created, clearActiveFrom: true);
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks.singleWhere((t) => t.id == created.id).activeFrom, isNull);
+      },
+    );
+
     test('updateTask persists a tags change', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

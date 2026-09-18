@@ -3,10 +3,35 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
+import 'package:taskframe/features/task/active_from_parsing.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/tag_parsing.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
+
+/// Whether [date] is set and still in the future — mirrors
+/// `Task.isNotYetActive` for a date that may not be saved to a task yet.
+bool _isFutureDated(DateTime? date) =>
+    date != null && date.isAfter(DateTime.now());
+
+/// Parses a `dd/mm/yy`/`dd/mm/yyyy` string as typed into the "Active
+/// from" field (no leading `from`, unlike the title-parsing helpers).
+/// Returns `null` for anything that isn't a valid full date.
+DateTime? _parseActiveFromField(String text) {
+  final match = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2,4})$').firstMatch(text);
+  if (match == null) return null;
+  final day = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final yearText = match.group(3)!;
+  final year = yearText.length <= 2
+      ? 2000 + int.parse(yearText)
+      : int.parse(yearText);
+  final date = DateTime(year, month, day);
+  if (date.year != year || date.month != month || date.day != day) {
+    return null;
+  }
+  return date;
+}
 
 /// Opens the edit modal for [task] (edit mode) or, when [task] is `null`,
 /// for creating a new task (create mode). Near-fullscreen on a narrow
@@ -43,9 +68,11 @@ class _TaskEditModalContent extends ConsumerStatefulWidget {
 
 class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   late final TextEditingController _titleController;
+  late final TextEditingController _activeFromController;
   late String _categoryId;
   late bool _closed;
   late List<String> _tags;
+  DateTime? _activeFrom;
 
   /// The task backing this modal. Starts as `null` in create mode until
   /// [_onTitleChanged] creates it on the first non-empty keystroke — from
@@ -68,11 +95,16 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _categoryId = widget.task?.categoryId ?? Category.defaultId;
     _closed = widget.task?.closed ?? false;
     _tags = widget.task?.tags ?? [];
+    _activeFrom = widget.task?.activeFrom;
+    _activeFromController = TextEditingController(
+      text: _activeFrom == null ? '' : formatActiveFrom(_activeFrom!),
+    );
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _activeFromController.dispose();
     super.dispose();
   }
 
@@ -83,30 +115,52 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   ///
   /// When the cursor is at the end and the just-typed text ends with
   /// `#tag `, that chunk is stripped from the title and added as a tag.
+  /// Likewise for `from dd/mm[/yy]`, which sets [_activeFrom] instead.
   Future<void> _onTitleChanged(String rawTitle) async {
     final atEnd = _titleController.selection.baseOffset == rawTitle.length;
-    final extraction = atEnd ? extractTrailingTag(rawTitle) : null;
-    final title = extraction?.title ?? rawTitle;
-    if (extraction != null) {
+    final tagExtraction = atEnd ? extractTrailingTag(rawTitle) : null;
+    final afterTag = tagExtraction?.title ?? rawTitle;
+    final activeFromExtraction = atEnd
+        ? extractTrailingActiveFrom(afterTag)
+        : null;
+    final title = activeFromExtraction?.title ?? afterTag;
+    if (tagExtraction != null || activeFromExtraction != null) {
       _titleController.value = TextEditingValue(
         text: title,
         selection: TextSelection.collapsed(offset: title.length),
       );
     }
-    final newTags = extraction != null && !_tags.contains(extraction.tag)
-        ? [..._tags, extraction.tag]
+    final newTags = tagExtraction != null && !_tags.contains(tagExtraction.tag)
+        ? [..._tags, tagExtraction.tag]
         : null;
     if (newTags != null) setState(() => _tags = newTags);
+    final newActiveFrom = activeFromExtraction?.activeFrom;
+    if (newActiveFrom != null) {
+      setState(() {
+        _activeFrom = newActiveFrom;
+        _activeFromController.text = formatActiveFrom(newActiveFrom);
+      });
+    }
 
     final notifier = ref.read(taskListProvider.notifier);
     if (_task != null) {
-      await notifier.updateTask(_task!, title: title, tags: newTags);
+      await notifier.updateTask(
+        _task!,
+        title: title,
+        tags: newTags,
+        activeFrom: newActiveFrom,
+      );
       return;
     }
     if (_pendingCreate != null) {
       final created = await _pendingCreate!;
       if (!mounted) return;
-      await notifier.updateTask(created, title: title, tags: newTags);
+      await notifier.updateTask(
+        created,
+        title: title,
+        tags: newTags,
+        activeFrom: newActiveFrom,
+      );
       return;
     }
     if (title.isEmpty) return;
@@ -115,6 +169,9 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final created = await future;
     if (_closed) await notifier.updateTask(created, closed: true);
     if (newTags != null) await notifier.updateTask(created, tags: newTags);
+    if (newActiveFrom != null) {
+      await notifier.updateTask(created, activeFrom: newActiveFrom);
+    }
     if (!mounted) return;
     setState(() {
       _task = created;
@@ -128,16 +185,27 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// never be picked up. Called as the modal is dismissed, before the
   /// pop actually goes through.
   Future<void> _applyPendingTagOnExit() async {
-    final extraction = extractFinalTag(_titleController.text);
-    if (extraction == null) return;
-    _titleController.value = TextEditingValue(
-      text: extraction.title,
-      selection: TextSelection.collapsed(offset: extraction.title.length),
+    final tagExtraction = extractFinalTag(_titleController.text);
+    final activeFromExtraction = extractFinalActiveFrom(
+      tagExtraction?.title ?? _titleController.text,
     );
-    final newTags = _tags.contains(extraction.tag)
+    if (tagExtraction == null && activeFromExtraction == null) return;
+    final title = activeFromExtraction?.title ?? tagExtraction!.title;
+    _titleController.value = TextEditingValue(
+      text: title,
+      selection: TextSelection.collapsed(offset: title.length),
+    );
+    final newTags = tagExtraction == null || _tags.contains(tagExtraction.tag)
         ? _tags
-        : [..._tags, extraction.tag];
-    setState(() => _tags = newTags);
+        : [..._tags, tagExtraction.tag];
+    final newActiveFrom = activeFromExtraction?.activeFrom ?? _activeFrom;
+    setState(() {
+      _tags = newTags;
+      if (activeFromExtraction != null) {
+        _activeFrom = newActiveFrom;
+        _activeFromController.text = formatActiveFrom(newActiveFrom!);
+      }
+    });
 
     final task =
         _task ?? (_pendingCreate != null ? await _pendingCreate : null);
@@ -145,7 +213,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     if (!mounted) return;
     await ref
         .read(taskListProvider.notifier)
-        .updateTask(task, title: extraction.title, tags: newTags);
+        .updateTask(
+          task,
+          title: title,
+          tags: newTags,
+          activeFrom: activeFromExtraction?.activeFrom,
+        );
   }
 
   /// Removes [tag] from this task's tags, persisting the change.
@@ -169,6 +242,54 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
           .read(taskListProvider.notifier)
           .updateTask(task, categoryId: id);
     }
+  }
+
+  /// Applies a typed `dd/mm/yy`/`dd/mm/yyyy` value from the "Active from"
+  /// field. An empty value clears [_activeFrom]; anything else that
+  /// doesn't parse as a full date is left alone (no update) until it
+  /// does.
+  Future<void> _onActiveFromFieldChanged(String text) async {
+    if (text.isEmpty) {
+      setState(() => _activeFrom = null);
+      final task = _task;
+      if (task != null) {
+        await ref
+            .read(taskListProvider.notifier)
+            .updateTask(task, clearActiveFrom: true);
+      }
+      return;
+    }
+    final parsed = _parseActiveFromField(text);
+    if (parsed == null) return;
+    setState(() => _activeFrom = parsed);
+    final task = _task;
+    if (task != null) {
+      await ref
+          .read(taskListProvider.notifier)
+          .updateTask(task, activeFrom: parsed);
+    }
+  }
+
+  /// Opens the standard Material date picker, applying the result the
+  /// same way a typed date does.
+  Future<void> _pickActiveFrom() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _activeFrom ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked == null || !mounted) return;
+    final date = DateTime(picked.year, picked.month, picked.day);
+    _activeFromController.text = formatActiveFrom(date);
+    await _onActiveFromFieldChanged(_activeFromController.text);
+  }
+
+  /// Clears the "Active from" field and the task's [Task.activeFrom].
+  Future<void> _clearActiveFrom() async {
+    _activeFromController.clear();
+    await _onActiveFromFieldChanged('');
   }
 
   Future<void> _onClosedChanged(bool value) async {
@@ -231,9 +352,16 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                   ),
                   Expanded(
                     child: TextField(
+                      key: const Key('task-title-field'),
                       controller: _titleController,
                       style: TextStyle(
                         decoration: _closed ? TextDecoration.lineThrough : null,
+                        color: _isFutureDated(_activeFrom)
+                            ? Theme.of(context).disabledColor
+                            : null,
+                        fontStyle: _isFutureDated(_activeFrom)
+                            ? FontStyle.italic
+                            : null,
                       ),
                       onChanged: _onTitleChanged,
                     ),
@@ -244,6 +372,29 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                 const SizedBox(height: 8),
                 TagPills(tags: _tags, onRemoved: _onTagRemoved),
               ],
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('task-active-from-field'),
+                controller: _activeFromController,
+                decoration: InputDecoration(
+                  labelText: 'Active from',
+                  hintText: 'dd/mm/yy',
+                  suffixIcon: _activeFromController.text.isEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.calendar_today),
+                          tooltip: 'Pick a date',
+                          onPressed: _pickActiveFrom,
+                        )
+                      : IconButton(
+                          key: const Key('task-active-from-clear'),
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Clear active-from date',
+                          onPressed: _clearActiveFrom,
+                        ),
+                ),
+                onTap: _pickActiveFrom,
+                onChanged: _onActiveFromFieldChanged,
+              ),
               const SizedBox(height: 16),
               BlockCategoryPicker(
                 selectedCategoryId: _categoryId,
