@@ -1,14 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sembast/sembast_memory.dart';
+import 'package:taskframe/core/storage/app_database.dart';
 import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
 void main() {
   group('SembastDayBlocksRepository', () {
     late SembastDayBlocksRepository repository;
+    late Database db;
 
     setUp(() async {
-      final db = await newDatabaseFactoryMemory().openDatabase('test.db');
+      db = await newDatabaseFactoryMemory().openDatabase('test.db');
       repository = SembastDayBlocksRepository(db);
     });
 
@@ -174,6 +176,23 @@ void main() {
       await repository.delete(added, date: date);
 
       expect(await repository.load(date), isEmpty);
+    });
+
+    test('delete soft-deletes: block stays in the store but excluded from '
+        'load', () async {
+      final today = DateTime.now();
+      final added = await repository.add(
+        today,
+        start: DateTime(today.year, today.month, today.day, 9),
+        end: DateTime(today.year, today.month, today.day, 10),
+        kind: BlockKind.frame,
+      );
+
+      await repository.delete(added, date: today);
+
+      expect(await repository.load(today), isEmpty);
+      final record = await dayBlocksStore.record(added.id).get(db);
+      expect(record!['deleted'], isTrue);
     });
   });
 }

@@ -16,7 +16,10 @@ class SembastSavedSearchRepository implements SavedSearchRepository {
 
   @override
   Future<List<SavedSearch>> load() async {
-    final finder = Finder(sortOrders: [SortOrder('order')]);
+    final finder = Finder(
+      filter: Filter.notEquals('deleted', true),
+      sortOrders: [SortOrder('order')],
+    );
     final records = await savedSearchesStore.find(_db, finder: finder);
     return [for (final record in records) SavedSearch.fromMap(record.value)];
   }
@@ -32,6 +35,7 @@ class SembastSavedSearchRepository implements SavedSearchRepository {
       name: name,
       query: query,
       order: nextOrder,
+      updatedAt: DateTime.now().toUtc(),
     );
     await savedSearchesStore.record(view.id).put(_db, view.toMap());
     return view;
@@ -39,20 +43,30 @@ class SembastSavedSearchRepository implements SavedSearchRepository {
 
   @override
   Future<SavedSearch> rename(SavedSearch view, String name) async {
-    final updated = view.copyWith(name: name);
+    final updated = view.copyWith(
+      name: name,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await savedSearchesStore.record(updated.id).put(_db, updated.toMap());
     return updated;
   }
 
   @override
   Future<void> delete(SavedSearch view) async {
-    await savedSearchesStore.record(view.id).delete(_db);
+    final tombstone = view.copyWith(
+      deleted: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await savedSearchesStore.record(view.id).put(_db, tombstone.toMap());
   }
 
   @override
   Future<void> reorder(List<SavedSearch> orderedViews) async {
     for (var i = 0; i < orderedViews.length; i++) {
-      final updated = orderedViews[i].copyWith(order: i);
+      final updated = orderedViews[i].copyWith(
+        order: i,
+        updatedAt: DateTime.now().toUtc(),
+      );
       await savedSearchesStore.record(updated.id).put(_db, updated.toMap());
     }
   }

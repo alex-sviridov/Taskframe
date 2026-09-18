@@ -20,7 +20,7 @@ class SembastCategoryRepository implements CategoryRepository {
 
   final Database _db;
 
-  static const _fallbackDefault = Category(
+  static final _fallbackDefault = Category(
     id: Category.defaultId,
     name: 'Default',
     colorValue: 0xFF009688,
@@ -28,7 +28,10 @@ class SembastCategoryRepository implements CategoryRepository {
 
   @override
   Future<List<Category>> load() async {
-    final finder = Finder(sortOrders: [SortOrder('order')]);
+    final finder = Finder(
+      filter: Filter.notEquals('deleted', true),
+      sortOrders: [SortOrder('order')],
+    );
     final records = await categoriesStore.find(_db, finder: finder);
     final categories = [
       for (final record in records) Category.fromMap(record.value),
@@ -48,6 +51,7 @@ class SembastCategoryRepository implements CategoryRepository {
       name: name,
       colorValue: colorValue,
       emoji: emoji,
+      updatedAt: DateTime.now().toUtc(),
     );
     await categoriesStore.record(category.id).put(_db, {
       ...category.toMap(),
@@ -67,9 +71,15 @@ class SembastCategoryRepository implements CategoryRepository {
     final current = existingRecord == null
         ? category
         : Category.fromMap(existingRecord);
-    final updated = current.isDefault
-        ? current.copyWith(colorValue: colorValue)
-        : current.copyWith(name: name, colorValue: colorValue, emoji: emoji);
+    final updated =
+        (current.isDefault
+                ? current.copyWith(colorValue: colorValue)
+                : current.copyWith(
+                    name: name,
+                    colorValue: colorValue,
+                    emoji: emoji,
+                  ))
+            .copyWith(updatedAt: DateTime.now().toUtc());
     final order =
         existingRecord?['order'] ??
         (current.isDefault ? 0 : DateTime.now().microsecondsSinceEpoch);
@@ -83,6 +93,17 @@ class SembastCategoryRepository implements CategoryRepository {
   @override
   Future<void> delete(Category category) async {
     if (category.isDefault) return;
-    await categoriesStore.record(category.id).delete(_db);
+    final existingRecord = await categoriesStore.record(category.id).get(_db);
+    final current = existingRecord == null
+        ? category
+        : Category.fromMap(existingRecord);
+    final tombstone = current.copyWith(
+      deleted: true,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await categoriesStore.record(category.id).put(_db, {
+      ...tombstone.toMap(),
+      'order': existingRecord?['order'] ?? 0,
+    });
   }
 }

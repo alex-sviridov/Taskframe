@@ -27,7 +27,7 @@ void main() {
 
     test('rename throws StateError if template not found', () async {
       final repository = InMemoryTemplateRepository();
-      const missingTemplate = Template(id: 't-missing', name: 'Weekday');
+      final missingTemplate = Template(id: 't-missing', name: 'Weekday');
       expect(
         () => repository.rename(missingTemplate, name: 'Renamed'),
         throwsA(isA<StateError>()),

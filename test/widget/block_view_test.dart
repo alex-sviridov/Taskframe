@@ -69,7 +69,7 @@ void main() {
     testWidgets('fills with the category color for an anchor block', (
       tester,
     ) async {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -85,7 +85,7 @@ void main() {
     testWidgets('outlines with the category color for a frame block', (
       tester,
     ) async {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -101,7 +101,7 @@ void main() {
 
     testWidgets('prefixes the title with the category emoji when it has '
         'one', (tester) async {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,
@@ -116,7 +116,7 @@ void main() {
     testWidgets('shows the plain title when the category has no emoji', (
       tester,
     ) async {
-      const category = Category(
+      final category = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,

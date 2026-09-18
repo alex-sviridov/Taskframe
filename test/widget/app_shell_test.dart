@@ -50,6 +50,14 @@ GoRouter _buildTestRouter() => GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/account',
+              builder: (context, state) => const Text('Account screen'),
+            ),
+          ],
+        ),
       ],
     ),
   ],
@@ -128,6 +136,7 @@ void main() {
       expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
       expect(find.text('Tasks'), findsOneWidget);
+      expect(find.text('Account'), findsOneWidget);
       expect(find.text('Branch one'), findsOneWidget);
     });
 
@@ -178,5 +187,96 @@ void main() {
       expect(find.text('Branch three'), findsOneWidget);
       expect(find.text('Branch one'), findsNothing);
     });
+
+    testWidgets('narrow: tapping "Account" in the open drawer navigates to '
+        'account', (tester) async {
+      _setViewportWidth(tester, 600);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Account screen'), findsOneWidget);
+    });
+
+    testWidgets('wide: tapping "Account" in the sidebar navigates to '
+        'account', (tester) async {
+      _setViewportWidth(tester, 1000);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(routerConfig: _buildTestRouter()),
+        ),
+      );
+
+      await tester.tap(find.text('Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Account screen'), findsOneWidget);
+    });
+
+    testWidgets(
+      'wide: the Account branch keeps the persistent sidebar visible, '
+      'same as every other branch',
+      (tester) async {
+        _setViewportWidth(tester, 1000);
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp.router(routerConfig: _buildTestRouter()),
+          ),
+        );
+
+        await tester.tap(find.text('Account'));
+        await tester.pumpAndSettle();
+
+        // Unlike a route pushed on top of the shell, a branch keeps the
+        // sidebar (and every other destination) on screen alongside it.
+        expect(find.byType(NavigationDrawer), findsOneWidget);
+        expect(find.text('Day'), findsOneWidget);
+        expect(find.text('Templates'), findsOneWidget);
+        expect(find.text('Categories'), findsOneWidget);
+        expect(find.text('Tasks'), findsOneWidget);
+        expect(find.text('Account screen'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'narrow: the Account branch is reachable via the drawer, same as '
+      'every other branch, and switching away and back preserves its state',
+      (tester) async {
+        _setViewportWidth(tester, 600);
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp.router(routerConfig: _buildTestRouter()),
+          ),
+        );
+
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Account'));
+        await tester.pumpAndSettle();
+        expect(find.text('Account screen'), findsOneWidget);
+
+        // Switch to another branch and back — a StatefulShellBranch (not
+        // a plain pushed route) keeps its Navigator/state alive rather
+        // than rebuilding from scratch.
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Templates'));
+        await tester.pumpAndSettle();
+        expect(find.text('Branch two'), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Account'));
+        await tester.pumpAndSettle();
+        expect(find.text('Account screen'), findsOneWidget);
+      },
+    );
   });
 }

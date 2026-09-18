@@ -59,7 +59,7 @@ void main() {
 
     test('does not overwrite an existing category', () async {
       final db = await newDatabaseFactoryMemory().openDatabase('test.db');
-      const existing = Category(
+      final existing = Category(
         id: 'category-1',
         name: 'Work',
         colorValue: 0xFF2196F3,

@@ -6,7 +6,7 @@ import 'package:taskframe/features/category/providers.dart';
 
 void main() {
   group('categoryById', () {
-    const categories = [
+    final categories = [
       Category(id: Category.defaultId, name: 'Default', colorValue: 0xFF009688),
       Category(id: 'category-1', name: 'Work', colorValue: 0xFF2196F3),
     ];

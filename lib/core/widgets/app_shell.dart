@@ -66,6 +66,8 @@ class AppShell extends StatelessWidget {
           children: [
             ..._drawerDestinations(),
             const _SavedViewsSection(isNarrow: true),
+            const Divider(),
+            _accountDestination,
           ],
         ),
         body: Column(
@@ -123,6 +125,8 @@ class AppShell extends StatelessWidget {
             children: [
               ..._drawerDestinations(),
               const _SavedViewsSection(isNarrow: false),
+              const Divider(),
+              _accountDestination,
             ],
           ),
         ),
@@ -132,6 +136,28 @@ class AppShell extends StatelessWidget {
     );
   }
 }
+
+/// The fifth branch destination (`/account`), listed separately at the
+/// bottom of the nav drawer/sidebar (below a [Divider]) rather than
+/// alongside [_destinations] — it's conceptually different from the
+/// content destinations above it, but is a real, indexed
+/// [NavigationDrawerDestination] like the others, so [AppShell]'s
+/// existing `onDestinationSelected: (index) => navigationShell.goBranch
+/// (index)` handles switching to it the same way it does for every other
+/// branch (persistent sidebar on wide widths, drawer on narrow ones,
+/// state kept alive when switching away and back).
+///
+/// Must be spliced directly into [NavigationDrawer]'s `children` — unlike
+/// most widgets, [NavigationDrawerDestination] only self-registers with
+/// its index when it's a *direct* child of the [NavigationDrawer] that
+/// owns it, so this is a plain constant value, not a wrapper widget
+/// (wrapping it in a `StatelessWidget` hides it from that direct-child
+/// lookup and crashes with "Navigation destinations need a
+/// _NavigationDrawerDestinationInfo parent").
+const _accountDestination = NavigationDrawerDestination(
+  icon: Icon(Icons.account_circle),
+  label: Text('Account'),
+);
 
 /// The "Saved views" sidebar section, listed directly under the "Tasks"
 /// destination — hidden entirely while there are no saved views.

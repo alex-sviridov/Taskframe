@@ -6,7 +6,10 @@ on:
   pull_request:
 
 jobs:
-  check:
+  # Everything checkable about the Flutter/Dart app itself: formatting,
+  # static analysis, unit tests, e2e (Playwright), and that the release
+  # web bundle actually builds.
+  app-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +34,28 @@ jobs:
         run: make e2e
       - name: Build web
         run: make build-web
+
+  # Everything checkable about the sync backend (PocketBase, in
+  # docker-compose.yml) that app-checks above can't catch, since it never
+  # starts PocketBase: a real regression in the sync engine, the
+  # PocketBase collection setup, or the two talking to each other.
+  backend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+      - run: flutter pub get
+      - name: Start PocketBase
+        run: docker compose up -d --build pocketbase
+      - name: Wait for PocketBase to be healthy
+        run: timeout 60 bash -c 'until curl -sf http://localhost:8090/api/health; do sleep 1; done'
+      - name: Create PocketBase superuser
+        run: docker compose exec -T pocketbase /pb/pocketbase superuser upsert ci@taskframe.local ci-password-change-me
+      - name: Set up PocketBase collections
+        run: dart run scripts/setup_pocketbase.dart http://localhost:8090 ci@taskframe.local ci-password-change-me
+      - name: Integration tests
+        run: make integration-test

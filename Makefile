@@ -1,7 +1,7 @@
 COVERAGE_DIR := coverage
 
-.PHONY: help setup format format-check analyze test test-coverage e2e check \
-	run run-android run-web build-apk build-web build-ios clean
+.PHONY: help setup format format-check analyze test test-coverage integration-test \
+	e2e check run run-android run-web build-apk build-web build-ios clean
 
 help:
 	@echo "Available targets:"
@@ -11,9 +11,10 @@ help:
 	@echo "  analyze        Run static analysis (flutter analyze + custom_lint)"
 	@echo "  test           Run tests"
 	@echo "  test-coverage  Run tests with a coverage report"
+	@echo "  integration-test  Run integration tests against a local PocketBase"
 	@echo "  e2e            Run Playwright end-to-end tests against flutter web"
 	@echo "  check          format-check + analyze + test + e2e (run before pushing)"
-	@echo "  run            Build the release web bundle and serve it on :8080"
+	@echo "  run            Build and run the web app + PocketBase via Docker Compose"
 	@echo "  run-android    Run on an Android device/emulator"
 	@echo "  run-web        Run in Chrome"
 	@echo "  build-apk      Build a release APK"
@@ -37,29 +38,32 @@ analyze:
 	dart run custom_lint
 
 test:
-	flutter test
+	flutter test test/unit test/widget
 
 test-coverage:
-	flutter test --coverage
+	flutter test --coverage test/unit test/widget
 	@if command -v genhtml >/dev/null 2>&1; then \
 		genhtml $(COVERAGE_DIR)/lcov.info -o $(COVERAGE_DIR)/html; \
 	else \
 		echo "genhtml not found; coverage/lcov.info generated, skipping HTML report"; \
 	fi
 
+integration-test:
+	@echo "Requires: docker compose up -d pocketbase, then"
+	@echo "  dart run scripts/setup_pocketbase.dart http://localhost:8090 dev@taskframe.local dev-password-change-me"
+	flutter test test/integration
+
 e2e:
 	cd e2e && npx playwright test
 
 check: format-check analyze test e2e
 
-# Builds first and only then serves the finished, static build/web/ —
-# `flutter run -d web-server` starts accepting connections before its
-# background release build finishes writing build/web/, which can serve a
-# stale or partial bundle (see e2e/playwright.config.ts's webServer).
+# Brings up the web app and its PocketBase backend together, exactly as
+# they run in production: nginx serving the release web bundle on :8080
+# and proxying /api/ to the pocketbase service (see nginx.conf and
+# docker-compose.yml). --build picks up local changes on every run.
 run:
-	@fuser -k 8080/tcp 2>/dev/null || true
-	flutter build web --release --pwa-strategy=offline-first
-	python3 -m http.server 8080 --directory build/web
+	docker compose up --build
 
 run-android:
 	flutter run -d android

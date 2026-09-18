@@ -5,13 +5,15 @@ import 'package:taskframe/features/category/models/category.dart';
 /// it's a flat, unordered-by-time item.
 class Task {
   /// Creates a [Task].
-  const new({
+  new({
     required this.id,
     required this.title,
     this.closed = false,
     this.categoryId = Category.defaultId,
     this.tags = const [],
-  });
+    DateTime? updatedAt,
+    this.deleted = false,
+  }) : updatedAt = updatedAt ?? _epoch;
 
   /// Reconstructs a [Task] from a map produced by [toMap]. `tags` defaults
   /// to empty when absent, so a task persisted before tags existed still
@@ -22,6 +24,10 @@ class Task {
     closed: map['closed']! as bool,
     categoryId: map['categoryId']! as String,
     tags: [for (final tag in map['tags'] as List? ?? const []) tag as String],
+    updatedAt: map['updatedAt'] == null
+        ? null
+        : DateTime.parse(map['updatedAt']! as String),
+    deleted: map['deleted'] as bool? ?? false,
   );
 
   /// Unique identifier for this task.
@@ -41,19 +47,34 @@ class Task {
   /// of the title as the user types. Defaults to empty.
   final List<String> tags;
 
+  /// When this task was last changed. Defaults to the Unix epoch for
+  /// records written before sync existed, so they always lose an
+  /// LWW comparison against a genuinely newer edit.
+  final DateTime updatedAt;
+
+  /// Soft-delete tombstone: `true` once removed, so the deletion can
+  /// propagate to other devices instead of being silently resurrected.
+  final bool deleted;
+
+  static final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Returns a copy of this task with any of [title]/[closed]/[categoryId]/
-  /// [tags] replaced.
+  /// [tags]/[updatedAt]/[deleted] replaced.
   Task copyWith({
     String? title,
     bool? closed,
     String? categoryId,
     List<String>? tags,
+    DateTime? updatedAt,
+    bool? deleted,
   }) => Task(
     id: id,
     title: title ?? this.title,
     closed: closed ?? this.closed,
     categoryId: categoryId ?? this.categoryId,
     tags: tags ?? this.tags,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deleted: deleted ?? this.deleted,
   );
 
   /// This task's field values as a JSON-safe map, for storage.
@@ -63,5 +84,7 @@ class Task {
     'closed': closed,
     'categoryId': categoryId,
     'tags': tags,
+    'updatedAt': updatedAt.toIso8601String(),
+    'deleted': deleted,
   };
 }

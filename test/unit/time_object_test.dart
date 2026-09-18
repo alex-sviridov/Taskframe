@@ -166,5 +166,22 @@ void main() {
 
       expect(block.toMap()['kind'], 'frame');
     });
+
+    test('toMap/fromMap round-trip updatedAt and deleted', () {
+      final updatedAt = DateTime.utc(2026, 9, 15, 12);
+      final block = TimeObject(
+        id: 'b1',
+        title: 'Work',
+        start: DateTime(2026, 9, 15, 9),
+        end: DateTime(2026, 9, 15, 10),
+        kind: BlockKind.frame,
+        locked: false,
+        updatedAt: updatedAt,
+        deleted: true,
+      );
+      final restored = TimeObject.fromMap(block.toMap());
+      expect(restored.updatedAt, updatedAt);
+      expect(restored.deleted, isTrue);
+    });
   });
 }
