@@ -38,6 +38,13 @@ class _CountingBackend implements SyncBackend {
   int upsertCalls = 0;
   int listCalls = 0;
 
+  /// When true, [listChangedSince] returns one remote record that wins
+  /// LWW against local (which has nothing for this id), so `syncAll`
+  /// reports the collection as changed — lets tests exercise
+  /// [startSyncTriggers]'s `onSynced` callback without needing
+  /// sync_engine.dart's own push/pull mechanics (covered elsewhere).
+  bool hasRemoteChange = false;
+
   @override
   Future<void> upsert(String collection, Map<String, Object?> record) async {
     upsertCalls++;
@@ -49,7 +56,17 @@ class _CountingBackend implements SyncBackend {
     DateTime cursor,
   ) async {
     listCalls++;
-    return [];
+    if (!hasRemoteChange) return [];
+    final now = DateTime.now().toUtc().toIso8601String();
+    return [
+      {
+        'entity_id': 'a',
+        'updated_at': now,
+        'server_updated': now,
+        'deleted': false,
+        'data': {'id': 'a', 'updatedAt': now, 'deleted': false},
+      },
+    ];
   }
 }
 
@@ -141,6 +158,39 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     expect(backend.listCalls, beforeLost);
+  });
+
+  test('calls onSynced with the changed-collection names after a sync that '
+      'actually applied a remote change', () async {
+    backend.hasRemoteChange = true;
+    Set<String>? received;
+    final handle = startSyncTriggers(
+      engine: engine,
+      connectivity: Connectivity(),
+      interval: const Duration(minutes: 10),
+      onSynced: (changed) => received = changed,
+    );
+    addTearDown(handle.dispose);
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(received, isNotNull);
+    expect(received, isNotEmpty);
+  });
+
+  test('calls onSynced with an empty set when nothing changed', () async {
+    Set<String>? received;
+    final handle = startSyncTriggers(
+      engine: engine,
+      connectivity: Connectivity(),
+      interval: const Duration(minutes: 10),
+      onSynced: (changed) => received = changed,
+    );
+    addTearDown(handle.dispose);
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(received, isEmpty);
   });
 
   test('dispose stops both the timer and the connectivity subscription', () {

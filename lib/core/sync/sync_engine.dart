@@ -83,11 +83,21 @@ class SyncEngine {
   /// `syncAll`/[runExclusive] call on this engine (e.g. `logout()`'s
   /// store wipe), so a sync never races a concurrent operation that
   /// wipes the very stores it's reading/writing.
-  Future<void> syncAll(List<SyncCollection> collections) {
+  ///
+  /// Returns the names of the collections that actually had at least one
+  /// remote record applied to local storage this call (i.e. a pull that
+  /// won LWW) — a pushed-only or no-op collection is never included.
+  /// This is what lets a caller (see `sync_trigger.dart`'s `onSynced`)
+  /// tell the already-running UI's cached state to refresh only where
+  /// something genuinely changed underneath it, instead of either doing
+  /// nothing (leaving new server data invisible until a full reload) or
+  /// refreshing everything on every tick.
+  Future<Set<String>> syncAll(List<SyncCollection> collections) {
     return runExclusive(() async {
+      final changed = <String>{};
       for (final collection in collections) {
         try {
-          await _pull(collection);
+          if (await _pull(collection)) changed.add(collection.name);
         } on Object {
           // Best-effort; retried on the next trigger.
         }
@@ -97,6 +107,7 @@ class SyncEngine {
           // Best-effort; retried on the next trigger.
         }
       }
+      return changed;
     });
   }
 
@@ -138,14 +149,17 @@ class SyncEngine {
     }
   }
 
-  Future<void> _pull(SyncCollection collection) async {
+  /// Returns whether any remote record was actually applied to local
+  /// storage (i.e. won LWW) — see [syncAll]'s returned set.
+  Future<bool> _pull(SyncCollection collection) async {
     final cursor = await _cursor('sync_pull_${collection.name}');
     final remoteRecords = await _backend.listChangedSince(
       collection.name,
       cursor,
     );
-    if (remoteRecords.isEmpty) return;
+    if (remoteRecords.isEmpty) return false;
 
+    var applied = false;
     DateTime? maxSeen;
     for (final remote in remoteRecords) {
       final entityId = remote['entity_id']! as String;
@@ -171,6 +185,7 @@ class SyncEngine {
         remote['data']! as Map<Object?, Object?>,
       );
       await collection.store.record(entityId).put(_db, data, merge: true);
+      applied = true;
     }
     if (maxSeen != null) {
       await _settings.setValue(
@@ -178,6 +193,7 @@ class SyncEngine {
         maxSeen.toIso8601String(),
       );
     }
+    return applied;
   }
 
   Future<DateTime> _cursor(String key) async {

@@ -22,24 +22,37 @@ class SyncTriggerHandle {
 /// start), whenever connectivity is regained, and every 30 seconds while
 /// the app is running. See spec: "Sync triggers: app start, connectivity
 /// regained, and a foreground timer (~30s)."
+///
+/// [onSynced], when given, is called after every sync attempt with the
+/// set of collection names [SyncEngine.syncAll] actually applied a
+/// remote change to — a background pull writes straight to local
+/// storage with no other way to tell the app's already-running UI state
+/// that new data arrived, so a composition root wires this to
+/// invalidate the matching providers.
 SyncTriggerHandle startSyncTriggers({
   required SyncEngine engine,
   Connectivity? connectivity,
   Duration interval = const Duration(seconds: 30),
+  void Function(Set<String> changedCollections)? onSynced,
 }) {
   final connectivityChecker = connectivity ?? Connectivity();
 
-  unawaited(engine.syncAll(syncCollections));
+  Future<void> sync() async {
+    final changed = await engine.syncAll(syncCollections);
+    onSynced?.call(changed);
+  }
+
+  unawaited(sync());
 
   final timer = Timer.periodic(interval, (_) {
-    unawaited(engine.syncAll(syncCollections));
+    unawaited(sync());
   });
 
   final subscription = connectivityChecker.onConnectivityChanged.listen((
     results,
   ) {
     if (results.any((r) => r != ConnectivityResult.none)) {
-      unawaited(engine.syncAll(syncCollections));
+      unawaited(sync());
     }
   });
 

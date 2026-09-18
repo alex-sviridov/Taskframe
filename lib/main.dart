@@ -43,23 +43,36 @@ Future<void> main() async {
   // A genuinely unauthenticated (guest) device still legitimately
   // fails-and-retries here - it has nothing to sync to yet.
   await syncClient.restoreSession();
-  startSyncTriggers(engine: syncEngine);
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        ...sembastOverrides(db),
-        pocketBaseSyncClientProvider.overrideWithValue(syncClient),
-        accountLogoutProvider.overrideWithValue(
-          () => logout(
-            db: db,
-            settings: appSettings,
-            client: syncClient,
-            syncEngine: syncEngine,
-          ),
+  // Built explicitly (rather than letting ProviderScope create one
+  // implicitly) so startSyncTriggers' onSynced callback below can reach
+  // it directly — a background sync pull writes straight to sembast
+  // with no other route back into the widget tree's provider state, so
+  // this is what makes new server data show up without a manual reload.
+  final container = ProviderContainer(
+    overrides: [
+      ...sembastOverrides(db),
+      pocketBaseSyncClientProvider.overrideWithValue(syncClient),
+      accountLogoutProvider.overrideWithValue(
+        () => logout(
+          db: db,
+          settings: appSettings,
+          client: syncClient,
+          syncEngine: syncEngine,
         ),
-      ],
-      child: const App(),
-    ),
+      ),
+    ],
   );
+
+  startSyncTriggers(
+    engine: syncEngine,
+    onSynced: (changedCollections) {
+      for (final name in changedCollections) {
+        final provider = syncedProvidersByCollection[name];
+        if (provider != null) container.invalidate(provider);
+      }
+    },
+  );
+
+  runApp(UncontrolledProviderScope(container: container, child: const App()));
 }

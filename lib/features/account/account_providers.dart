@@ -39,6 +39,23 @@ final accountLogoutProvider = Provider<Future<void> Function()>((ref) {
   );
 });
 
+/// Every provider that caches a list/family read from one of the six
+/// synced sembast stores, keyed by the [SyncCollection.name] it's backed
+/// by. Invalidating one after a mutation to local storage that didn't
+/// originate from the provider's own repository calls (a logout/
+/// account-switch wipe, or a background sync pull — see
+/// `sync_trigger.dart`'s `onSynced`) is what makes that mutation visible
+/// in the already-running UI instead of staying invisible until a full
+/// reload rebuilds every provider from scratch.
+final syncedProvidersByCollection = {
+  'tasks': taskListProvider,
+  'categories': categoryListProvider,
+  'saved_searches': savedSearchListProvider,
+  'templates': templateListProvider,
+  'template_blocks': templateBlocksProvider,
+  'day_blocks': dayBlocksProvider,
+};
+
 /// This device's account state: the logged-in email, or `null` for guest
 /// mode. Also exposes the actions to register/log in/log out.
 class AccountNotifier extends AsyncNotifier<String?> {
@@ -116,13 +133,9 @@ class AccountNotifier extends AsyncNotifier<String?> {
   /// instantiated member of a family, which is what's needed for
   /// `dayBlocksProvider`/`templateBlocksProvider`.
   void _invalidateSyncedProviders() {
-    ref
-      ..invalidate(taskListProvider)
-      ..invalidate(categoryListProvider)
-      ..invalidate(savedSearchListProvider)
-      ..invalidate(templateListProvider)
-      ..invalidate(templateBlocksProvider)
-      ..invalidate(dayBlocksProvider);
+    for (final provider in syncedProvidersByCollection.values) {
+      ref.invalidate(provider);
+    }
   }
 }
 

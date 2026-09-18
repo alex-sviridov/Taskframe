@@ -260,6 +260,94 @@ void main() {
     },
   );
 
+  test('syncAll returns the collection name when a remote record was '
+      'actually applied locally (remote wins)', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'old',
+      'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+      'deleted': false,
+    });
+    backend.remote['things'] = [
+      {
+        'entity_id': 'a',
+        'updated_at': DateTime.utc(2026, 1, 2).toIso8601String(),
+        'server_updated': DateTime.utc(2026, 1, 2).toIso8601String(),
+        'deleted': false,
+        'data': {
+          'id': 'a',
+          'title': 'new',
+          'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+          'deleted': false,
+        },
+      },
+    ];
+
+    final changed = await engine.syncAll([things]);
+
+    expect(changed, {'things'});
+  });
+
+  test('syncAll returns an empty set when a remote record loses LWW '
+      '(nothing actually changed locally)', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'new-local',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    backend.remote['things'] = [
+      {
+        'entity_id': 'a',
+        'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'deleted': false,
+        'data': {
+          'id': 'a',
+          'title': 'old-remote',
+          'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'deleted': false,
+        },
+      },
+    ];
+
+    final changed = await engine.syncAll([things]);
+
+    expect(changed, isEmpty);
+  });
+
+  test('syncAll returns an empty set when there is nothing to pull', () async {
+    final changed = await engine.syncAll([things]);
+
+    expect(changed, isEmpty);
+  });
+
+  test('syncAll only reports collections that actually had a change applied, '
+      'not every collection synced', () async {
+    final otherStore = stringMapStoreFactory.store('others');
+    final others = SyncCollection(name: 'others', store: otherStore);
+
+    backend.remote['things'] = [
+      {
+        'entity_id': 'a',
+        'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'server_updated': DateTime.utc(2026, 1, 1).toIso8601String(),
+        'deleted': false,
+        'data': {
+          'id': 'a',
+          'title': 'from-remote',
+          'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+          'deleted': false,
+        },
+      },
+    ];
+    // 'others' has nothing on the remote at all.
+
+    final changed = await engine.syncAll([things, others]);
+
+    expect(changed, {'things'});
+  });
+
   test(
     'cursor advancement on partial-failure push: only succeeded records '
     'advance the push cursor, the failing one is retried next time',
