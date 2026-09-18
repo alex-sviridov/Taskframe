@@ -6,7 +6,10 @@ on:
   pull_request:
 
 jobs:
-  check:
+  # Everything checkable about the Flutter/Dart app itself: formatting,
+  # static analysis, unit tests, e2e (Playwright), and that the release
+  # web bundle actually builds.
+  app-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,12 +35,11 @@ jobs:
       - name: Build web
         run: make build-web
 
-  # Exercises the actual sync backend (PocketBase, in docker-compose.yml)
-  # rather than just building/formatting the Dart side of it — a real
-  # regression in the sync engine, the PocketBase collection setup, or
-  # the two talking to each other wouldn't be caught by the `check` job
-  # above, which never starts PocketBase.
-  backend-integration:
+  # Everything checkable about the sync backend (PocketBase, in
+  # docker-compose.yml) that app-checks above can't catch, since it never
+  # starts PocketBase: a real regression in the sync engine, the
+  # PocketBase collection setup, or the two talking to each other.
+  backend-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
