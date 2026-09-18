@@ -1,5 +1,6 @@
 // test/widget/task_edit_modal_test.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/providers.dart';
@@ -285,6 +286,51 @@ void main() {
         expect(tasks.single.title, 'Buy milk ');
         expect(tasks.single.activeFrom, DateTime(2026, 3, 5));
       });
+
+      testWidgets('typing "@category " strips it from the title and sets the '
+          'category', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Ship it @work ',
+        );
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        expect(tasks, hasLength(1));
+        expect(tasks.single.title, 'Ship it ');
+        expect(tasks.single.categoryId, work.id);
+      });
+
+      testWidgets(
+        'typing "@word " for a name that matches no category leaves it '
+        'as plain text',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Ship it @nope ',
+          );
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          expect(tasks, hasLength(1));
+          expect(tasks.single.title, 'Ship it @nope ');
+        },
+      );
 
       testWidgets(
         'typing "every 1w " strips it from the title and sets repeat',
@@ -760,6 +806,64 @@ void main() {
         expect(updated.tags, ['errands']);
       });
 
+      testWidgets('typing "@category " in edit mode sets the category', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        final created = await container
+            .read(taskListProvider.notifier)
+            .addTask(title: 'Buy milk');
+        await _pumpOpenButton(tester, container, task: created);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk @work ',
+        );
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        final updated = tasks.singleWhere((t) => t.id == created.id);
+        expect(updated.title, 'Buy milk ');
+        expect(updated.categoryId, work.id);
+      });
+
+      testWidgets(
+        'a trailing "@category" with no space is still applied when the '
+        'modal is dismissed',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final work = await container
+              .read(categoryListProvider.notifier)
+              .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Buy milk');
+          await _pumpOpenButton(tester, container, task: created);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Buy milk @work',
+          );
+          await tester.pump();
+          await tester.tapAt(const Offset(10, 10));
+          await tester.pumpAndSettle();
+
+          final tasks = container.read(taskListProvider).value!;
+          final updated = tasks.singleWhere((t) => t.id == created.id);
+          expect(updated.title, 'Buy milk ');
+          expect(updated.categoryId, work.id);
+        },
+      );
+
       testWidgets(
         'a trailing "#tag" with no space is still added when the modal is '
         'dismissed',
@@ -865,6 +969,155 @@ void main() {
 
         final tasks = container.read(taskListProvider).value!;
         expect(tasks.where((t) => t.id == created.id), hasLength(1));
+      });
+    });
+
+    group('title suggestions dropdown', () {
+      testWidgets('typing "#" shows every distinct tag across loaded tasks', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(taskListProvider.notifier);
+        final milk = await notifier.addTask(title: 'Buy milk');
+        await notifier.updateTask(milk, tags: ['groceries']);
+        final dog = await notifier.addTask(title: 'Walk the dog');
+        await notifier.updateTask(dog, tags: ['urgent']);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('task-title-field')), '#');
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.widgetWithText(ListTile, 'groceries'), findsOneWidget);
+        expect(find.widgetWithText(ListTile, 'urgent'), findsOneWidget);
+      });
+
+      testWidgets('excludes tags already applied to this task', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(taskListProvider.notifier);
+        final milk = await notifier.addTask(title: 'Buy milk');
+        await notifier.updateTask(milk, tags: ['groceries']);
+        final tagged = container
+            .read(taskListProvider)
+            .value!
+            .singleWhere((t) => t.id == milk.id);
+        await _pumpOpenButton(tester, container, task: tagged);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Buy milk #',
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.widgetWithText(ListTile, 'groceries'), findsNothing);
+      });
+
+      testWidgets('selecting a tag suggestion completes it and adds the tag', (
+        tester,
+      ) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(taskListProvider.notifier);
+        final milk = await notifier.addTask(title: 'Buy milk');
+        await notifier.updateTask(milk, tags: ['groceries']);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task-title-field')),
+          'Ship it #gro',
+        );
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.widgetWithText(ListTile, 'groceries'));
+        await tester.pump();
+        await tester.pump();
+
+        final tasks = container.read(taskListProvider).value!;
+        final created = tasks.singleWhere((t) => t.title == 'Ship it ');
+        expect(created.tags, ['groceries']);
+      });
+
+      testWidgets('typing "@" shows every category name', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Home', colorValue: 0xFF4CAF50);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('task-title-field')), '@');
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.widgetWithText(ListTile, 'work'), findsOneWidget);
+        expect(find.widgetWithText(ListTile, 'home'), findsOneWidget);
+      });
+
+      testWidgets(
+        'selecting a category suggestion sets the category and strips '
+        'the text',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final work = await container
+              .read(categoryListProvider.notifier)
+              .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Ship it @wo',
+          );
+          await tester.pump();
+          await tester.pump();
+
+          await tester.tap(find.widgetWithText(ListTile, 'work'));
+          await tester.pump();
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          final created = tasks.singleWhere((t) => t.title == 'Ship it ');
+          expect(created.categoryId, work.id);
+        },
+      );
+
+      testWidgets('pressing Escape closes the dropdown', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final notifier = container.read(taskListProvider.notifier);
+        final milk = await notifier.addTask(title: 'Buy milk');
+        await notifier.updateTask(milk, tags: ['groceries']);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('task-title-field')), '#');
+        await tester.pump();
+        await tester.pump();
+        expect(find.widgetWithText(ListTile, 'groceries'), findsOneWidget);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.widgetWithText(ListTile, 'groceries'), findsNothing);
       });
     });
   });

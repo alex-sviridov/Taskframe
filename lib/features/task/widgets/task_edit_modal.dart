@@ -1,15 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/models/category.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/task/active_from_parsing.dart';
+import 'package:taskframe/features/task/category_parsing.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/repeat_parsing.dart';
 import 'package:taskframe/features/task/tag_parsing.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
+
+/// Matches an *unfinished* `#word` immediately before the cursor — no
+/// trailing space yet — so suggestions can be offered while the user is
+/// still typing it, wherever the cursor currently sits. The title's own
+/// `!`-exclusion isn't a concept here (unlike the search bar's tokens),
+/// so this is simpler than `tasks_screen.dart`'s counterpart.
+final _partialTitleTagPattern = RegExp(r'(^|\s)#(\w*)$');
+
+/// The `@` counterpart of [_partialTitleTagPattern].
+final _partialTitleCategoryPattern = RegExp(r'(^|\s)@(\w*)$');
+
+/// Which kind of token the title's suggestions dropdown is currently
+/// offering.
+enum _TitleSuggestionKind { tag, category }
+
+/// The title's suggestions dropdown never lists more than this many
+/// options — matches the search bar's own limit.
+const _maxTitleSuggestions = 4;
 
 /// Whether [date] is set and still in the future — mirrors
 /// `Task.isNotYetActive` for a date that may not be saved to a task yet.
@@ -89,6 +111,25 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   late List<String> _tags;
   DateTime? _activeFrom;
   String _repeatUnit = 'w';
+  late final FocusNode _titleFocusNode;
+
+  /// Anchors the floating title-suggestions dropdown to the title
+  /// field's current position/size — same mechanism as the search bar's
+  /// own dropdown in `tasks_screen.dart`.
+  final LayerLink _titleFieldLink = LayerLink();
+
+  /// Reads the title field's laid-out size, so the floating dropdown can
+  /// match its width and sit directly below it.
+  final GlobalKey _titleFieldBoxKey = GlobalKey();
+
+  /// The floating title-suggestions dropdown, inserted into the ambient
+  /// [Overlay] on demand.
+  OverlayEntry? _titleSuggestionsOverlayEntry;
+
+  /// Set on Escape to hide the title suggestions dropdown until the next
+  /// keystroke — otherwise a pure recompute from unchanged text would
+  /// show the same suggestions right back.
+  bool _titleSuggestionsDismissed = false;
 
   /// The stored `Task.repeat` form (e.g. `"2w"`) derived from
   /// [_repeatCountController]/[_repeatUnit] — `null` while the count is
@@ -126,6 +167,10 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final split = initialRepeat == null ? null : _splitRepeat(initialRepeat);
     _repeatCountController = TextEditingController(text: split?.count ?? '');
     _repeatUnit = split?.unit ?? 'w';
+    _titleFocusNode = FocusNode()
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
   }
 
   @override
@@ -133,6 +178,9 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _titleController.dispose();
     _activeFromController.dispose();
     _repeatCountController.dispose();
+    _titleFocusNode.dispose();
+    _titleSuggestionsOverlayEntry?.remove();
+    _titleSuggestionsOverlayEntry?.dispose();
     super.dispose();
   }
 
@@ -143,21 +191,31 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   ///
   /// When the cursor is at the end and the just-typed text ends with
   /// `#tag `, that chunk is stripped from the title and added as a tag.
-  /// Likewise for `from dd/mm[/yy]`, which sets [_activeFrom] instead, and
-  /// `every <n><unit>`/`every <n> <word>`, which sets [_repeat].
+  /// Likewise for `@category` (matched against real category names —
+  /// see [extractTrailingCategory]), which sets [_categoryId]; `from
+  /// dd/mm[/yy]`, which sets [_activeFrom]; and `every` followed by a
+  /// count and unit (e.g. `every 1w`/`every 1 week`), which sets
+  /// [_repeat].
   Future<void> _onTitleChanged(String rawTitle) async {
+    _titleSuggestionsDismissed = false;
     final atEnd = _titleController.selection.baseOffset == rawTitle.length;
     final tagExtraction = atEnd ? extractTrailingTag(rawTitle) : null;
     final afterTag = tagExtraction?.title ?? rawTitle;
-    final activeFromExtraction = atEnd
-        ? extractTrailingActiveFrom(afterTag)
+    final categories = ref.read(categoryListProvider).value ?? const [];
+    final categoryExtraction = atEnd
+        ? extractTrailingCategory(afterTag, categories)
         : null;
-    final afterActiveFrom = activeFromExtraction?.title ?? afterTag;
+    final afterCategory = categoryExtraction?.title ?? afterTag;
+    final activeFromExtraction = atEnd
+        ? extractTrailingActiveFrom(afterCategory)
+        : null;
+    final afterActiveFrom = activeFromExtraction?.title ?? afterCategory;
     final repeatExtraction = atEnd
         ? extractTrailingRepeat(afterActiveFrom)
         : null;
     final title = repeatExtraction?.title ?? afterActiveFrom;
     if (tagExtraction != null ||
+        categoryExtraction != null ||
         activeFromExtraction != null ||
         repeatExtraction != null) {
       _titleController.value = TextEditingValue(
@@ -169,6 +227,8 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         ? [..._tags, tagExtraction.tag]
         : null;
     if (newTags != null) setState(() => _tags = newTags);
+    final newCategoryId = categoryExtraction?.categoryId;
+    if (newCategoryId != null) setState(() => _categoryId = newCategoryId);
     final newActiveFrom = activeFromExtraction?.activeFrom;
     if (newActiveFrom != null) {
       setState(() {
@@ -191,6 +251,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         _task!,
         title: title,
         tags: newTags,
+        categoryId: newCategoryId,
         activeFrom: newActiveFrom,
         repeat: newRepeat,
       );
@@ -203,6 +264,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         created,
         title: title,
         tags: newTags,
+        categoryId: newCategoryId,
         activeFrom: newActiveFrom,
         repeat: newRepeat,
       );
@@ -234,15 +296,24 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// pop actually goes through.
   Future<void> _applyPendingTagOnExit() async {
     final tagExtraction = extractFinalTag(_titleController.text);
-    final activeFromExtraction = extractFinalActiveFrom(
+    final categories = ref.read(categoryListProvider).value ?? const [];
+    final categoryExtraction = extractFinalCategory(
       tagExtraction?.title ?? _titleController.text,
+      categories,
+    );
+    final activeFromExtraction = extractFinalActiveFrom(
+      categoryExtraction?.title ??
+          tagExtraction?.title ??
+          _titleController.text,
     );
     final repeatExtraction = extractFinalRepeat(
       activeFromExtraction?.title ??
+          categoryExtraction?.title ??
           tagExtraction?.title ??
           _titleController.text,
     );
     if (tagExtraction == null &&
+        categoryExtraction == null &&
         activeFromExtraction == null &&
         repeatExtraction == null) {
       return;
@@ -250,6 +321,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final title =
         repeatExtraction?.title ??
         activeFromExtraction?.title ??
+        categoryExtraction?.title ??
         tagExtraction!.title;
     _titleController.value = TextEditingValue(
       text: title,
@@ -258,10 +330,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     final newTags = tagExtraction == null || _tags.contains(tagExtraction.tag)
         ? _tags
         : [..._tags, tagExtraction.tag];
+    final newCategoryId = categoryExtraction?.categoryId ?? _categoryId;
     final newActiveFrom = activeFromExtraction?.activeFrom ?? _activeFrom;
     final newRepeat = repeatExtraction?.repeat ?? _repeat;
     setState(() {
       _tags = newTags;
+      if (categoryExtraction != null) _categoryId = newCategoryId;
       if (activeFromExtraction != null) {
         _activeFrom = newActiveFrom;
         _activeFromController.text = formatActiveFrom(newActiveFrom!);
@@ -283,9 +357,166 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
           task,
           title: title,
           tags: newTags,
+          categoryId: categoryExtraction?.categoryId,
           activeFrom: activeFromExtraction?.activeFrom,
           repeat: repeatExtraction?.repeat,
         );
+  }
+
+  /// The title's suggestions dropdown current answer — tag names while
+  /// the text immediately before the cursor ends in an unfinished
+  /// `#word`, category names while it ends in an unfinished `@word`.
+  /// `null` hides the dropdown: no partial match, no candidates,
+  /// dismissed via Escape, or the title field isn't focused. Mirrors
+  /// `_TasksScreenState._currentSuggestions` in `tasks_screen.dart`.
+  ({List<String> options, _TitleSuggestionKind kind})?
+  _currentTitleSuggestions() {
+    if (_titleSuggestionsDismissed || !_titleFocusNode.hasFocus) return null;
+    final cursor = _titleController.selection.baseOffset;
+    if (cursor < 0) return null;
+    final beforeCursor = _titleController.text.substring(0, cursor);
+    final tagMatch = _partialTitleTagPattern.firstMatch(beforeCursor);
+    if (tagMatch != null) {
+      final partial = tagMatch.group(2)!.toLowerCase();
+      final tasks = ref.read(taskListProvider).value ?? const <Task>[];
+      final allTags = <String>{for (final t in tasks) ...t.tags};
+      final options =
+          allTags
+              .difference(_tags.toSet())
+              .where((tag) => tag.startsWith(partial))
+              .toList()
+            ..sort();
+      return options.isEmpty
+          ? null
+          : (
+              options: options.take(_maxTitleSuggestions).toList(),
+              kind: _TitleSuggestionKind.tag,
+            );
+    }
+    final categoryMatch = _partialTitleCategoryPattern.firstMatch(beforeCursor);
+    if (categoryMatch != null) {
+      final partial = categoryMatch.group(2)!.toLowerCase();
+      final categories = ref.read(categoryListProvider).value ?? const [];
+      final options =
+          categories
+              .map((c) => c.name.toLowerCase())
+              .where((name) => name.startsWith(partial))
+              .toList()
+            ..sort();
+      return options.isEmpty
+          ? null
+          : (
+              options: options.take(_maxTitleSuggestions).toList(),
+              kind: _TitleSuggestionKind.category,
+            );
+    }
+    return null;
+  }
+
+  /// Completes the unfinished token immediately before the cursor with
+  /// [option] plus a trailing space, then reinserts whatever followed the
+  /// cursor — same shape a manually-typed `#tag `/`@category ` settles
+  /// to — and re-runs [_onTitleChanged] on the result, since setting
+  /// [_titleController]'s value directly doesn't itself invoke the
+  /// field's `onChanged`.
+  void _selectTitleSuggestion(
+    String option, {
+    required _TitleSuggestionKind kind,
+  }) {
+    final cursor = _titleController.selection.baseOffset;
+    final text = _titleController.text;
+    final beforeCursor = text.substring(0, cursor);
+    final afterCursor = text.substring(cursor);
+    final pattern = kind == _TitleSuggestionKind.tag
+        ? _partialTitleTagPattern
+        : _partialTitleCategoryPattern;
+    final match = pattern.firstMatch(beforeCursor)!;
+    final symbol = kind == _TitleSuggestionKind.tag ? '#' : '@';
+    final prefix = beforeCursor.substring(0, match.start) + match.group(1)!;
+    final completed = '$prefix$symbol$option ';
+    _titleController.value = TextEditingValue(
+      text: completed + afterCursor,
+      selection: TextSelection.collapsed(offset: completed.length),
+    );
+    unawaited(_onTitleChanged(_titleController.text));
+  }
+
+  /// Inserts, rebuilds, or removes the floating title-suggestions
+  /// dropdown to match [_currentTitleSuggestions]'s current answer.
+  /// Called after every frame so it always runs once the title field's
+  /// [_titleFieldBoxKey] render box is guaranteed to be laid out.
+  void _syncTitleSuggestionsOverlay() {
+    final hasSuggestions = _currentTitleSuggestions() != null;
+    if (!hasSuggestions) {
+      _titleSuggestionsOverlayEntry?.remove();
+      _titleSuggestionsOverlayEntry?.dispose();
+      _titleSuggestionsOverlayEntry = null;
+      return;
+    }
+    if (_titleSuggestionsOverlayEntry != null) {
+      _titleSuggestionsOverlayEntry!.markNeedsBuild();
+      return;
+    }
+    final entry = OverlayEntry(builder: _buildTitleSuggestionsOverlay);
+    _titleSuggestionsOverlayEntry = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  /// Builds the floating dropdown's content, re-reading
+  /// [_currentTitleSuggestions] fresh each time.
+  Widget _buildTitleSuggestionsOverlay(BuildContext context) {
+    final suggestions = _currentTitleSuggestions();
+    if (suggestions == null) return const SizedBox.shrink();
+    final fieldBox =
+        _titleFieldBoxKey.currentContext?.findRenderObject() as RenderBox?;
+    final fieldSize = fieldBox?.size ?? const Size(300, 48);
+    return Positioned(
+      width: fieldSize.width,
+      child: CompositedTransformFollower(
+        link: _titleFieldLink,
+        showWhenUnlinked: false,
+        offset: Offset(0, fieldSize.height + 4),
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in suggestions.options)
+                  GestureDetector(
+                    onTapDown: (_) =>
+                        _selectTitleSuggestion(option, kind: suggestions.kind),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        suggestions.kind == _TitleSuggestionKind.tag
+                            ? Icons.tag
+                            : Icons.category,
+                      ),
+                      title: Text(option),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  KeyEventResult _handleTitleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_currentTitleSuggestions() != null) {
+        setState(() => _titleSuggestionsDismissed = true);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   /// Removes [tag] from this task's tags, persisting the change.
@@ -436,6 +667,11 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
 
   @override
   Widget build(BuildContext context) {
+    // Overlay content can only be sized/positioned off the title field's
+    // render box once this frame has actually laid it out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncTitleSuggestionsOverlay();
+    });
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -461,19 +697,31 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                     onChanged: (value) => _onClosedChanged(value ?? !_closed),
                   ),
                   Expanded(
-                    child: TextField(
-                      key: const Key('task-title-field'),
-                      controller: _titleController,
-                      style: TextStyle(
-                        decoration: _closed ? TextDecoration.lineThrough : null,
-                        color: _isFutureDated(_activeFrom)
-                            ? Theme.of(context).disabledColor
-                            : null,
-                        fontStyle: _isFutureDated(_activeFrom)
-                            ? FontStyle.italic
-                            : null,
+                    child: CompositedTransformTarget(
+                      link: _titleFieldLink,
+                      child: Focus(
+                        onKeyEvent: _handleTitleKeyEvent,
+                        child: Container(
+                          key: _titleFieldBoxKey,
+                          child: TextField(
+                            key: const Key('task-title-field'),
+                            controller: _titleController,
+                            focusNode: _titleFocusNode,
+                            style: TextStyle(
+                              decoration: _closed
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: _isFutureDated(_activeFrom)
+                                  ? Theme.of(context).disabledColor
+                                  : null,
+                              fontStyle: _isFutureDated(_activeFrom)
+                                  ? FontStyle.italic
+                                  : null,
+                            ),
+                            onChanged: _onTitleChanged,
+                          ),
+                        ),
                       ),
-                      onChanged: _onTitleChanged,
                     ),
                   ),
                 ],
