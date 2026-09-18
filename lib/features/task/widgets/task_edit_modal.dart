@@ -511,37 +511,58 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 56,
-                    child: TextField(
-                      key: const Key('task-repeat-number-field'),
-                      controller: _repeatCountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Repeat'),
-                      onChanged: _onRepeatCountChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    key: const Key('task-repeat-unit-dropdown'),
-                    value: _repeatUnit,
-                    items: [
-                      for (final entry in _repeatUnits.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Repeat',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: Theme.of(context).hintColor),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            child: TextField(
+                              key: const Key('task-repeat-number-field'),
+                              controller: _repeatCountController,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              decoration: const InputDecoration(
+                                border: UnderlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: _onRepeatCountChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          DropdownButton<String>(
+                            key: const Key('task-repeat-unit-dropdown'),
+                            value: _repeatUnit,
+                            items: [
+                              for (final entry in _repeatUnits.entries)
+                                DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ),
+                            ],
+                            onChanged: _onRepeatUnitChanged,
+                          ),
+                          if (_repeatCountController.text.isNotEmpty)
+                            IconButton(
+                              key: const Key('task-repeat-clear'),
+                              icon: const Icon(Icons.clear),
+                              tooltip: 'Clear repeat',
+                              onPressed: _clearRepeat,
+                            ),
+                        ],
+                      ),
                     ],
-                    onChanged: _onRepeatUnitChanged,
                   ),
-                  if (_repeatCountController.text.isNotEmpty)
-                    IconButton(
-                      key: const Key('task-repeat-clear'),
-                      icon: const Icon(Icons.clear),
-                      tooltip: 'Clear repeat',
-                      onPressed: _clearRepeat,
-                    ),
                 ],
               ),
               const SizedBox(height: 16),
