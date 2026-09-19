@@ -137,14 +137,11 @@ void main() {
       expect(parsed.categoryTokens.single.category, 'уборка');
     });
 
-    test(
-      'adjacent tokens with no space between them still parse as two',
-      () {
-        final parsed = parseSearchQuery('#a@home');
-        expect(parsed.tagTokens.single.tag, 'a');
-        expect(parsed.categoryTokens.single.category, 'home');
-      },
-    );
+    test('adjacent tokens with no space between them still parse as two', () {
+      final parsed = parseSearchQuery('#a@home');
+      expect(parsed.tagTokens.single.tag, 'a');
+      expect(parsed.categoryTokens.single.category, 'home');
+    });
 
     test('a mixed query extracts tags, status, and categories together', () {
       final parsed = parseSearchQuery(

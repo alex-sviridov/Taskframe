@@ -11,8 +11,7 @@ import 'package:taskframe/features/template/widgets/templates_screen.dart';
 /// Templates, Categories, Tasks, Account), each keeping its own state
 /// alive when the others are shown. Bare `/` redirects to `/now`.
 final GoRouter appRouter = GoRouter(
-  redirect: (context, state) =>
-      state.uri.path == '/' ? '/now' : null,
+  redirect: (context, state) => state.uri.path == '/' ? '/now' : null,
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
@@ -20,7 +19,10 @@ final GoRouter appRouter = GoRouter(
       branches: [
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/now', builder: (context, state) => const NowScreen()),
+            GoRoute(
+              path: '/now',
+              builder: (context, state) => const NowScreen(),
+            ),
           ],
         ),
         StatefulShellBranch(

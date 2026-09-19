@@ -8,19 +8,20 @@ void main() {
   group('appRouter', () {
     setUp(() => appRouter.go('/'));
 
-    testWidgets('/ redirects to /now, shown inside the shell with Now selected', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
-      );
-      await tester.pump();
+    testWidgets(
+      '/ redirects to /now, shown inside the shell with Now selected',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
+        );
+        await tester.pump();
 
-      expect(find.byType(AppShell), findsOneWidget);
-      expect(find.text('Now'), findsWidgets);
-      final shell = tester.widget<AppShell>(find.byType(AppShell));
-      expect(shell.navigationShell.currentIndex, 0);
-    });
+        expect(find.byType(AppShell), findsOneWidget);
+        expect(find.text('Now'), findsWidgets);
+        final shell = tester.widget<AppShell>(find.byType(AppShell));
+        expect(shell.navigationShell.currentIndex, 0);
+      },
+    );
 
     testWidgets('tapping Day navigates to /day', (tester) async {
       await tester.pumpWidget(
