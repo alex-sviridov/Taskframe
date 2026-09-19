@@ -192,12 +192,6 @@ class _DayGridState extends ConsumerState<DayGrid> {
     return minutesFromStart / 15 * widget.slotHeight;
   }
 
-  /// True height of the landzone drag preview: [block]'s own duration,
-  /// measured from [start].
-  double _landzoneHeightFor(DateTime start, TimeObject block) =>
-      _offsetFor(start.add(block.end.difference(block.start))) -
-      _offsetFor(start);
-
   List<TimeObject> get _blocksSortedByStart =>
       [...widget.blocks]..sort((a, b) => a.start.compareTo(b.start));
 
@@ -255,6 +249,46 @@ class _DayGridState extends ConsumerState<DayGrid> {
         ),
       ),
     );
+  }
+
+  /// The landzone/resize-draft preview box for [block] spanning
+  /// `[start, end)`: a dashed, non-interactive outline around a
+  /// surface-colored [BlockView], used by both the drag landzone and the
+  /// resize draft — the two places `DayGrid` shows a block "as it would
+  /// be" rather than as it currently is. Returns the box alongside its
+  /// own top/height so the caller's matching [_titleOverlay] call reuses
+  /// them instead of recomputing [_offsetFor] a second time.
+  ({Widget box, double top, double height}) _previewBox({
+    required Key boxKey,
+    required TimeObject block,
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final top = _offsetFor(start);
+    final height = _offsetFor(end) - top;
+    final box = Positioned(
+      key: boxKey,
+      top: top,
+      left: _gridLeft,
+      right: 0,
+      height: height,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: DashedBorderPainter(color: scheme.primary),
+          child: Container(
+            color: scheme.surface,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: BlockView(
+              block: block,
+              showTitle: false,
+              category: _categoryFor(block),
+            ),
+          ),
+        ),
+      ),
+    );
+    return (box: box, top: top, height: height);
   }
 
   /// The category [block] is tagged with, resolved from the currently
@@ -400,6 +434,25 @@ class _DayGridState extends ConsumerState<DayGrid> {
       offsetFor: _offsetFor,
       maxBleed: DraggableBlock.hitBleed,
     );
+    final landzonePreview = dragState != null && landzoneStart != null
+        ? _previewBox(
+            boxKey: const Key('day-grid-landzone'),
+            block: dragState.block,
+            start: landzoneStart,
+            end: landzoneStart.add(
+              dragState.block.end.difference(dragState.block.start),
+            ),
+          )
+        : null;
+    final resizeDraftPreview =
+        resizeState != null && resizeState.column == widget.column
+        ? _previewBox(
+            boxKey: const Key('day-grid-resize-draft'),
+            block: resizeState.block,
+            start: resizeState.draftStart,
+            end: resizeState.draftEnd,
+          )
+        : null;
 
     return MouseRegion(
       // Wraps the whole grid, not just the background layer, so the cursor
@@ -621,66 +674,22 @@ class _DayGridState extends ConsumerState<DayGrid> {
                   ),
                 ),
               ),
-            if (dragState != null && landzoneStart != null) ...[
-              Positioned(
-                key: const Key('day-grid-landzone'),
-                top: _offsetFor(landzoneStart),
-                left: _gridLeft,
-                right: 0,
-                height: _landzoneHeightFor(landzoneStart, dragState.block),
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: DashedBorderPainter(color: scheme.primary),
-                    child: Container(
-                      color: scheme.surface,
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: BlockView(
-                        block: dragState.block,
-                        showTitle: false,
-                        category: _categoryFor(dragState.block),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            if (landzonePreview != null) ...[
+              landzonePreview.box,
               _titleOverlay(
                 key: const Key('day-grid-landzone-title'),
-                block: dragState.block,
-                trueTop: _offsetFor(landzoneStart),
-                trueHeight: _landzoneHeightFor(landzoneStart, dragState.block),
+                block: dragState!.block,
+                trueTop: landzonePreview.top,
+                trueHeight: landzonePreview.height,
               ),
             ],
-            if (resizeState != null && resizeState.column == widget.column) ...[
-              Positioned(
-                key: const Key('day-grid-resize-draft'),
-                top: _offsetFor(resizeState.draftStart),
-                left: _gridLeft,
-                right: 0,
-                height:
-                    _offsetFor(resizeState.draftEnd) -
-                    _offsetFor(resizeState.draftStart),
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: DashedBorderPainter(color: scheme.primary),
-                    child: Container(
-                      color: scheme.surface,
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: BlockView(
-                        block: resizeState.block,
-                        showTitle: false,
-                        category: _categoryFor(resizeState.block),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            if (resizeDraftPreview != null) ...[
+              resizeDraftPreview.box,
               _titleOverlay(
                 key: const Key('day-grid-resize-draft-title'),
-                block: resizeState.block,
-                trueTop: _offsetFor(resizeState.draftStart),
-                trueHeight:
-                    _offsetFor(resizeState.draftEnd) -
-                    _offsetFor(resizeState.draftStart),
+                block: resizeState!.block,
+                trueTop: resizeDraftPreview.top,
+                trueHeight: resizeDraftPreview.height,
               ),
             ],
             if (nowLineY != null)
