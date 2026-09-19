@@ -40,6 +40,14 @@ void main() {
     test('returns null for empty text', () {
       expect(extractTrailingTag(''), isNull);
     });
+
+    test('extracts a tag with non-ASCII letters', () {
+      final result = extractTrailingTag('Купить #продукты ');
+
+      expect(result, isNotNull);
+      expect(result!.tag, 'продукты');
+      expect(result.title, 'Купить ');
+    });
   });
 
   group('extractFinalTag', () {
@@ -80,6 +88,14 @@ void main() {
 
     test('returns null for empty text', () {
       expect(extractFinalTag(''), isNull);
+    });
+
+    test('extracts a tag with non-ASCII letters', () {
+      final result = extractFinalTag('Купить #продукты');
+
+      expect(result, isNotNull);
+      expect(result!.tag, 'продукты');
+      expect(result.title, 'Купить ');
     });
   });
 }

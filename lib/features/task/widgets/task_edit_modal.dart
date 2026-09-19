@@ -20,10 +20,16 @@ import 'package:taskframe/features/task/widgets/tag_pills.dart';
 /// still typing it, wherever the cursor currently sits. The title's own
 /// `!`-exclusion isn't a concept here (unlike the search bar's tokens),
 /// so this is simpler than `tasks_screen.dart`'s counterpart.
-final _partialTitleTagPattern = RegExp(r'(^|\s)#(\w*)$');
+///
+/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
+/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
+/// match tags/categories containing letters outside that range (e.g.
+/// Cyrillic); trigger characters (#/@) stay excluded so this still stops
+/// at a following token typed with no space.
+final _partialTitleTagPattern = RegExp(r'(^|\s)#([^\s#/@]*)$');
 
 /// The `@` counterpart of [_partialTitleTagPattern].
-final _partialTitleCategoryPattern = RegExp(r'(^|\s)@(\w*)$');
+final _partialTitleCategoryPattern = RegExp(r'(^|\s)@([^\s#/@]*)$');
 
 /// Which kind of token the title's suggestions dropdown is currently
 /// offering.

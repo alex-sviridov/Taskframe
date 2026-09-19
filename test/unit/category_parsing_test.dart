@@ -5,7 +5,12 @@ import 'package:taskframe/features/task/category_parsing.dart';
 void main() {
   final work = Category(id: 'cat-1', name: 'Work', colorValue: 0xFF2196F3);
   final home = Category(id: 'cat-2', name: 'Home', colorValue: 0xFF4CAF50);
-  final categories = [work, home];
+  final housekeeping = Category(
+    id: 'cat-3',
+    name: 'уборка',
+    colorValue: 0xFFFFC107,
+  );
+  final categories = [work, home, housekeeping];
 
   group('extractTrailingCategory', () {
     test('extracts a category typed at the start of the title', () {
@@ -52,6 +57,14 @@ void main() {
     test('returns null for empty text', () {
       expect(extractTrailingCategory('', categories), isNull);
     });
+
+    test('extracts a category whose name has non-ASCII letters', () {
+      final result = extractTrailingCategory('Помыть пол @уборка ', categories);
+
+      expect(result, isNotNull);
+      expect(result!.categoryId, housekeeping.id);
+      expect(result.title, 'Помыть пол ');
+    });
   });
 
   group('extractFinalCategory', () {
@@ -96,6 +109,14 @@ void main() {
 
     test('returns null for empty text', () {
       expect(extractFinalCategory('', categories), isNull);
+    });
+
+    test('extracts a category whose name has non-ASCII letters', () {
+      final result = extractFinalCategory('Помыть пол @уборка', categories);
+
+      expect(result, isNotNull);
+      expect(result!.categoryId, housekeeping.id);
+      expect(result.title, 'Помыть пол ');
     });
   });
 }
