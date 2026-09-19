@@ -2,7 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
 import 'package:taskframe/features/category/providers.dart';
-import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/template/providers.dart';

@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/day/date_format.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/day_new_block.dart';
 import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
 
