@@ -198,6 +198,13 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   /// [_repeat].
   Future<void> _onTitleChanged(String rawTitle) async {
     _titleSuggestionsDismissed = false;
+    // Unconditional: a keystroke that matches no extraction pattern below
+    // (e.g. an unfinished "#gro") still needs to rebuild so the
+    // post-frame callback in build() re-syncs the title suggestions
+    // dropdown for the new cursor/text state — the extraction-specific
+    // setState calls further down only fire when a token actually
+    // completes.
+    setState(() {});
     final atEnd = _titleController.selection.baseOffset == rawTitle.length;
     final tagExtraction = atEnd ? extractTrailingTag(rawTitle) : null;
     final afterTag = tagExtraction?.title ?? rawTitle;

@@ -1119,6 +1119,46 @@ void main() {
 
         expect(find.widgetWithText(ListTile, 'groceries'), findsNothing);
       });
+
+      testWidgets(
+        'the dropdown appears from typing alone, with no separate focus '
+        'change in between (regression: a keystroke that matches no '
+        'extraction pattern must still trigger a rebuild)',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final notifier = container.read(taskListProvider.notifier);
+          final milk = await notifier.addTask(title: 'Buy milk');
+          await notifier.updateTask(milk, tags: ['groceries']);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          // Focuses the field and types a prefix that matches no
+          // extraction pattern and opens no dropdown.
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Ship it ',
+          );
+          await tester.pump();
+          await tester.pump();
+          expect(find.byType(ListTile), findsNothing);
+
+          // The field is already focused now, so this second enterText
+          // call types one more character with no accompanying focus
+          // change (focusing an already-focused field is a no-op) —
+          // exactly the steady-state typing case that must still refresh
+          // the dropdown on its own.
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Ship it #',
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.widgetWithText(ListTile, 'groceries'), findsOneWidget);
+        },
+      );
     });
   });
 }
