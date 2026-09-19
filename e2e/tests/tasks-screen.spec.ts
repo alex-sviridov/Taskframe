@@ -11,16 +11,19 @@ import {
 
 /**
  * The task edit modal's own title field, as opposed to the tasks screen's
- * persistent search field — every plain `getByRole('textbox')` in this file
- * would otherwise match both once the modal is open. Distinguished by
+ * persistent search field and the modal's own "Active from"/"Repeat"
+ * fields — every plain `getByRole('textbox')` in this file would
+ * otherwise match all four once the modal is open. Distinguished by
  * accessible name: the search field's name is its hint text ("Search:
- * #tag  @category  /opened  free text", collapsed to "Search: #tag
- * @category /opened free text" in the accessibility tree) regardless of its
- * current value, while the
- * modal's field has no name at all.
+ * #tag  @category  /opened  /active  free text", collapsed to "Search:
+ * #tag @category /opened /active free text" in the accessibility tree)
+ * regardless of its current value; the "Active from"/"Repeat" fields'
+ * names are their labels; the title field has no name at all.
  */
 function modalTextbox(page: Page): Locator {
-  return page.getByRole('textbox', { name: /^(?!Search:).*$/ });
+  return page.getByRole('textbox', {
+    name: /^(?!Search:|Active from|Repeat).*$/,
+  });
 }
 
 /**

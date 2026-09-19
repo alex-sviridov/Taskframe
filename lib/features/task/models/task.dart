@@ -11,6 +11,8 @@ class Task {
     this.closed = false,
     this.categoryId = Category.defaultId,
     this.tags = const [],
+    this.activeFrom,
+    this.repeat,
     DateTime? updatedAt,
     this.deleted = false,
   }) : updatedAt = updatedAt ?? _epoch;
@@ -24,6 +26,10 @@ class Task {
     closed: map['closed']! as bool,
     categoryId: map['categoryId']! as String,
     tags: [for (final tag in map['tags'] as List? ?? const []) tag as String],
+    activeFrom: map['activeFrom'] == null
+        ? null
+        : DateTime.parse(map['activeFrom']! as String),
+    repeat: map['repeat'] as String?,
     updatedAt: map['updatedAt'] == null
         ? null
         : DateTime.parse(map['updatedAt']! as String),
@@ -47,6 +53,16 @@ class Task {
   /// of the title as the user types. Defaults to empty.
   final List<String> tags;
 
+  /// The date this task becomes active, or `null` if it always has been.
+  /// A task with a future [activeFrom] is not yet active.
+  final DateTime? activeFrom;
+
+  /// How often this task recurs, as a compact `<n><unit>` string (`d`/`w`/
+  /// `m`/`y` — days/weeks/months/years, e.g. `"1w"`), or `null` if it
+  /// doesn't repeat. Closing a task with this set creates its successor
+  /// (see `TaskListNotifier.updateTask`).
+  final String? repeat;
+
   /// When this task was last changed. Defaults to the Unix epoch for
   /// records written before sync existed, so they always lose an
   /// LWW comparison against a genuinely newer edit.
@@ -56,15 +72,27 @@ class Task {
   /// propagate to other devices instead of being silently resurrected.
   final bool deleted;
 
+  /// Whether [activeFrom] is set and still in the future — the task
+  /// isn't active yet.
+  bool get isNotYetActive =>
+      activeFrom != null && activeFrom!.isAfter(DateTime.now());
+
   static final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Returns a copy of this task with any of [title]/[closed]/[categoryId]/
-  /// [tags]/[updatedAt]/[deleted] replaced.
+  /// [tags]/[activeFrom]/[repeat]/[updatedAt]/[deleted] replaced.
+  /// [activeFrom]/[repeat] are left unchanged when omitted; pass
+  /// [clearActiveFrom]/[clearRepeat] to remove them instead, since `null`
+  /// here already means "don't change".
   Task copyWith({
     String? title,
     bool? closed,
     String? categoryId,
     List<String>? tags,
+    DateTime? activeFrom,
+    bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
     DateTime? updatedAt,
     bool? deleted,
   }) => Task(
@@ -73,6 +101,8 @@ class Task {
     closed: closed ?? this.closed,
     categoryId: categoryId ?? this.categoryId,
     tags: tags ?? this.tags,
+    activeFrom: clearActiveFrom ? null : (activeFrom ?? this.activeFrom),
+    repeat: clearRepeat ? null : (repeat ?? this.repeat),
     updatedAt: updatedAt ?? this.updatedAt,
     deleted: deleted ?? this.deleted,
   );
@@ -84,6 +114,8 @@ class Task {
     'closed': closed,
     'categoryId': categoryId,
     'tags': tags,
+    'activeFrom': activeFrom?.toIso8601String(),
+    'repeat': repeat,
     'updatedAt': updatedAt.toIso8601String(),
     'deleted': deleted,
   };

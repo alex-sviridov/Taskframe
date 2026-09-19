@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/task/active_from_parsing.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
@@ -11,10 +12,13 @@ import 'package:taskframe/features/task/widgets/tag_pills.dart';
 /// categories are still loading, matching `BlockView`'s fallback) and the
 /// category's emoji prefixed onto the title, with a leading checkbox that
 /// toggles [Task.closed] directly — no need to open the edit modal just
-/// to close a task. Closed tasks show their title struck through and
-/// dimmed. Tapping the rest of the card calls [onTap]. Built on
-/// [ColoredListCard], shared with the categories list, so its background
-/// is the category color itself, matching `BlockView`'s own approach.
+/// to close a task. Closed (and not-yet-active) tasks show their title
+/// dimmed relative to the category's own contrast color (via
+/// [foregroundColorFor], not a fixed theme color, which could be
+/// illegible against an arbitrarily dark/light category color). Tapping
+/// the rest of the card calls [onTap]. Built on [ColoredListCard],
+/// shared with the categories list, so its background is the category
+/// color itself, matching `BlockView`'s own approach.
 class TaskCard extends ConsumerWidget {
   /// Creates a [TaskCard] for [task].
   const new({required this.task, required this.onTap, super.key});
@@ -33,10 +37,12 @@ class TaskCard extends ConsumerWidget {
         ? null
         : categoryById(categories, task.categoryId);
     final categoryColor = category == null ? null : Color(category.colorValue);
+    final background = categoryColor ?? scheme.primaryContainer;
     final title = category?.formatTitle(task.title) ?? task.title;
+    final notYetActive = task.isNotYetActive;
 
     return ColoredListCard(
-      color: categoryColor ?? scheme.primaryContainer,
+      color: background,
       leading: Checkbox(
         shape: const CircleBorder(),
         value: task.closed,
@@ -52,11 +58,34 @@ class TaskCard extends ConsumerWidget {
             title,
             style: TextStyle(
               decoration: task.closed ? TextDecoration.lineThrough : null,
-              color: task.closed ? Theme.of(context).disabledColor : null,
+              color: task.closed || notYetActive
+                  ? foregroundColorFor(background).withValues(alpha: 0.6)
+                  : null,
+              fontStyle: notYetActive ? FontStyle.italic : null,
             ),
           ),
-          if (task.tags.isNotEmpty) const SizedBox(height: 4),
-          TagPills(tags: task.tags),
+          if (task.tags.isNotEmpty || notYetActive || task.repeat != null)
+            const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (notYetActive)
+                Chip(
+                  label: Text('from ${formatActiveFrom(task.activeFrom!)}'),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              if (task.repeat != null)
+                Chip(
+                  avatar: const Icon(Icons.repeat, size: 16),
+                  label: Text(task.repeat!),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              TagPills(tags: task.tags),
+            ],
+          ),
         ],
       ),
       onTap: onTap,

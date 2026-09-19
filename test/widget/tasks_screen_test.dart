@@ -115,7 +115,7 @@ void main() {
       await tester.enterText(
         find.descendant(
           of: find.byType(Dialog),
-          matching: find.byType(TextField),
+          matching: find.byKey(const Key('task-title-field')),
         ),
         'Buy milk',
       );
@@ -141,7 +141,7 @@ void main() {
       await tester.enterText(
         find.descendant(
           of: find.byType(Dialog),
-          matching: find.byType(TextField),
+          matching: find.byKey(const Key('task-title-field')),
         ),
         'Buy oat milk',
       );
@@ -340,6 +340,84 @@ void main() {
 
       expect(find.text('Buy milk'), findsNothing);
       expect(find.text('Walk the dog'), findsOneWidget);
+    });
+
+    testWidgets('/active filters to tasks that are already active', (
+      tester,
+    ) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(
+            title: 'Plan trip',
+            activeFrom: DateTime.now().add(const Duration(days: 30)),
+          );
+      await _pump(tester, container: container);
+
+      await tester.enterText(find.byType(TextField), '/active');
+      await tester.pump();
+
+      expect(find.text('Buy milk'), findsOneWidget);
+      expect(find.text('Plan trip'), findsNothing);
+    });
+
+    testWidgets('/!active filters to tasks not yet active', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(
+            title: 'Plan trip',
+            activeFrom: DateTime.now().add(const Duration(days: 30)),
+          );
+      await _pump(tester, container: container);
+
+      await tester.enterText(find.byType(TextField), '/!active');
+      await tester.pump();
+
+      expect(find.text('Buy milk'), findsNothing);
+      expect(find.text('Plan trip'), findsOneWidget);
+    });
+
+    testWidgets('/opened and /active combine with AND', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk');
+      final closed = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Walk the dog');
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(closed, closed: true);
+      await container
+          .read(taskListProvider.notifier)
+          .addTask(
+            title: 'Plan trip',
+            activeFrom: DateTime.now().add(const Duration(days: 30)),
+          );
+      await _pump(tester, container: container);
+
+      await tester.enterText(find.byType(TextField), '/opened /active');
+      await tester.pump();
+
+      expect(find.text('Buy milk'), findsOneWidget);
+      expect(find.text('Walk the dog'), findsNothing);
+      expect(find.text('Plan trip'), findsNothing);
     });
 
     testWidgets('a /word that is not "opened" is left as plain search '
@@ -652,8 +730,8 @@ void main() {
       expect(field.controller!.text, '#groceries  rest');
     });
 
-    testWidgets('typing "/" shows "opened" as the only suggestion, only '
-        'while unset', (tester) async {
+    testWidgets('typing "/" shows "opened" and "active", each only while '
+        'unset', (tester) async {
       await _pump(tester);
 
       await tester.tap(find.byType(TextField));
@@ -662,8 +740,16 @@ void main() {
       await tester.pump();
 
       expect(find.widgetWithText(ListTile, 'opened'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'active'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), '/opened /');
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.widgetWithText(ListTile, 'opened'), findsNothing);
+      expect(find.widgetWithText(ListTile, 'active'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '/opened /active /');
       await tester.pump();
       await tester.pump();
 

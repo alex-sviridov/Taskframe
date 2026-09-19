@@ -12,17 +12,27 @@ abstract class TaskRepository {
 
   /// Creates a new, open task and returns it. [categoryId] defaults to
   /// [Category.defaultId] when omitted.
-  Future<Task> add({required String title, String? categoryId});
+  Future<Task> add({
+    required String title,
+    String? categoryId,
+    DateTime? activeFrom,
+  });
 
   /// Updates [task] in place, replacing any of [title]/[closed]/
-  /// [categoryId]/[tags] that are given and leaving the rest unchanged.
-  /// Returns the updated task.
+  /// [categoryId]/[tags]/[activeFrom]/[repeat] that are given and leaving
+  /// the rest unchanged. [activeFrom]/[repeat] are left unchanged when
+  /// omitted; pass [clearActiveFrom]/[clearRepeat] to remove them
+  /// instead. Returns the updated task.
   Future<Task> update(
     Task task, {
     String? title,
     bool? closed,
     String? categoryId,
     List<String>? tags,
+    DateTime? activeFrom,
+    bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   });
 
   /// Removes [task].
@@ -39,11 +49,16 @@ class InMemoryTaskRepository implements TaskRepository {
   Future<List<Task>> load() async => List.unmodifiable(_tasks);
 
   @override
-  Future<Task> add({required String title, String? categoryId}) async {
+  Future<Task> add({
+    required String title,
+    String? categoryId,
+    DateTime? activeFrom,
+  }) async {
     final task = Task(
       id: 'task-${_nextId++}',
       title: title,
       categoryId: categoryId ?? Category.defaultId,
+      activeFrom: activeFrom,
     );
     _tasks.add(task);
     return task;
@@ -56,12 +71,20 @@ class InMemoryTaskRepository implements TaskRepository {
     bool? closed,
     String? categoryId,
     List<String>? tags,
+    DateTime? activeFrom,
+    bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
   }) async {
     final updated = task.copyWith(
       title: title,
       closed: closed,
       categoryId: categoryId,
       tags: tags,
+      activeFrom: activeFrom,
+      clearActiveFrom: clearActiveFrom,
+      repeat: repeat,
+      clearRepeat: clearRepeat,
     );
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) {
