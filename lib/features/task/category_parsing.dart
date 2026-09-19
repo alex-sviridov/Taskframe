@@ -1,7 +1,20 @@
 import 'package:taskframe/features/category/models/category.dart';
 
-final _trailingCategoryPattern = RegExp(r'(^|\s)@(\w+) $');
-final _finalCategoryPattern = RegExp(r'(^|\s)@(\w+)$');
+// Any non-space, non-trigger character, not `\w`, since `\w` in Dart's
+// RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to match
+// category names containing letters outside that range (e.g. Cyrillic
+// "уборка"). Trigger characters (#/@) stay excluded so this still stops
+// at a following token typed with no space, same as `\w` did by not
+// matching them either.
+final _trailingCategoryPattern = RegExp(r'(^|\s)@([^\s#/@]+) $');
+final _finalCategoryPattern = RegExp(r'(^|\s)@([^\s#/@]+)$');
+
+/// Matches an *unfinished* `@word` immediately before the cursor — no
+/// trailing space yet — so a suggestions dropdown can offer matching
+/// category names while the user is still typing it. Shared by every
+/// title field that offers `@category` autocomplete (tasks, day/template
+/// blocks).
+final partialCategoryPattern = RegExp(r'(^|\s)@([^\s#/@]*)$');
 
 /// If [text] ends with an `@category` immediately followed by the space
 /// that was just typed, and `category` matches (case-insensitively) the

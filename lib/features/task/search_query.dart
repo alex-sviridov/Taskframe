@@ -94,7 +94,13 @@ class ParsedQuery {
   final String freeText;
 }
 
-final _tokenPattern = RegExp(r'(#|/|@)(!?)(\w+)');
+// Any non-space, non-trigger character, not `\w`, since `\w` in Dart's
+// RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to match
+// tags/categories containing letters outside that range (e.g. Cyrillic).
+// Trigger characters (#/@) stay excluded so a token typed right up
+// against the next one with no space still stops at the boundary, same
+// as `\w` did by not matching them either.
+final _tokenPattern = RegExp(r'(#|/|@)(!?)([^\s#/@]+)');
 
 /// Parses [text] for every `#tag`/`#!tag`, every `@category`/
 /// `@!category`, the first `/opened`/`/!opened` occurrence, and the

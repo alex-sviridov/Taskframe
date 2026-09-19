@@ -19,13 +19,19 @@ import 'package:taskframe/features/task/widgets/task_edit_modal.dart';
 /// Matches an *unfinished* `#word`/`#!word` immediately before the
 /// cursor — no trailing space yet — so suggestions can be offered while
 /// the user is still typing it, wherever the cursor currently sits.
-final _partialTagPattern = RegExp(r'(^|\s)#(!?)(\w*)$');
+///
+/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
+/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
+/// match tags/categories containing letters outside that range (e.g.
+/// Cyrillic); trigger characters (#/@) stay excluded so this still stops
+/// at a following token typed with no space.
+final _partialTagPattern = RegExp(r'(^|\s)#(!?)([^\s#/@]*)$');
 
 /// The `/` counterpart of [_partialTagPattern].
-final _partialStatusPattern = RegExp(r'(^|\s)/(!?)(\w*)$');
+final _partialStatusPattern = RegExp(r'(^|\s)/(!?)([^\s#/@]*)$');
 
 /// The `@` counterpart of [_partialTagPattern].
-final _partialCategoryPattern = RegExp(r'(^|\s)@(!?)(\w*)$');
+final _partialCategoryPattern = RegExp(r'(^|\s)@(!?)([^\s#/@]*)$');
 
 /// Which kind of token the suggestions dropdown is currently offering —
 /// decides both the icon shown per row and which symbol/lookup

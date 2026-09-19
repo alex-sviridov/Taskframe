@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/core/widgets/title_suggestions_overlay.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
@@ -20,14 +21,15 @@ import 'package:taskframe/features/task/widgets/tag_pills.dart';
 /// still typing it, wherever the cursor currently sits. The title's own
 /// `!`-exclusion isn't a concept here (unlike the search bar's tokens),
 /// so this is simpler than `tasks_screen.dart`'s counterpart.
-final _partialTitleTagPattern = RegExp(r'(^|\s)#(\w*)$');
-
-/// The `@` counterpart of [_partialTitleTagPattern].
-final _partialTitleCategoryPattern = RegExp(r'(^|\s)@(\w*)$');
-
-/// Which kind of token the title's suggestions dropdown is currently
-/// offering.
-enum _TitleSuggestionKind { tag, category }
+///
+/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
+/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
+/// match tags containing letters outside that range (e.g. Cyrillic);
+/// trigger characters (#/@) stay excluded so this still stops at a
+/// following token typed with no space. The `@` counterpart lives as
+/// [partialCategoryPattern] in `category_parsing.dart`, shared with
+/// every other title field that offers `@category` autocomplete.
+final _partialTitleTagPattern = RegExp(r'(^|\s)#([^\s#/@]*)$');
 
 /// The title's suggestions dropdown never lists more than this many
 /// options — matches the search bar's own limit.
@@ -113,18 +115,11 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   String _repeatUnit = 'w';
   late final FocusNode _titleFocusNode;
 
-  /// Anchors the floating title-suggestions dropdown to the title
-  /// field's current position/size — same mechanism as the search bar's
-  /// own dropdown in `tasks_screen.dart`.
-  final LayerLink _titleFieldLink = LayerLink();
-
-  /// Reads the title field's laid-out size, so the floating dropdown can
-  /// match its width and sit directly below it.
-  final GlobalKey _titleFieldBoxKey = GlobalKey();
-
-  /// The floating title-suggestions dropdown, inserted into the ambient
-  /// [Overlay] on demand.
-  OverlayEntry? _titleSuggestionsOverlayEntry;
+  /// Manages the floating title-suggestions dropdown — same shared
+  /// controller the search bar's own dropdown in `tasks_screen.dart`
+  /// (independently) and `block_edit_modal.dart` use.
+  final TitleSuggestionsController _titleSuggestions =
+      TitleSuggestionsController();
 
   /// Set on Escape to hide the title suggestions dropdown until the next
   /// keystroke — otherwise a pure recompute from unchanged text would
@@ -179,8 +174,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _activeFromController.dispose();
     _repeatCountController.dispose();
     _titleFocusNode.dispose();
-    _titleSuggestionsOverlayEntry?.remove();
-    _titleSuggestionsOverlayEntry?.dispose();
+    _titleSuggestions.dispose();
     super.dispose();
   }
 
@@ -370,14 +364,13 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         );
   }
 
-  /// The title's suggestions dropdown current answer — tag names while
-  /// the text immediately before the cursor ends in an unfinished
-  /// `#word`, category names while it ends in an unfinished `@word`.
-  /// `null` hides the dropdown: no partial match, no candidates,
-  /// dismissed via Escape, or the title field isn't focused. Mirrors
+  /// The title's suggestions dropdown current rows — tag names while the
+  /// text immediately before the cursor ends in an unfinished `#word`,
+  /// category names while it ends in an unfinished `@word`. `null` hides
+  /// the dropdown: no partial match, no candidates, dismissed via
+  /// Escape, or the title field isn't focused. Mirrors
   /// `_TasksScreenState._currentSuggestions` in `tasks_screen.dart`.
-  ({List<String> options, _TitleSuggestionKind kind})?
-  _currentTitleSuggestions() {
+  List<TitleSuggestionRow>? _currentTitleSuggestionRows() {
     if (_titleSuggestionsDismissed || !_titleFocusNode.hasFocus) return null;
     final cursor = _titleController.selection.baseOffset;
     if (cursor < 0) return null;
@@ -393,14 +386,21 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
               .where((tag) => tag.startsWith(partial))
               .toList()
             ..sort();
-      return options.isEmpty
-          ? null
-          : (
-              options: options.take(_maxTitleSuggestions).toList(),
-              kind: _TitleSuggestionKind.tag,
-            );
+      if (options.isEmpty) return null;
+      return [
+        for (final option in options.take(_maxTitleSuggestions))
+          TitleSuggestionRow(
+            label: option,
+            icon: Icons.tag,
+            onSelect: () => _selectTitleSuggestion(
+              option,
+              pattern: _partialTitleTagPattern,
+              symbol: '#',
+            ),
+          ),
+      ];
     }
-    final categoryMatch = _partialTitleCategoryPattern.firstMatch(beforeCursor);
+    final categoryMatch = partialCategoryPattern.firstMatch(beforeCursor);
     if (categoryMatch != null) {
       final partial = categoryMatch.group(2)!.toLowerCase();
       final categories = ref.read(categoryListProvider).value ?? const [];
@@ -410,35 +410,39 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
               .where((name) => name.startsWith(partial))
               .toList()
             ..sort();
-      return options.isEmpty
-          ? null
-          : (
-              options: options.take(_maxTitleSuggestions).toList(),
-              kind: _TitleSuggestionKind.category,
-            );
+      if (options.isEmpty) return null;
+      return [
+        for (final option in options.take(_maxTitleSuggestions))
+          TitleSuggestionRow(
+            label: option,
+            icon: Icons.category,
+            onSelect: () => _selectTitleSuggestion(
+              option,
+              pattern: partialCategoryPattern,
+              symbol: '@',
+            ),
+          ),
+      ];
     }
     return null;
   }
 
-  /// Completes the unfinished token immediately before the cursor with
-  /// [option] plus a trailing space, then reinserts whatever followed the
-  /// cursor — same shape a manually-typed `#tag `/`@category ` settles
-  /// to — and re-runs [_onTitleChanged] on the result, since setting
-  /// [_titleController]'s value directly doesn't itself invoke the
-  /// field's `onChanged`.
+  /// Completes the unfinished token immediately before the cursor (as
+  /// matched by [pattern]) with [option] plus a trailing space, then
+  /// reinserts whatever followed the cursor — same shape a manually-typed
+  /// `#tag `/`@category ` settles to — and re-runs [_onTitleChanged] on
+  /// the result, since setting [_titleController]'s value directly
+  /// doesn't itself invoke the field's `onChanged`.
   void _selectTitleSuggestion(
     String option, {
-    required _TitleSuggestionKind kind,
+    required RegExp pattern,
+    required String symbol,
   }) {
     final cursor = _titleController.selection.baseOffset;
     final text = _titleController.text;
     final beforeCursor = text.substring(0, cursor);
     final afterCursor = text.substring(cursor);
-    final pattern = kind == _TitleSuggestionKind.tag
-        ? _partialTitleTagPattern
-        : _partialTitleCategoryPattern;
     final match = pattern.firstMatch(beforeCursor)!;
-    final symbol = kind == _TitleSuggestionKind.tag ? '#' : '@';
     final prefix = beforeCursor.substring(0, match.start) + match.group(1)!;
     final completed = '$prefix$symbol$option ';
     _titleController.value = TextEditingValue(
@@ -448,77 +452,10 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     unawaited(_onTitleChanged(_titleController.text));
   }
 
-  /// Inserts, rebuilds, or removes the floating title-suggestions
-  /// dropdown to match [_currentTitleSuggestions]'s current answer.
-  /// Called after every frame so it always runs once the title field's
-  /// [_titleFieldBoxKey] render box is guaranteed to be laid out.
-  void _syncTitleSuggestionsOverlay() {
-    final hasSuggestions = _currentTitleSuggestions() != null;
-    if (!hasSuggestions) {
-      _titleSuggestionsOverlayEntry?.remove();
-      _titleSuggestionsOverlayEntry?.dispose();
-      _titleSuggestionsOverlayEntry = null;
-      return;
-    }
-    if (_titleSuggestionsOverlayEntry != null) {
-      _titleSuggestionsOverlayEntry!.markNeedsBuild();
-      return;
-    }
-    final entry = OverlayEntry(builder: _buildTitleSuggestionsOverlay);
-    _titleSuggestionsOverlayEntry = entry;
-    Overlay.of(context).insert(entry);
-  }
-
-  /// Builds the floating dropdown's content, re-reading
-  /// [_currentTitleSuggestions] fresh each time.
-  Widget _buildTitleSuggestionsOverlay(BuildContext context) {
-    final suggestions = _currentTitleSuggestions();
-    if (suggestions == null) return const SizedBox.shrink();
-    final fieldBox =
-        _titleFieldBoxKey.currentContext?.findRenderObject() as RenderBox?;
-    final fieldSize = fieldBox?.size ?? const Size(300, 48);
-    return Positioned(
-      width: fieldSize.width,
-      child: CompositedTransformFollower(
-        link: _titleFieldLink,
-        showWhenUnlinked: false,
-        offset: Offset(0, fieldSize.height + 4),
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final option in suggestions.options)
-                  GestureDetector(
-                    onTapDown: (_) =>
-                        _selectTitleSuggestion(option, kind: suggestions.kind),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(
-                        suggestions.kind == _TitleSuggestionKind.tag
-                            ? Icons.tag
-                            : Icons.category,
-                      ),
-                      title: Text(option),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   KeyEventResult _handleTitleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape) {
-      if (_currentTitleSuggestions() != null) {
+      if (_currentTitleSuggestionRows() != null) {
         setState(() => _titleSuggestionsDismissed = true);
         return KeyEventResult.handled;
       }
@@ -677,7 +614,9 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     // Overlay content can only be sized/positioned off the title field's
     // render box once this frame has actually laid it out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncTitleSuggestionsOverlay();
+      if (mounted) {
+        _titleSuggestions.sync(context, _currentTitleSuggestionRows());
+      }
     });
     return PopScope(
       canPop: false,
@@ -705,11 +644,11 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
                   ),
                   Expanded(
                     child: CompositedTransformTarget(
-                      link: _titleFieldLink,
+                      link: _titleSuggestions.link,
                       child: Focus(
                         onKeyEvent: _handleTitleKeyEvent,
                         child: Container(
-                          key: _titleFieldBoxKey,
+                          key: _titleSuggestions.fieldBoxKey,
                           child: TextField(
                             key: const Key('task-title-field'),
                             controller: _titleController,

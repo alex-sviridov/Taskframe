@@ -812,6 +812,92 @@ void main() {
       expect(blocks.single.categoryId, work.id);
     });
 
+    testWidgets('typing "@category " in the title strips it and sets the '
+        'category', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      final work = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Deep work @work ');
+      await tester.pump();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.categoryId, work.id);
+      expect(find.text('Deep work '), findsOneWidget);
+    });
+
+    testWidgets('typing "@word " for a name that matches no category leaves '
+        'it as plain text and the category unchanged', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Deep work @nope ');
+      await tester.pump();
+
+      final blocks = container.read(dayBlocksProvider(_date)).value!;
+      expect(blocks.single.categoryId, block.categoryId);
+    });
+
+    testWidgets(
+      'a trailing "@category" with no space is still applied when the '
+      'modal is dismissed via the close button',
+      (tester) async {
+        final (container, block) = await _seededContainer();
+        addTearDown(container.dispose);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        await _pumpOpenButton(tester, container, block);
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField), 'Deep work @work');
+        await tester.pump();
+
+        await tester.tap(find.byTooltip('Close'));
+        await tester.pumpAndSettle();
+
+        final blocks = container.read(dayBlocksProvider(_date)).value!;
+        expect(blocks.single.title, 'Deep work');
+        expect(blocks.single.categoryId, work.id);
+      },
+    );
+
+    testWidgets(
+      'selecting a category suggestion sets the category and strips the '
+      'text',
+      (tester) async {
+        final (container, block) = await _seededContainer();
+        addTearDown(container.dispose);
+        final work = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+        await _pumpOpenButton(tester, container, block);
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField), 'Deep work @wo');
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.widgetWithText(ListTile, 'work'), findsOneWidget);
+        await tester.tap(find.widgetWithText(ListTile, 'work'));
+        await tester.pumpAndSettle();
+
+        final blocks = container.read(dayBlocksProvider(_date)).value!;
+        expect(blocks.single.categoryId, work.id);
+        expect(find.text('Deep work '), findsOneWidget);
+      },
+    );
+
     testWidgets('shows a segmented type selector with the current kind '
         'selected', (tester) async {
       final (container, block) = await _seededContainer();

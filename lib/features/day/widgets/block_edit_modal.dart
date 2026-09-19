@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
+import 'package:taskframe/core/widgets/title_suggestions_overlay.dart';
+import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/category/widgets/category_picker.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_blocks_provider.dart';
@@ -12,6 +15,11 @@ import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/day/widgets/block_kind_style.dart';
 import 'package:taskframe/features/day/widgets/schedule_block_actions.dart';
+import 'package:taskframe/features/task/category_parsing.dart';
+
+/// The title-suggestions dropdown never lists more than this many
+/// options — matches the same limit in `task_edit_modal.dart`.
+const _maxTitleSuggestions = 4;
 
 /// A tappable row showing [label] and [time] as `HH:mm`, used for the
 /// block edit modal's start/end rows.
@@ -436,6 +444,16 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   TimeObject? _currentBlock;
   _TimeField? _expandedField;
 
+  /// Manages the floating title-suggestions dropdown for an in-progress
+  /// `@category` — same shared controller `task_edit_modal.dart` uses.
+  final TitleSuggestionsController _titleSuggestions =
+      TitleSuggestionsController();
+
+  /// Set on Escape to hide the title suggestions dropdown until the next
+  /// keystroke — otherwise a pure recompute from unchanged text would
+  /// show the same suggestions right back.
+  bool _titleSuggestionsDismissed = false;
+
   /// The column whose provider this modal currently watches/writes
   /// through. Starts at [BlockEditModal.column] (a `final` constructor
   /// param that can't itself change) and is reassigned by [_changeDate]
@@ -459,6 +477,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
       ..removeListener(_handleFocusChange)
       ..dispose();
     _titleController.dispose();
+    _titleSuggestions.dispose();
     super.dispose();
   }
 
@@ -468,7 +487,16 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   /// pops the keyboard unexpectedly.
   bool _autofocusTitle = false;
 
+  /// Set for the duration of [_closeModal], so a focus loss it causes
+  /// (e.g. tapping the close button defocuses the title field as part of
+  /// the same tap) doesn't also fire [_handleFocusChange]'s own
+  /// [_commitTitle] — that call would race [_applyPendingCategoryOnExit]'s
+  /// combined update using an unstripped title and a stale category
+  /// fallback, clobbering whichever of the two resolves second.
+  bool _closing = false;
+
   void _handleFocusChange() {
+    if (_closing) return;
     final block = _currentBlock;
     if (!_titleFocus.hasFocus && block != null) {
       unawaited(_commitTitle(block));
@@ -489,6 +517,152 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
         title: value,
       );
     }
+  }
+
+  /// Applied on every keystroke: when the cursor is at the end and the
+  /// just-typed text ends with `@category ` (matched against real
+  /// category names — see [extractTrailingCategory]), strips that chunk
+  /// from the title field and applies the category immediately — same as
+  /// picking it from [BlockCategoryPicker] below. Unlike
+  /// [_commitTitle], the plain title text itself is never persisted
+  /// here; it still only saves on blur/submit, as it always has.
+  void _onTitleChanged(TimeObject block, String rawTitle) {
+    _titleSuggestionsDismissed = false;
+    // Unconditional: a keystroke that matches no extraction (e.g. an
+    // unfinished "@wo") still needs to rebuild so the post-frame
+    // callback in build() re-syncs the suggestions dropdown for the new
+    // cursor/text state.
+    setState(() {});
+    final atEnd = _titleController.selection.baseOffset == rawTitle.length;
+    if (!atEnd) return;
+    final categories = ref.read(categoryListProvider).value ?? const [];
+    final extraction = extractTrailingCategory(rawTitle, categories);
+    if (extraction == null) return;
+    _titleController.value = TextEditingValue(
+      text: extraction.title,
+      selection: TextSelection.collapsed(offset: extraction.title.length),
+    );
+    unawaited(_setCategory(block, extraction.categoryId));
+  }
+
+  /// Catches a trailing `@category` left with no space when the modal is
+  /// closed — [_onTitleChanged] only extracts on a trailing space, so a
+  /// category typed right before dismissal would otherwise never be
+  /// picked up. Also commits any pending plain-text title edit, the same
+  /// way every other action in this modal does before it acts.
+  ///
+  /// Applies both the stripped title and the new category in a single
+  /// [ScheduleBlockActions.updateBlock] call, rather than one call each
+  /// (as [_commitTitle] and [_setCategory] individually do) — two
+  /// sequential calls would each fall back to [block]'s own
+  /// (increasingly stale) snapshot for whichever field the other call
+  /// didn't touch, so the second call would silently clobber the
+  /// first's change.
+  Future<void> _applyPendingCategoryOnExit(TimeObject block) async {
+    final categories = ref.read(categoryListProvider).value ?? const [];
+    final extraction = extractFinalCategory(_titleController.text, categories);
+    final rawTitle = extraction?.title ?? _titleController.text;
+    final title = rawTitle.trim();
+    if (extraction != null) {
+      _titleController.value = TextEditingValue(
+        text: extraction.title,
+        selection: TextSelection.collapsed(offset: extraction.title.length),
+      );
+    }
+    if (title.isEmpty) {
+      _titleController.text = block.title;
+      if (extraction != null) {
+        await _setCategory(block, extraction.categoryId);
+      }
+      return;
+    }
+    final categoryId = extraction?.categoryId;
+    if (title != block.title || categoryId != null) {
+      await widget.actions.updateBlock(
+        ref,
+        _currentColumn,
+        block,
+        title: title,
+        categoryId: categoryId,
+      );
+    }
+  }
+
+  /// The title's suggestions dropdown current rows — category names
+  /// while the text immediately before the cursor ends in an unfinished
+  /// `@word`. `null` hides the dropdown: no partial match, no
+  /// candidates, dismissed via Escape, or the title field isn't
+  /// focused. Mirrors `task_edit_modal.dart`'s counterpart, category-only
+  /// since blocks have no tags.
+  List<TitleSuggestionRow>? _currentTitleSuggestionRows(TimeObject block) {
+    if (_titleSuggestionsDismissed || !_titleFocus.hasFocus) return null;
+    final cursor = _titleController.selection.baseOffset;
+    if (cursor < 0) return null;
+    final beforeCursor = _titleController.text.substring(0, cursor);
+    final match = partialCategoryPattern.firstMatch(beforeCursor);
+    if (match == null) return null;
+    final partial = match.group(2)!.toLowerCase();
+    final categories = ref.read(categoryListProvider).value ?? const [];
+    final options =
+        categories
+            .map((c) => c.name.toLowerCase())
+            .where((name) => name.startsWith(partial))
+            .toList()
+          ..sort();
+    if (options.isEmpty) return null;
+    return [
+      for (final option in options.take(_maxTitleSuggestions))
+        TitleSuggestionRow(
+          label: option,
+          icon: Icons.category,
+          onSelect: () => _selectTitleSuggestion(block, option),
+        ),
+    ];
+  }
+
+  /// Completes the unfinished `@word` immediately before the cursor with
+  /// [option] plus a trailing space, then reinserts whatever followed
+  /// the cursor, and re-runs [_onTitleChanged] on the result — same
+  /// shape as `task_edit_modal.dart`'s counterpart.
+  void _selectTitleSuggestion(TimeObject block, String option) {
+    final cursor = _titleController.selection.baseOffset;
+    final text = _titleController.text;
+    final beforeCursor = text.substring(0, cursor);
+    final afterCursor = text.substring(cursor);
+    final match = partialCategoryPattern.firstMatch(beforeCursor)!;
+    final prefix = beforeCursor.substring(0, match.start) + match.group(1)!;
+    final completed = '$prefix@$option ';
+    _titleController.value = TextEditingValue(
+      text: completed + afterCursor,
+      selection: TextSelection.collapsed(offset: completed.length),
+    );
+    _onTitleChanged(block, _titleController.text);
+  }
+
+  KeyEventResult _handleTitleKeyEvent(
+    TimeObject block,
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_currentTitleSuggestionRows(block) != null) {
+        setState(() => _titleSuggestionsDismissed = true);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Applies any pending `@category` and title edit, then pops the
+  /// modal. Used by both the close button and [PopScope]'s intercepted
+  /// pop (system back / barrier tap) — safe to run twice in a row since
+  /// the second pass finds nothing left to extract or commit.
+  Future<void> _closeModal() async {
+    _closing = true;
+    final block = _currentBlock;
+    if (block != null) await _applyPendingCategoryOnExit(block);
+    if (mounted) Navigator.of(context).pop();
   }
 
   /// Toggles [field]'s inline wheel picker: collapses it if already
@@ -662,65 +836,124 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
         .where((b) => b.id != current.id)
         .toList();
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(Icons.close),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              TextField(
-                controller: _titleController,
-                focusNode: _titleFocus,
-                autofocus: _autofocusTitle,
-                onSubmitted: (_) => _commitTitle(current),
-                decoration: const InputDecoration(
-                  border: UnderlineInputBorder(),
-                  isDense: true,
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _titleSuggestions.sync(context, _currentTitleSuggestionRows(current));
+      }
+    });
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _closeModal();
+      },
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: const Icon(Icons.close),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => unawaited(_closeModal()),
+                    ),
+                  ],
                 ),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              BlockCategoryPicker(
-                selectedCategoryId: current.categoryId,
-                onSelected: (categoryId) => _setCategory(current, categoryId),
-              ),
-              const SizedBox(height: 12),
-              if (isDayColumn) ...[
-                ListTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(
-                    formatDate(
-                      (_currentColumn as DayColumn).date,
-                      settings.dateFormat,
+                const SizedBox(height: 4),
+                CompositedTransformTarget(
+                  link: _titleSuggestions.link,
+                  child: Focus(
+                    onKeyEvent: (node, event) =>
+                        _handleTitleKeyEvent(current, node, event),
+                    child: Container(
+                      key: _titleSuggestions.fieldBoxKey,
+                      child: TextField(
+                        controller: _titleController,
+                        focusNode: _titleFocus,
+                        autofocus: _autofocusTitle,
+                        onChanged: (value) => _onTitleChanged(current, value),
+                        onSubmitted: (_) => _commitTitle(current),
+                        decoration: const InputDecoration(
+                          border: UnderlineInputBorder(),
+                          isDense: true,
+                        ),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
                   ),
-                  onTap: () => _changeDate(current),
                 ),
-              ],
-              if (isNarrow(context)) ...[
-                BlockTimeRow(
-                  label: 'Starts',
-                  time: current.start,
-                  onTap: () => _toggleTimeField(_TimeField.start, current),
+                const SizedBox(height: 12),
+                BlockCategoryPicker(
+                  selectedCategoryId: current.categoryId,
+                  onSelected: (categoryId) => _setCategory(current, categoryId),
                 ),
-                if (_expandedField == _TimeField.start)
-                  _TimeWheelPicker(
-                    initial: current.start,
-                    settings: settings,
+                const SizedBox(height: 12),
+                if (isDayColumn) ...[
+                  ListTile(
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(
+                      formatDate(
+                        (_currentColumn as DayColumn).date,
+                        settings.dateFormat,
+                      ),
+                    ),
+                    onTap: () => _changeDate(current),
+                  ),
+                ],
+                if (isNarrow(context)) ...[
+                  BlockTimeRow(
+                    label: 'Starts',
+                    time: current.start,
+                    onTap: () => _toggleTimeField(_TimeField.start, current),
+                  ),
+                  if (_expandedField == _TimeField.start)
+                    _TimeWheelPicker(
+                      initial: current.start,
+                      settings: settings,
+                      range: validEditRange(
+                        block: current,
+                        editingStart: true,
+                        day: anchorDateFor(_currentColumn),
+                        settings: settings,
+                        others: others,
+                      ),
+                      onDone: (picked) =>
+                          _confirmTime(current, _TimeField.start, picked),
+                    ),
+                  BlockTimeRow(
+                    label: 'Ends',
+                    time: current.end,
+                    onTap: () => _toggleTimeField(_TimeField.end, current),
+                  ),
+                  if (_expandedField == _TimeField.end)
+                    _TimeWheelPicker(
+                      initial: current.end,
+                      settings: settings,
+                      range: validEditRange(
+                        block: current,
+                        editingStart: false,
+                        day: anchorDateFor(_currentColumn),
+                        settings: settings,
+                        others: others,
+                      ),
+                      onDone: (picked) =>
+                          _confirmTime(current, _TimeField.end, picked),
+                    ),
+                ] else ...[
+                  // A drag-to-scroll wheel is awkward with a mouse and, as an
+                  // inline-expanding picker, pushes the rest of this layout
+                  // around — a plain dropdown avoids both on a wide width.
+                  BlockTimeDropdown(
+                    label: 'Starts',
+                    value: current.start,
                     range: validEditRange(
                       block: current,
                       editingStart: true,
@@ -728,18 +961,13 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                       settings: settings,
                       others: others,
                     ),
-                    onDone: (picked) =>
+                    onChanged: (picked) =>
                         _confirmTime(current, _TimeField.start, picked),
                   ),
-                BlockTimeRow(
-                  label: 'Ends',
-                  time: current.end,
-                  onTap: () => _toggleTimeField(_TimeField.end, current),
-                ),
-                if (_expandedField == _TimeField.end)
-                  _TimeWheelPicker(
-                    initial: current.end,
-                    settings: settings,
+                  const SizedBox(height: 12),
+                  BlockTimeDropdown(
+                    label: 'Ends',
+                    value: current.end,
                     range: validEditRange(
                       block: current,
                       editingStart: false,
@@ -747,71 +975,43 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                       settings: settings,
                       others: others,
                     ),
-                    onDone: (picked) =>
+                    onChanged: (picked) =>
                         _confirmTime(current, _TimeField.end, picked),
                   ),
-              ] else ...[
-                // A drag-to-scroll wheel is awkward with a mouse and, as an
-                // inline-expanding picker, pushes the rest of this layout
-                // around — a plain dropdown avoids both on a wide width.
-                BlockTimeDropdown(
-                  label: 'Starts',
-                  value: current.start,
-                  range: validEditRange(
-                    block: current,
-                    editingStart: true,
-                    day: anchorDateFor(_currentColumn),
-                    settings: settings,
-                    others: others,
+                ],
+                const SizedBox(height: 12),
+                Center(
+                  child: SegmentedButton<BlockKind>(
+                    segments: [
+                      for (final kind in BlockKind.values)
+                        ButtonSegment(
+                          value: kind,
+                          label: Text(kind.label),
+                          icon: Icon(kind.icon, color: kind.color),
+                        ),
+                    ],
+                    selected: {current.kind},
+                    onSelectionChanged: (selection) =>
+                        _setKind(current, selection.single),
                   ),
-                  onChanged: (picked) =>
-                      _confirmTime(current, _TimeField.start, picked),
                 ),
                 const SizedBox(height: 12),
-                BlockTimeDropdown(
-                  label: 'Ends',
-                  value: current.end,
-                  range: validEditRange(
-                    block: current,
-                    editingStart: false,
-                    day: anchorDateFor(_currentColumn),
-                    settings: settings,
-                    others: others,
-                  ),
-                  onChanged: (picked) =>
-                      _confirmTime(current, _TimeField.end, picked),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (isDayColumn)
+                      IconButton(
+                        tooltip: 'Copy to next day',
+                        icon: const Icon(Icons.content_copy),
+                        onPressed: canCopy
+                            ? () => _copyToNextDay(current)
+                            : null,
+                      ),
+                    BlockDeleteButton(onConfirmed: () => _delete(current)),
+                  ],
                 ),
               ],
-              const SizedBox(height: 12),
-              Center(
-                child: SegmentedButton<BlockKind>(
-                  segments: [
-                    for (final kind in BlockKind.values)
-                      ButtonSegment(
-                        value: kind,
-                        label: Text(kind.label),
-                        icon: Icon(kind.icon, color: kind.color),
-                      ),
-                  ],
-                  selected: {current.kind},
-                  onSelectionChanged: (selection) =>
-                      _setKind(current, selection.single),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (isDayColumn)
-                    IconButton(
-                      tooltip: 'Copy to next day',
-                      icon: const Icon(Icons.content_copy),
-                      onPressed: canCopy ? () => _copyToNextDay(current) : null,
-                    ),
-                  BlockDeleteButton(onConfirmed: () => _delete(current)),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

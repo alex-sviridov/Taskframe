@@ -21,6 +21,14 @@ GoRouter _buildTestRouter() => GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/zero',
+              builder: (context, state) => const Text('Branch zero'),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: '/one',
               builder: (context, state) => const Text('Branch one'),
             ),
@@ -94,6 +102,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(NavigationDrawer), findsOneWidget);
+      expect(find.text('Now'), findsOneWidget);
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
@@ -132,6 +141,7 @@ void main() {
 
       expect(find.byType(NavigationDrawer), findsOneWidget);
       expect(find.byIcon(Icons.menu), findsNothing);
+      expect(find.text('Now'), findsOneWidget);
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Templates'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
@@ -237,6 +247,7 @@ void main() {
         // Unlike a route pushed on top of the shell, a branch keeps the
         // sidebar (and every other destination) on screen alongside it.
         expect(find.byType(NavigationDrawer), findsOneWidget);
+        expect(find.text('Now'), findsOneWidget);
         expect(find.text('Day'), findsOneWidget);
         expect(find.text('Templates'), findsOneWidget);
         expect(find.text('Categories'), findsOneWidget);
