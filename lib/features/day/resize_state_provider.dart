@@ -11,8 +11,9 @@ const _minBlockDuration = Duration(minutes: 15);
 /// if any.
 ///
 /// `null` when no resize is in progress. A resize never changes a block's
-/// date, so unlike [DragNotifier] this needs no pointer-ownership dance —
-/// the widget driving the drag stays mounted for its whole lifetime.
+/// date, so unlike DragNotifier (in drag_state_provider.dart) this needs no
+/// pointer-ownership dance — the widget driving the drag stays mounted for
+/// its whole lifetime.
 class ResizeNotifier extends Notifier<ResizeState?> {
   ScheduleController? _controller;
 
@@ -106,7 +107,8 @@ final resizeStateProvider = NotifierProvider<ResizeNotifier, ResizeState?>(
 
 /// Projects [resizeState] to the value a `DayGrid` for [column] actually
 /// cares about, collapsing to `null` whenever the resize belongs to some
-/// other column. See [dragStateForColumn], its drag equivalent.
+/// other column. See dragStateForColumn (in drag_state_provider.dart) for
+/// the drag equivalent.
 ResizeState? resizeStateForColumn(
   ResizeState? resizeState,
   ScheduleColumn column,

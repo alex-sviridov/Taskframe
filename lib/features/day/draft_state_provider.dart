@@ -41,7 +41,8 @@ final draftStateProvider = NotifierProvider<DraftNotifier, DraftState?>(
 
 /// Projects [draftState] to the value a `DayGrid` for [column] actually
 /// cares about, collapsing to `null` whenever the draft belongs to some
-/// other column. See [dragStateForColumn], its drag equivalent.
+/// other column. See dragStateForColumn (in drag_state_provider.dart) for
+/// the drag equivalent.
 DraftState? draftStateForColumn(DraftState? draftState, ScheduleColumn column) {
   if (draftState == null) return null;
   return draftState.column == column ? draftState : null;
