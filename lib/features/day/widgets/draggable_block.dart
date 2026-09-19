@@ -425,109 +425,113 @@ class _DraggableBlockState extends ConsumerState<DraggableBlock> {
             // on hover. `translucent` so a mouse pointer that lands
             // outside both strips (most of a tiny block) still reaches the
             // move `PanGestureRecognizer` above.
-            Positioned(
-              key: const Key('day-grid-resize-start-handle'),
+            _ResizeHandle(
+              resizeKey: const Key('day-grid-resize-start-handle'),
               top: topBleed - topOvershoot,
-              left: 0,
-              right: 0,
               height: topOvershoot + topStripBottom,
-              child: MouseRegion(
-                // `MouseRegion` defaults to `opaque: true`, which would
-                // absorb hit-testing at this point regardless of the
-                // translucent `RawGestureDetector` beneath it — blocking
-                // the touch race zone and the move detector further down
-                // the Stack whenever a non-mouse pointer, or a mouse
-                // pointer outside this strip's own recognizer, lands here.
-                opaque: false,
-                cursor: SystemMouseCursors.resizeRow,
-                child: RawGestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  gestures: {
-                    VerticalDragGestureRecognizer:
-                        GestureRecognizerFactoryWithHandlers<
-                          VerticalDragGestureRecognizer
-                        >(
-                          () => VerticalDragGestureRecognizer()
-                            ..supportedDevices = {
-                              PointerDeviceKind.mouse,
-                              PointerDeviceKind.trackpad,
-                            },
-                          (recognizer) {
-                            recognizer
-                              ..onStart = (details) {
-                                _startResize(ResizeEdge.start);
-                                // See the touch zone's matching comment: the
-                                // arena can resolve mid-gesture, in which
-                                // case `onStart` already carries the full
-                                // movement and no `onUpdate` follows.
-                                _updateResize(details.globalPosition);
-                              }
-                              ..onUpdate = (details) {
-                                _updateResize(details.globalPosition);
-                              }
-                              ..onEnd = (_) {
-                                _endResize();
-                              }
-                              ..onCancel = _cancelResize;
-                          },
-                        ),
-                  },
-                ),
-              ),
+              edge: ResizeEdge.start,
+              onStart: (edge, position) {
+                _startResize(edge);
+                _updateResize(position);
+              },
+              onUpdate: _updateResize,
+              onEnd: _endResize,
+              onCancel: _cancelResize,
             ),
-            Positioned(
-              key: const Key('day-grid-resize-end-handle'),
+            _ResizeHandle(
+              resizeKey: const Key('day-grid-resize-end-handle'),
               top: topBleed + bottomStripTop,
-              left: 0,
-              right: 0,
               height: (blockHeight + bottomOvershoot) - bottomStripTop,
-              child: MouseRegion(
-                // `MouseRegion` defaults to `opaque: true`, which would
-                // absorb hit-testing at this point regardless of the
-                // translucent `RawGestureDetector` beneath it — blocking
-                // the touch race zone and the move detector further down
-                // the Stack whenever a non-mouse pointer, or a mouse
-                // pointer outside this strip's own recognizer, lands here.
-                opaque: false,
-                cursor: SystemMouseCursors.resizeRow,
-                child: RawGestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  gestures: {
-                    VerticalDragGestureRecognizer:
-                        GestureRecognizerFactoryWithHandlers<
-                          VerticalDragGestureRecognizer
-                        >(
-                          () => VerticalDragGestureRecognizer()
-                            ..supportedDevices = {
-                              PointerDeviceKind.mouse,
-                              PointerDeviceKind.trackpad,
-                            },
-                          (recognizer) {
-                            recognizer
-                              ..onStart = (details) {
-                                _startResize(ResizeEdge.end);
-                                // See the touch zone's matching comment: the
-                                // arena can resolve mid-gesture, in which
-                                // case `onStart` already carries the full
-                                // movement and no `onUpdate` follows.
-                                _updateResize(details.globalPosition);
-                              }
-                              ..onUpdate = (details) {
-                                _updateResize(details.globalPosition);
-                              }
-                              ..onEnd = (_) {
-                                _endResize();
-                              }
-                              ..onCancel = _cancelResize;
-                          },
-                        ),
-                  },
-                ),
-              ),
+              edge: ResizeEdge.end,
+              onStart: (edge, position) {
+                _startResize(edge);
+                _updateResize(position);
+              },
+              onUpdate: _updateResize,
+              onEnd: _endResize,
+              onCancel: _cancelResize,
             ),
           ],
         );
       },
+    );
+  }
+}
+
+/// One mouse resize strip — the thin, precise handle sitting at a
+/// block's true top or bottom edge (see [_DraggableBlockState.build]'s
+/// "classic" desktop resize handles comment). Identical for the start
+/// and end edges except for [edge], geometry, and which
+/// [_DraggableBlockState] callback each drag stage invokes.
+class _ResizeHandle extends StatelessWidget {
+  const new({
+    required this.resizeKey,
+    required this.top,
+    required this.height,
+    required this.edge,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+    required this.onCancel,
+  });
+
+  final Key resizeKey;
+  final double top;
+  final double height;
+  final ResizeEdge edge;
+
+  /// Called on drag start with [edge] and the pointer's global position —
+  /// the caller both starts the resize for [edge] and immediately applies
+  /// this first position, matching the original two call sites' comment
+  /// about the arena resolving mid-gesture.
+  final void Function(ResizeEdge edge, Offset globalPosition) onStart;
+  final ValueChanged<Offset> onUpdate;
+  final VoidCallback onEnd;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      key: resizeKey,
+      top: top,
+      left: 0,
+      right: 0,
+      height: height,
+      child: MouseRegion(
+        // See the original handles' comment: `opaque: false` so a pointer
+        // outside this strip's own recognizer still reaches the touch
+        // race zone and move detector beneath it.
+        opaque: false,
+        cursor: SystemMouseCursors.resizeRow,
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.translucent,
+          gestures: {
+            VerticalDragGestureRecognizer:
+                GestureRecognizerFactoryWithHandlers<
+                  VerticalDragGestureRecognizer
+                >(
+                  () => VerticalDragGestureRecognizer()
+                    ..supportedDevices = {
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                    },
+                  (recognizer) {
+                    recognizer
+                      ..onStart = (details) {
+                        onStart(edge, details.globalPosition);
+                      }
+                      ..onUpdate = (details) {
+                        onUpdate(details.globalPosition);
+                      }
+                      ..onEnd = (_) {
+                        onEnd();
+                      }
+                      ..onCancel = onCancel;
+                  },
+                ),
+          },
+        ),
+      ),
     );
   }
 }
