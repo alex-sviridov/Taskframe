@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+/// Picks black or white — whichever reads legibly — for text/icons drawn
+/// on top of [background]. Used by [ColoredListCard] itself, and
+/// reusable anywhere else that needs to dim/style text against an
+/// arbitrary, user-chosen category color rather than a fixed theme color
+/// (a fixed color can't guarantee contrast against every possible
+/// category color).
+Color foregroundColorFor(Color background) =>
+    ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+    ? Colors.white
+    : Colors.black;
+
 /// A rounded, filled list row used for both `TaskCard` and category list
 /// rows: a colored `Container` (the row's own color, e.g. a task's or
 /// category's category color) wrapping a `ListTile`, so tapping anywhere
@@ -32,13 +43,7 @@ class ColoredListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Picks black or white text/icons based on the row's own background,
-    // so an arbitrarily-chosen category color (e.g. a light yellow) never
-    // ends up rendering light text on a light background.
-    final foreground =
-        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
+    final foreground = foregroundColorFor(color);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(

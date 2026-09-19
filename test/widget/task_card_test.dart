@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
@@ -196,6 +197,62 @@ void main() {
       final titleText = tester.widget<Text>(find.text('Buy milk'));
       expect(titleText.style?.fontStyle, FontStyle.italic);
     });
+
+    testWidgets("dims a closed task's title relative to a dark category color "
+        '(not a fixed disabled color that could be illegible on it)', (
+      tester,
+    ) async {
+      final container = await _seededContainer();
+      addTearDown(container.dispose);
+      final category = await container
+          .read(categoryListProvider.notifier)
+          .addCategory(name: 'Work', colorValue: 0xFF1A237E);
+      final task = await container
+          .read(taskListProvider.notifier)
+          .addTask(title: 'Buy milk', categoryId: category.id);
+      await container
+          .read(taskListProvider.notifier)
+          .updateTask(task, closed: true);
+      final closed = container
+          .read(taskListProvider)
+          .value!
+          .singleWhere((t) => t.id == task.id);
+
+      await _pumpCard(tester, container, closed);
+
+      final titleText = tester.widget<Text>(find.text('Buy milk'));
+      expect(
+        titleText.style?.color,
+        foregroundColorFor(const Color(0xFF1A237E)).withValues(alpha: 0.6),
+      );
+    });
+
+    testWidgets(
+      "dims a future-dated task's title relative to a dark category color",
+      (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        final category = await container
+            .read(categoryListProvider.notifier)
+            .addCategory(name: 'Work', colorValue: 0xFF1A237E);
+        final future = DateTime.now().add(const Duration(days: 30));
+        final task = await container
+            .read(taskListProvider.notifier)
+            .addTask(
+              title: 'Buy milk',
+              categoryId: category.id,
+              activeFrom: future,
+            );
+
+        await _pumpCard(tester, container, task);
+
+        final titleText = tester.widget<Text>(find.text('Buy milk'));
+        expect(
+          titleText.style?.color,
+          foregroundColorFor(const Color(0xFF1A237E)).withValues(alpha: 0.6),
+        );
+      },
+    );
 
     testWidgets('the title is normal style for an already-active task', (
       tester,
