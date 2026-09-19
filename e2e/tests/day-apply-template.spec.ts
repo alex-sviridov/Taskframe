@@ -21,8 +21,9 @@ const addTemplateButton = { x: 780, y: 28 } as const;
 // The sidebar's "Day" destination isn't exposed in Flutter's semantics
 // tree (only the active screen's own content is), so switching branches
 // has to be a raw coordinate click rather than `getByRole`, regardless of
-// whether accessibility has been enabled.
-const dayDestination = { x: 100, y: 28 } as const;
+// whether accessibility has been enabled. Day is the sidebar's second
+// destination (below "Now"), one 56px row below the sidebar's own top.
+const dayDestination = { x: 100, y: 84 } as const;
 
 /**
  * Adds a template, opens a block draft at [y] (a fixed x, arbitrary but

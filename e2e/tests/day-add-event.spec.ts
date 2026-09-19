@@ -17,7 +17,7 @@ const freeSpace = { x: 300, y: 650 } as const;
 test.beforeEach(async ({ page }) => {
   // Waits for Flutter to finish booting before sending raw pointer events;
   // it injects a placeholder once the app is ready to receive input.
-  await gotoAndWaitForBoot(page, '/');
+  await gotoAndWaitForBoot(page, '/#/day');
 });
 
 /**

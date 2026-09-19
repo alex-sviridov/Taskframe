@@ -5,7 +5,7 @@ import { gotoAndWaitForBoot } from './support/gestures';
 test.use({ viewport: { width: 800, height: 720 } });
 
 test.beforeEach(async ({ page }) => {
-  await gotoAndWaitForBoot(page, '/');
+  await gotoAndWaitForBoot(page, '/#/day');
   await enableFlutterAccessibility(page);
 });
 

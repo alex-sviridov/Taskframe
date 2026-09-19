@@ -143,7 +143,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     // trees stay mounted underneath, exactly the scenario the fix
     // addresses. Accessibility is already enabled at this point, which
     // is fine: neither hop needs a double-click.
-    await page.goto('/#/');
+    await page.goto('/#/day');
     await expect(page.getByRole('heading', { name: 'Day Frame' })).toBeVisible();
     await page.goto('/#/templates');
 

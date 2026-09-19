@@ -32,7 +32,7 @@ async function addCategoryAndGoToDay(page: Page, name: string): Promise<void> {
   // A hash-only navigation doesn't reload the page, so accessibility
   // (enabled once above) is still active here — enabling it again would
   // hang waiting for a placeholder that's already been consumed.
-  await page.goto('/#/');
+  await page.goto('/#/day');
 }
 
 test.describe('wide viewport', () => {
