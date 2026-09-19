@@ -23,6 +23,7 @@ class _Destination {
 /// narrow (hidden drawer) and wide (persistent sidebar) renderings so they
 /// never drift out of sync with each other.
 const _destinations = [
+  _Destination(icon: Icons.wb_sunny_outlined, label: 'Now'),
   _Destination(icon: Icons.calendar_today, label: 'Day'),
   _Destination(icon: Icons.dashboard_customize, label: 'Templates'),
   _Destination(icon: Icons.category, label: 'Categories'),

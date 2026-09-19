@@ -37,7 +37,7 @@ Future<Template> _pumpBothBranchesWithTemplateBlock(
   WidgetTester tester,
   ProviderContainer container,
 ) async {
-  appRouter.go('/');
+  appRouter.go('/day');
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,

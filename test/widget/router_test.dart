@@ -8,7 +8,7 @@ void main() {
   group('appRouter', () {
     setUp(() => appRouter.go('/'));
 
-    testWidgets('/ shows DayScreen inside the shell with Day selected', (
+    testWidgets('/ redirects to /now, shown inside the shell with Now selected', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -17,9 +17,23 @@ void main() {
       await tester.pump();
 
       expect(find.byType(AppShell), findsOneWidget);
-      expect(find.text('Day Frame'), findsOneWidget);
+      expect(find.text('Now'), findsWidgets);
       final shell = tester.widget<AppShell>(find.byType(AppShell));
       expect(shell.navigationShell.currentIndex, 0);
+    });
+
+    testWidgets('tapping Day navigates to /day', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Day'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Day Frame'), findsOneWidget);
+      final shell = tester.widget<AppShell>(find.byType(AppShell));
+      expect(shell.navigationShell.currentIndex, 1);
     });
 
     testWidgets('tapping Categories navigates to /categories', (tester) async {
@@ -34,7 +48,7 @@ void main() {
       expect(find.text('Categories'), findsWidgets);
       expect(find.text('Default'), findsOneWidget);
       final shell = tester.widget<AppShell>(find.byType(AppShell));
-      expect(shell.navigationShell.currentIndex, 2);
+      expect(shell.navigationShell.currentIndex, 3);
     });
 
     testWidgets('tapping Templates navigates to /templates', (tester) async {
@@ -48,7 +62,7 @@ void main() {
 
       expect(find.text('Templates'), findsWidgets);
       final shell = tester.widget<AppShell>(find.byType(AppShell));
-      expect(shell.navigationShell.currentIndex, 1);
+      expect(shell.navigationShell.currentIndex, 2);
     });
 
     testWidgets('tapping Tasks navigates to /tasks', (tester) async {
@@ -62,7 +76,7 @@ void main() {
 
       expect(find.text('Tasks'), findsWidgets);
       final shell = tester.widget<AppShell>(find.byType(AppShell));
-      expect(shell.navigationShell.currentIndex, 3);
+      expect(shell.navigationShell.currentIndex, 4);
     });
 
     testWidgets(
@@ -72,6 +86,9 @@ void main() {
           ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
         );
         await tester.pump();
+
+        await tester.tap(find.text('Day'));
+        await tester.pumpAndSettle();
 
         final initialLabel = tester
             .widget<Text>(find.byKey(const Key('day-screen-date-label')))
