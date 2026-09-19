@@ -18,6 +18,7 @@ import 'package:taskframe/features/day/resize_state_provider.dart';
 import 'package:taskframe/features/day/widgets/block_view.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
 import 'package:taskframe/features/day/widgets/drag_target_resolver.dart';
+import 'package:taskframe/features/day/widgets/draggable_block.dart';
 
 const _settings = DaySettings(
   dayStartHour: 6,
@@ -575,7 +576,7 @@ void main() {
         find.byKey(const ValueKey('day-grid-block-position-1')),
       );
 
-      // This Positioned is enlarged by `_DraggableBlock.hitBleed` (9px) on
+      // This Positioned is enlarged by `DraggableBlock.hitBleed` (9px) on
       // each side so the block's resize zones have room to bleed past its
       // true edges; the block itself insets its visual content back in.
       const hitBleed = 9.0;
