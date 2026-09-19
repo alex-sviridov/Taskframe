@@ -6,7 +6,7 @@ import 'package:taskframe/core/storage/sembast_overrides.dart';
 import 'package:taskframe/features/category/data/sembast_category_repository.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/data/sembast_day_blocks_repository.dart';
-import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/saved_search/data/sembast_saved_search_repository.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/data/sembast_task_repository.dart';

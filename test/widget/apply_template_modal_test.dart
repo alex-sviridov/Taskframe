@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/template_apply_effects.dart';
 import 'package:taskframe/features/day/widgets/apply_template_modal.dart';
 import 'package:taskframe/features/template/models/template.dart';

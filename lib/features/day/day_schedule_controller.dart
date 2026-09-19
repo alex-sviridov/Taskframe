@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
 import 'package:taskframe/features/day/schedule_controller.dart';
 
 /// A [ScheduleController] backed by [dayBlocksProvider]/

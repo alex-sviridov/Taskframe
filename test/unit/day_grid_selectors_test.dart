@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/draft_state_provider.dart';
+import 'package:taskframe/features/day/drag_state_provider.dart';
 import 'package:taskframe/features/day/models/draft_state.dart';
 import 'package:taskframe/features/day/models/drag_state.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/resize_state_provider.dart';
 
 TimeObject _block() => TimeObject(
   id: '1',

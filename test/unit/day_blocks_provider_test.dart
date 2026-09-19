@@ -2,8 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
 
 void main() {
   group('dayBlocksProvider', () {

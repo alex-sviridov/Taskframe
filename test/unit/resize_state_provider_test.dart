@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/models/resize_state.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
+import 'package:taskframe/features/day/resize_state_provider.dart';
 
 // Fixed, far-past date: InMemoryDayBlocksRepository seeds hardcoded blocks
 // for whatever date happens to be the real wall-clock "today", so tests must

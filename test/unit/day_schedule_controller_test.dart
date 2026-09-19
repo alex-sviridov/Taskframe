@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/day/day_schedule_controller.dart';
 import 'package:taskframe/features/day/models/schedule_column.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
-import 'package:taskframe/features/day/providers.dart';
 
 /// Riverpod's `Ref` has no public constructor; reading this trivial
 /// provider is the standard way to obtain one from a `ProviderContainer`
