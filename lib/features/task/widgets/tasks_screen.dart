@@ -114,7 +114,9 @@ class UnifiedQueryController extends TextEditingController {
 /// (multiple combine with AND), `@category`/`@!category` filters by the
 /// task's category name (multiple also combine with AND — since a task
 /// has exactly one category, more than one *included* category can
-/// never match), and `/opened`/`/!opened` filters by closed status.
+/// never match), and `/opened`/`/!opened` filters by closed status. With
+/// no status token, closed tasks are shown only if closed today or
+/// later — `/!opened` is required to see ones closed before today.
 /// Recognized tokens render as styled (not extracted)
 /// text — tapping one toggles it between included/excluded; removing
 /// one is plain text editing. The whole query string mirrors to/from the
@@ -602,11 +604,16 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       for (final category in categories)
         category.id: category.name.toLowerCase(),
     };
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
     return [
       for (final task in tasks)
         if ((query.isEmpty || task.title.toLowerCase().contains(query)) &&
-            (parsed.statusToken == null ||
-                task.closed == parsed.statusToken!.excluded) &&
+            (parsed.statusToken != null
+                ? task.closed == parsed.statusToken!.excluded
+                : !(task.closed &&
+                      task.closedAt != null &&
+                      task.closedAt!.isBefore(todayStart))) &&
             (parsed.activeToken == null ||
                 task.isNotYetActive == parsed.activeToken!.excluded) &&
             parsed.tagTokens.every(

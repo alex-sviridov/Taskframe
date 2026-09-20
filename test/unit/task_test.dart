@@ -263,5 +263,118 @@ void main() {
         expect(restored.updatedAt, DateTime.fromMillisecondsSinceEpoch(0));
       },
     );
+
+    test('toMap/fromMap round-trip a set closedAt', () {
+      final closedAt = DateTime.utc(2026, 9, 15, 12);
+      final task = Task(
+        id: 't1',
+        title: 'Buy milk',
+        closed: true,
+        closedAt: closedAt,
+      );
+
+      final restored = Task.fromMap(task.toMap());
+
+      expect(restored.closedAt, closedAt);
+    });
+
+    test('fromMap backfills closedAt from updatedAt for a closed task '
+        'persisted before closedAt existed', () {
+      final updatedAt = DateTime.utc(2026, 9, 10);
+      final restored = Task.fromMap({
+        'id': 't1',
+        'title': 'Buy milk',
+        'closed': true,
+        'categoryId': Category.defaultId,
+        'updatedAt': updatedAt.toIso8601String(),
+      });
+
+      expect(restored.closedAt, updatedAt);
+    });
+
+    test(
+      'fromMap leaves closedAt null for an open task with no closedAt key',
+      () {
+        final restored = Task.fromMap({
+          'id': 't1',
+          'title': 'Buy milk',
+          'closed': false,
+          'categoryId': Category.defaultId,
+        });
+
+        expect(restored.closedAt, isNull);
+      },
+    );
+  });
+
+  group('closedAt', () {
+    test('defaults to null', () {
+      final task = Task(id: 'task-1', title: 'Buy milk');
+
+      expect(task.closedAt, isNull);
+    });
+
+    test('copyWith(closed: true) sets closedAt to now when opening -> '
+        'closing', () {
+      final task = Task(id: 'task-1', title: 'Buy milk');
+      final before = DateTime.now();
+
+      final closed = task.copyWith(closed: true);
+      final after = DateTime.now();
+
+      expect(closed.closedAt, isNotNull);
+      expect(
+        closed.closedAt!.isAfter(before.subtract(const Duration(seconds: 1))),
+        isTrue,
+      );
+      expect(
+        closed.closedAt!.isBefore(after.add(const Duration(seconds: 1))),
+        isTrue,
+      );
+    });
+
+    test('copyWith(closed: false) clears closedAt when closing -> '
+        'reopening', () {
+      final task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: true,
+        closedAt: DateTime.utc(2026, 3, 5),
+      );
+
+      final reopened = task.copyWith(closed: false);
+
+      expect(reopened.closedAt, isNull);
+    });
+
+    test('copyWith(closed: true) on an already-closed task leaves '
+        'closedAt unchanged', () {
+      final closedAt = DateTime.utc(2026, 3, 5);
+      final task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: true,
+        closedAt: closedAt,
+      );
+
+      final updated = task.copyWith(closed: true, title: 'Buy oat milk');
+
+      expect(updated.closedAt, closedAt);
+    });
+
+    test('copyWith with no arguments leaves an existing closedAt '
+        'unchanged', () {
+      final closedAt = DateTime.utc(2026, 3, 5);
+      final task = Task(
+        id: 'task-1',
+        title: 'Buy milk',
+        closed: true,
+        closedAt: closedAt,
+      );
+
+      final copy = task.copyWith();
+
+      expect(copy.closedAt, closedAt);
+    });
   });
 }
