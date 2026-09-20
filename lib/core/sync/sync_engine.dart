@@ -8,15 +8,29 @@ import 'package:taskframe/core/sync/sync_collection.dart';
 /// (see `pocketbase_sync_client.dart`) is the real implementation; tests
 /// use an in-memory fake.
 abstract class SyncBackend {
-  /// Creates or replaces the remote record whose `entity_id` is
-  /// `record['id']`, in PocketBase collection [collection]. [record] is
-  /// the full local sembast map for that entity (it must contain `id`,
-  /// `updatedAt`, `deleted`).
-  Future<void> upsert(String collection, Map<String, Object?> record);
+  /// Creates or updates the remote record for `record['entity_id']`, in
+  /// PocketBase collection [collection]. [record] is the full local
+  /// sembast map for that entity (it must contain `id`, `updatedAt`,
+  /// `deleted`).
+  ///
+  /// [remoteId] is this entity's PocketBase record id if already known
+  /// (from an earlier push or pull of the same entity — see
+  /// `sync_collection.dart`'s `remoteIdStore`), letting the
+  /// implementation go straight to a single `update` call instead of
+  /// first querying PocketBase to check whether the record exists.
+  /// `null` means this entity has never been seen remotely before — the
+  /// implementation must `create` it. Returns the entity's PocketBase
+  /// record id either way, for the caller to remember for next time.
+  Future<String> upsert(
+    String collection,
+    Map<String, Object?> record, {
+    String? remoteId,
+  });
 
   /// Returns every remote record in [collection] whose PocketBase-managed
   /// `server_updated` timestamp is strictly after [cursor]. Each returned
-  /// map has `entity_id`, `updated_at` (the client-set last-write-wins
+  /// map has `entity_id`, `remote_id` (this record's PocketBase id, for
+  /// `remoteIdStore`), `updated_at` (the client-set last-write-wins
   /// timestamp), `server_updated` (PocketBase's own `updated` field, used
   /// only for cursor advancement — immune to client clock skew), `deleted`,
   /// and `data` (the original local sembast map as pushed by [upsert]).
@@ -137,12 +151,17 @@ class SyncEngine {
 
     DateTime? maxSeen;
     for (final record in records) {
+      final entityId = record.key;
       final updatedAt = DateTime.parse(record.value['updatedAt']! as String);
+      final idKey = remoteIdKey(collection.name, entityId);
+      final knownIdRecord = await remoteIdStore.record(idKey).get(_db);
+      final knownRemoteId = knownIdRecord?['id'] as String?;
       try {
-        await _backend.upsert(collection.name, {
+        final remoteId = await _backend.upsert(collection.name, {
           ...record.value,
-          'entity_id': record.key,
-        });
+          'entity_id': entityId,
+        }, remoteId: knownRemoteId);
+        await remoteIdStore.record(idKey).put(_db, {'id': remoteId});
       } on Object {
         // Stop here rather than propagating: everything up to this point
         // already succeeded and its cursor progress below must not be
@@ -174,6 +193,18 @@ class SyncEngine {
     DateTime? maxSeen;
     for (final remote in remoteRecords) {
       final entityId = remote['entity_id']! as String;
+      // Learned regardless of who wins LWW below: even when the local
+      // copy stays newer (remote discarded), this device now knows the
+      // entity's remote id — without this, its next push of that
+      // not-yet-pushed local edit would `create` a duplicate remote
+      // record instead of updating the one that already exists.
+      final remoteId = remote['remote_id'] as String?;
+      if (remoteId != null) {
+        await remoteIdStore.record(remoteIdKey(collection.name, entityId)).put(
+          _db,
+          {'id': remoteId},
+        );
+      }
       // Cursor advancement uses PocketBase's own server-assigned
       // `server_updated` (monotonic, immune to client clock skew), not
       // the client-set `updated_at` used below for LWW.

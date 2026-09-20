@@ -1,32 +1,48 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/widgets.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
 
 /// Handle returned by [startSyncTriggers], to stop triggering sync
 /// (tests, or a future "sign out").
 class SyncTriggerHandle {
-  /// Creates a [SyncTriggerHandle] owning [_timer] and
-  /// [_connectivitySubscription].
-  new(this._timer, this._connectivitySubscription);
+  /// Creates a [SyncTriggerHandle] that runs [_disposeAll] to tear
+  /// everything down.
+  new(this._disposeAll);
 
-  final Timer _timer;
-  final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  final void Function() _disposeAll;
 
-  /// Stops both the periodic timer and the connectivity subscription.
-  void dispose() {
-    _timer.cancel();
-    // dispose() isn't async and has nothing to wait for; cancellation
-    // completing is not something a caller needs to observe here.
-    unawaited(_connectivitySubscription.cancel());
-  }
+  /// Stops the periodic timer and every subscription driving it.
+  void dispose() => _disposeAll();
+}
+
+/// A [Stream] of `true` (app visible/foregrounded) and `false` (hidden/
+/// backgrounded) events, built from [WidgetsBinding]'s lifecycle
+/// notifications — covers a browser tab being hidden/shown as well as a
+/// mobile app being backgrounded/foregrounded, with no platform-specific
+/// code of its own.
+Stream<bool> _defaultVisibilityChanges() {
+  late final AppLifecycleListener listener;
+  final controller = StreamController<bool>(onCancel: () => listener.dispose());
+  listener = AppLifecycleListener(
+    onShow: () => controller.add(true),
+    onResume: () => controller.add(true),
+    onHide: () => controller.add(false),
+    onPause: () => controller.add(false),
+  );
+  return controller.stream;
 }
 
 /// Starts syncing [engine] against [syncCollections] on: right now (app
-/// start), whenever connectivity is regained, and every 30 seconds while
-/// the app is running. See spec: "Sync triggers: app start, connectivity
-/// regained, and a foreground timer (~30s)."
+/// start), whenever connectivity is regained, every 30 seconds while the
+/// app is running and visible, and immediately upon becoming visible
+/// again after being hidden. See spec: "Sync triggers: app start,
+/// connectivity regained, and a foreground timer (~30s)." The timer is
+/// paused while hidden/backgrounded — a hidden browser tab or
+/// backgrounded app has nothing to show a pull's result to, so ticking it
+/// only spends network/battery for no visible benefit.
 ///
 /// [onSynced], when given, is called after every sync attempt with the
 /// set of collection names [SyncEngine.syncAll] actually applied a
@@ -37,32 +53,50 @@ class SyncTriggerHandle {
 SyncTriggerHandle startSyncTriggers({
   required SyncEngine engine,
   Connectivity? connectivity,
+  Stream<bool>? visibilityChanges,
   Duration interval = const Duration(seconds: 30),
   void Function(Set<String> changedCollections)? onSynced,
 }) {
   final connectivityChecker = connectivity ?? Connectivity();
+  final visibility = visibilityChanges ?? _defaultVisibilityChanges();
 
   Future<void> sync() async {
     final changed = await engine.syncAll(syncCollections);
     onSynced?.call(changed);
   }
 
+  Timer? timer;
+  void startTimer() {
+    timer ??= Timer.periodic(interval, (_) => unawaited(sync()));
+  }
+
+  void stopTimer() {
+    timer?.cancel();
+    timer = null;
+  }
+
   unawaited(sync());
+  startTimer();
 
-  final timer = Timer.periodic(interval, (_) {
-    unawaited(sync());
-  });
+  final connectivitySubscription = connectivityChecker.onConnectivityChanged
+      .listen((results) {
+        if (results.any((r) => r != ConnectivityResult.none)) {
+          unawaited(sync());
+        }
+      });
 
-  // Cancelled in SyncTriggerHandle.dispose(), not here — the lint can't
-  // see that this subscription is handed off to the returned handle.
-  // ignore: cancel_subscriptions
-  final subscription = connectivityChecker.onConnectivityChanged.listen((
-    results,
-  ) {
-    if (results.any((r) => r != ConnectivityResult.none)) {
+  final visibilitySubscription = visibility.listen((visible) {
+    if (visible) {
       unawaited(sync());
+      startTimer();
+    } else {
+      stopTimer();
     }
   });
 
-  return SyncTriggerHandle(timer, subscription);
+  return SyncTriggerHandle(() {
+    stopTimer();
+    unawaited(connectivitySubscription.cancel());
+    unawaited(visibilitySubscription.cancel());
+  });
 }

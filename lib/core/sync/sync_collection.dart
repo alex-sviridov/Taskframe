@@ -15,6 +15,22 @@ class SyncCollection {
   final StoreRef<String, Map<String, Object?>> store;
 }
 
+/// Maps `"<collectionName>:<entityId>"` to `{'id': <PocketBase record
+/// id>}`. `SyncEngine` uses this to push straight to `update(id, ...)`
+/// instead of asking PocketBase whether a record already exists (a
+/// network round trip per push) — see `SyncBackend.upsert`.
+///
+/// Kept as its own store, separate from each collection's own domain
+/// store, because every domain repository writes with a plain
+/// (non-merging) `put` — keeping this bookkeeping on the domain record
+/// itself would make an unrelated field edit silently erase it.
+final StoreRef<String, Map<String, Object?>> remoteIdStore =
+    stringMapStoreFactory.store('sync_remote_ids');
+
+/// The [remoteIdStore] key for [entityId] in [collectionName].
+String remoteIdKey(String collectionName, String entityId) =>
+    '$collectionName:$entityId';
+
 /// The six sembast stores synced by this app.
 final List<SyncCollection> syncCollections = [
   SyncCollection(name: 'tasks', store: tasksStore),

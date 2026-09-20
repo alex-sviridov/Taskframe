@@ -15,8 +15,13 @@ class _NoopSyncBackend implements SyncBackend {
   void Function()? onRun;
 
   @override
-  Future<void> upsert(String collection, Map<String, Object?> record) async {
+  Future<String> upsert(
+    String collection,
+    Map<String, Object?> record, {
+    String? remoteId,
+  }) async {
     onRun?.call();
+    return remoteId ?? 'remote-id';
   }
 
   @override
@@ -54,6 +59,7 @@ void main() {
     await settings.setValue('account_identity', 'me@example.com');
     await settings.setValue('account_token', 'a-token');
     await settings.setInstallHintDismissedAt(DateTime(2026));
+    await remoteIdStore.record('tasks:t1').put(db, {'id': 'pb-t1'});
 
     await logout(
       db: db,
@@ -73,6 +79,7 @@ void main() {
     expect(await settings.getValue('account_identity'), isNull);
     expect(await settings.getValue('account_token'), isNull);
     expect(await settings.getInstallHintDismissedAt(), DateTime(2026));
+    expect(await remoteIdStore.record('tasks:t1').get(db), isNull);
   });
 
   test(

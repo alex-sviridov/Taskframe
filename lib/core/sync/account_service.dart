@@ -20,6 +20,7 @@ Future<void> _wipeSyncedStores({
     await settings.deleteValue('sync_push_${collection.name}');
     await settings.deleteValue('sync_pull_${collection.name}');
   }
+  await remoteIdStore.delete(db);
 }
 
 /// Returns this device to a clean guest state: clears every synced
