@@ -79,15 +79,14 @@ class SidebarDestinationRow extends StatelessWidget {
                       child: Text(
                         label,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(
-                              color: selected
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected
+                              ? colorScheme.primary
+                              : colorScheme.onSurface,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ],
