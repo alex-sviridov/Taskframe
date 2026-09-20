@@ -7,8 +7,46 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
+import 'package:taskframe/features/task/data/task_repository.dart';
+import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/widgets/tasks_screen.dart';
+
+/// A [TaskRepository] that serves a fixed, pre-built task list from
+/// [load] — lets tests seed tasks with an explicit [Task.closedAt]
+/// that the normal add/update flow (which always stamps "now") can't
+/// produce.
+class _PresetTaskRepository implements TaskRepository {
+  new(this._tasks);
+
+  final List<Task> _tasks;
+
+  @override
+  Future<List<Task>> load() async => _tasks;
+
+  @override
+  Future<Task> add({
+    required String title,
+    String? categoryId,
+    DateTime? activeFrom,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<Task> update(
+    Task task, {
+    String? title,
+    bool? closed,
+    String? categoryId,
+    List<String>? tags,
+    DateTime? activeFrom,
+    bool clearActiveFrom = false,
+    String? repeat,
+    bool clearRepeat = false,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> delete(Task task) => throw UnimplementedError();
+}
 
 /// The search field's single [RenderEditable], for computing precise
 /// tap positions against a token's actual rendered character boxes
@@ -339,6 +377,104 @@ void main() {
       await tester.pump();
 
       expect(find.text('Buy milk'), findsNothing);
+      expect(find.text('Walk the dog'), findsOneWidget);
+    });
+
+    testWidgets('empty query hides a task closed before today by default', (
+      tester,
+    ) async {
+      final container = ProviderContainer(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(
+            _PresetTaskRepository([
+              Task(id: 't1', title: 'Buy milk'),
+              Task(
+                id: 't2',
+                title: 'Walk the dog',
+                closed: true,
+                closedAt: DateTime.now().subtract(const Duration(days: 2)),
+              ),
+            ]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await _pump(tester, container: container);
+
+      expect(find.text('Buy milk'), findsOneWidget);
+      expect(find.text('Walk the dog'), findsNothing);
+    });
+
+    testWidgets('empty query still shows a task closed today', (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(
+            _PresetTaskRepository([
+              Task(
+                id: 't1',
+                title: 'Walk the dog',
+                closed: true,
+                closedAt: DateTime.now(),
+              ),
+            ]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await _pump(tester, container: container);
+
+      expect(find.text('Walk the dog'), findsOneWidget);
+    });
+
+    testWidgets(
+      'empty query still shows a closed task with no closedAt, since its '
+      'age cannot be determined',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            taskRepositoryProvider.overrideWithValue(
+              _PresetTaskRepository([
+                Task(id: 't1', title: 'Walk the dog', closed: true),
+              ]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        await container.read(taskListProvider.future);
+        await _pump(tester, container: container);
+
+        expect(find.text('Walk the dog'), findsOneWidget);
+      },
+    );
+
+    testWidgets('/!opened shows a task closed before today', (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(
+            _PresetTaskRepository([
+              Task(
+                id: 't1',
+                title: 'Walk the dog',
+                closed: true,
+                closedAt: DateTime.now().subtract(const Duration(days: 2)),
+              ),
+            ]),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(categoryListProvider.future);
+      await container.read(taskListProvider.future);
+      await _pump(tester, container: container);
+
+      await tester.enterText(find.byType(TextField), '/!opened');
+      await tester.pump();
+
       expect(find.text('Walk the dog'), findsOneWidget);
     });
 

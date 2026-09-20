@@ -14,6 +14,7 @@ class Task {
     this.activeFrom,
     this.repeat,
     DateTime? updatedAt,
+    this.closedAt,
     this.deleted = false,
   }) : updatedAt = updatedAt ?? _epoch;
 
@@ -33,6 +34,11 @@ class Task {
     updatedAt: map['updatedAt'] == null
         ? null
         : DateTime.parse(map['updatedAt']! as String),
+    closedAt: map['closedAt'] != null
+        ? DateTime.parse(map['closedAt']! as String)
+        : (map['closed']! as bool && map['updatedAt'] != null
+              ? DateTime.parse(map['updatedAt']! as String)
+              : null),
     deleted: map['deleted'] as bool? ?? false,
   );
 
@@ -68,6 +74,12 @@ class Task {
   /// LWW comparison against a genuinely newer edit.
   final DateTime updatedAt;
 
+  /// When this task was closed, or `null` if it's open (or was closed
+  /// before this field existed and had no `updatedAt` to backfill from —
+  /// see [Task.fromMap]). Set automatically by [copyWith] on an
+  /// open->closed transition and cleared on a closed->open one.
+  final DateTime? closedAt;
+
   /// Soft-delete tombstone: `true` once removed, so the deletion can
   /// propagate to other devices instead of being silently resurrected.
   final bool deleted;
@@ -83,7 +95,9 @@ class Task {
   /// [tags]/[activeFrom]/[repeat]/[updatedAt]/[deleted] replaced.
   /// [activeFrom]/[repeat] are left unchanged when omitted; pass
   /// [clearActiveFrom]/[clearRepeat] to remove them instead, since `null`
-  /// here already means "don't change".
+  /// here already means "don't change". [closedAt] is managed
+  /// automatically from [closed]'s transition (see [closedAt]'s doc) and
+  /// isn't settable directly.
   Task copyWith({
     String? title,
     bool? closed,
@@ -95,17 +109,28 @@ class Task {
     bool clearRepeat = false,
     DateTime? updatedAt,
     bool? deleted,
-  }) => Task(
-    id: id,
-    title: title ?? this.title,
-    closed: closed ?? this.closed,
-    categoryId: categoryId ?? this.categoryId,
-    tags: tags ?? this.tags,
-    activeFrom: clearActiveFrom ? null : (activeFrom ?? this.activeFrom),
-    repeat: clearRepeat ? null : (repeat ?? this.repeat),
-    updatedAt: updatedAt ?? this.updatedAt,
-    deleted: deleted ?? this.deleted,
-  );
+  }) {
+    final DateTime? closedAt;
+    if (closed == null || closed == this.closed) {
+      closedAt = this.closedAt;
+    } else if (closed) {
+      closedAt = DateTime.now();
+    } else {
+      closedAt = null;
+    }
+    return Task(
+      id: id,
+      title: title ?? this.title,
+      closed: closed ?? this.closed,
+      categoryId: categoryId ?? this.categoryId,
+      tags: tags ?? this.tags,
+      activeFrom: clearActiveFrom ? null : (activeFrom ?? this.activeFrom),
+      repeat: clearRepeat ? null : (repeat ?? this.repeat),
+      updatedAt: updatedAt ?? this.updatedAt,
+      closedAt: closedAt,
+      deleted: deleted ?? this.deleted,
+    );
+  }
 
   /// This task's field values as a JSON-safe map, for storage.
   Map<String, Object?> toMap() => {
@@ -117,6 +142,7 @@ class Task {
     'activeFrom': activeFrom?.toIso8601String(),
     'repeat': repeat,
     'updatedAt': updatedAt.toIso8601String(),
+    'closedAt': closedAt?.toIso8601String(),
     'deleted': deleted,
   };
 }
