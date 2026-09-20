@@ -101,7 +101,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationDrawer), findsOneWidget);
+      expect(find.byType(Drawer), findsOneWidget);
       expect(find.text('Now'), findsOneWidget);
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Templates'), findsOneWidget);
@@ -139,7 +139,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(NavigationDrawer), findsOneWidget);
+      expect(find.byKey(const ValueKey('wideSidebar')), findsOneWidget);
       expect(find.byIcon(Icons.menu), findsNothing);
       expect(find.text('Now'), findsOneWidget);
       expect(find.text('Day'), findsOneWidget);
@@ -151,7 +151,7 @@ void main() {
     });
 
     testWidgets('wide: the persistent sidebar is 30% narrower than the '
-        'NavigationDrawer default (304 * 0.7 ≈ 213)', (tester) async {
+        'Drawer default (304 * 0.7 ≈ 213)', (tester) async {
       _setViewportWidth(tester, 1000);
 
       await tester.pumpWidget(
@@ -160,7 +160,9 @@ void main() {
         ),
       );
 
-      final width = tester.getSize(find.byType(NavigationDrawer)).width;
+      final width = tester
+          .getSize(find.byKey(const ValueKey('wideSidebar')))
+          .width;
       expect(width, closeTo(213, 1));
     });
 
@@ -246,7 +248,7 @@ void main() {
 
         // Unlike a route pushed on top of the shell, a branch keeps the
         // sidebar (and every other destination) on screen alongside it.
-        expect(find.byType(NavigationDrawer), findsOneWidget);
+        expect(find.byKey(const ValueKey('wideSidebar')), findsOneWidget);
         expect(find.text('Now'), findsOneWidget);
         expect(find.text('Day'), findsOneWidget);
         expect(find.text('Templates'), findsOneWidget);

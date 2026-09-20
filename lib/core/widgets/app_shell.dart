@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
+import 'package:taskframe/core/widgets/sidebar_row.dart';
 import 'package:taskframe/features/saved_search/models/saved_search.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
 
@@ -31,21 +32,16 @@ const _destinations = [
 ];
 
 /// Width of the persistent (wide-width) sidebar — 30% narrower than
-/// [NavigationDrawer]'s own default width of 304 (304 * 0.7 = 212.8,
-/// rounded to a whole pixel: a fractional width here was enough to push
-/// layout into an extra pass, which could transiently double-build the
-/// day view's paged content underneath).
+/// [Drawer]'s own default width of 304 (304 * 0.7 = 212.8, rounded to a
+/// whole pixel: a fractional width here was enough to push layout into
+/// an extra pass, which could transiently double-build the day view's
+/// paged content underneath).
 const _sidebarWidth = 213.0;
 
-List<NavigationDrawerDestination> _drawerDestinations() => [
-  for (final d in _destinations)
-    NavigationDrawerDestination(icon: Icon(d.icon), label: Text(d.label)),
-];
-
 /// Wraps [navigationShell] with navigation to its branches: a hidden
-/// [NavigationDrawer] opened by a hamburger button on narrow widths, or a
-/// permanently visible [NavigationDrawer] acting as a sidebar on wide ones,
-/// switching at [narrowBreakpoint].
+/// drawer opened by a hamburger button on narrow widths, or a
+/// permanently visible sidebar on wide ones, switching at
+/// [narrowBreakpoint].
 class AppShell extends StatelessWidget {
   /// Creates an [AppShell] around [navigationShell].
   const new({required this.navigationShell, super.key});
@@ -58,18 +54,17 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isNarrow(context)) {
       return Scaffold(
-        drawer: NavigationDrawer(
-          selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: (index) {
-            Navigator.pop(context);
-            navigationShell.goBranch(index);
-          },
-          children: [
-            ..._drawerDestinations(),
-            const _SavedViewsSection(isNarrow: true),
-            const Divider(),
-            _accountDestination,
-          ],
+        drawer: Drawer(
+          child: SafeArea(
+            child: _SidebarContent(
+              navigationShell: navigationShell,
+              isNarrow: true,
+              onDestinationSelected: (index) {
+                Navigator.pop(context);
+                navigationShell.goBranch(index);
+              },
+            ),
+          ),
         ),
         body: Column(
           children: [
@@ -109,26 +104,18 @@ class AppShell extends StatelessWidget {
   Widget _wideBody(StatefulNavigationShell navigationShell) {
     return Row(
       children: [
-        // NavigationDrawer has no width parameter of its own — it always
-        // builds a Drawer, whose default width (304) is baked in via a
-        // tight BoxConstraints.expand, so shrinking it as a persistent
-        // sidebar means constraining it from outside like this rather
-        // than passing it any property directly.
         SizedBox(
+          key: const ValueKey('wideSidebar'),
           width: _sidebarWidth,
-          child: NavigationDrawer(
-            // The narrower sidebar no longer has room for the default
-            // tile padding (24px total) without its longest label
-            // ("Categories") overflowing.
-            tilePadding: const EdgeInsets.symmetric(horizontal: 8),
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: navigationShell.goBranch,
-            children: [
-              ..._drawerDestinations(),
-              const _SavedViewsSection(isNarrow: false),
-              const Divider(),
-              _accountDestination,
-            ],
+          child: Builder(
+            builder: (context) => Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: _SidebarContent(
+                navigationShell: navigationShell,
+                isNarrow: false,
+                onDestinationSelected: navigationShell.goBranch,
+              ),
+            ),
           ),
         ),
         const VerticalDivider(width: 1),
@@ -138,27 +125,46 @@ class AppShell extends StatelessWidget {
   }
 }
 
-/// The fifth branch destination (`/account`), listed separately at the
-/// bottom of the nav drawer/sidebar (below a [Divider]) rather than
-/// alongside [_destinations] — it's conceptually different from the
-/// content destinations above it, but is a real, indexed
-/// [NavigationDrawerDestination] like the others, so [AppShell]'s
-/// existing `onDestinationSelected: (index) => navigationShell.goBranch
-/// (index)` handles switching to it the same way it does for every other
-/// branch (persistent sidebar on wide widths, drawer on narrow ones,
-/// state kept alive when switching away and back).
-///
-/// Must be spliced directly into [NavigationDrawer]'s `children` — unlike
-/// most widgets, [NavigationDrawerDestination] only self-registers with
-/// its index when it's a *direct* child of the [NavigationDrawer] that
-/// owns it, so this is a plain constant value, not a wrapper widget
-/// (wrapping it in a `StatelessWidget` hides it from that direct-child
-/// lookup and crashes with "Navigation destinations need a
-/// _NavigationDrawerDestinationInfo parent").
-const _accountDestination = NavigationDrawerDestination(
-  icon: Icon(Icons.account_circle),
-  label: Text('Account'),
-);
+/// The shared content of both the narrow drawer and the wide persistent
+/// sidebar: the top-level destinations, the saved-views section, and the
+/// account entry below a divider. Kept in one place so the two layouts
+/// never drift out of sync with each other.
+class _SidebarContent extends StatelessWidget {
+  const new({
+    required this.navigationShell,
+    required this.isNarrow,
+    required this.onDestinationSelected,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final bool isNarrow;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentIndex = navigationShell.currentIndex;
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        for (var i = 0; i < _destinations.length; i++)
+          SidebarDestinationRow(
+            icon: _destinations[i].icon,
+            label: _destinations[i].label,
+            selected: currentIndex == i,
+            onTap: () => onDestinationSelected(i),
+          ),
+        _SavedViewsSection(isNarrow: isNarrow),
+        const Divider(),
+        SidebarDestinationRow(
+          icon: Icons.account_circle,
+          label: 'Account',
+          selected: currentIndex == _destinations.length,
+          onTap: () => onDestinationSelected(_destinations.length),
+        ),
+      ],
+    );
+  }
+}
 
 /// The "Saved views" sidebar section, listed directly under the "Tasks"
 /// destination — hidden entirely while there are no saved views.
@@ -183,20 +189,20 @@ class _SavedViewsSection extends ConsumerWidget {
     // not just the view that was last tapped.
     final currentQuery = GoRouterState.of(context).uri.queryParameters['q'];
 
-    // The left border reads as a "child of Tasks" tree accent — offset
-    // under the destination icon column, with the section's own content
-    // padding (32) picking up the rest of the indent the rows used to
-    // carry entirely on their own (48), so text still lands at the same x
-    // as before.
+    // The left border reads as a neutral tree guide rather than a
+    // selection accent (that's reserved for the primary-colored bar on
+    // selected rows themselves) — offset under the destination icon
+    // column, with the section's own content padding (32) picking up the
+    // rest of the indent the rows used to carry entirely on their own
+    // (48), so text still lands at the same x as before.
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 8),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
             left: BorderSide(
-              color: Theme.of(context).colorScheme.primary
-                  .withValues(alpha: 0.4),
-              width: 3,
+              color: Theme.of(context).colorScheme.outlineVariant,
+              width: 2,
             ),
           ),
         ),
@@ -318,8 +324,11 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
         ),
       ),
       selected: widget.isSelected,
-      selectedTileColor: colorScheme.secondaryContainer,
-      selectedColor: colorScheme.onSecondaryContainer,
+      // Same tint language as the top-level [SidebarDestinationRow]
+      // rows, rather than a distinct secondaryContainer "chip" style, so
+      // selection reads consistently across parent and child rows.
+      selectedTileColor: colorScheme.primary.withValues(alpha: 0.08),
+      selectedColor: colorScheme.primary,
       title: _renaming
           // Reads DefaultTextStyle from inside the title slot, so the field
           // always matches whatever text style ListTile would otherwise
