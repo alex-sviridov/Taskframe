@@ -10,7 +10,10 @@ void main() {
     test('adds every non-overlapping template block to the day', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final date = DateTime(2026, 9, 20);
+      // Far enough in the future to never collide with the real "today"
+      // (InMemoryDayBlocksRepository seeds hardcoded demo blocks,
+      // including one at 08:00, whenever the requested date IS today).
+      final date = DateTime(2099);
       await container.read(dayBlocksProvider(date).future);
 
       final template = await container
@@ -45,19 +48,20 @@ void main() {
       final dayBlocks = container.read(dayBlocksProvider(date)).value!;
       expect(dayBlocks.map((b) => b.title), contains('Breakfast'));
       expect(dayBlocks.single.id, result.addedIds.single);
-      expect(dayBlocks.single.start, DateTime(2026, 9, 20, 8));
+      expect(dayBlocks.single.start, DateTime(2099, 1, 1, 8));
     });
 
     test('skips a template block overlapping an existing day block', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final date = DateTime(2026, 9, 21);
+      // See the note above: far enough in the future to never be "today".
+      final date = DateTime(2099, 1, 2);
       await container.read(dayBlocksProvider(date).future);
       await container
           .read(dayBlocksProvider(date).notifier)
           .addBlock(
-            start: DateTime(2026, 9, 21, 8, 30),
-            end: DateTime(2026, 9, 21, 9, 30),
+            start: DateTime(2099, 1, 2, 8, 30),
+            end: DateTime(2099, 1, 2, 9, 30),
             kind: BlockKind.anchor,
             title: 'Existing',
           );
@@ -90,7 +94,7 @@ void main() {
 
       expect(result.addedIds, isEmpty);
       expect(result.skipped, [
-        (start: DateTime(2026, 9, 21, 8), end: DateTime(2026, 9, 21, 9)),
+        (start: DateTime(2099, 1, 2, 8), end: DateTime(2099, 1, 2, 9)),
       ]);
       final dayBlocks = container.read(dayBlocksProvider(date)).value!;
       expect(dayBlocks.map((b) => b.title), ['Existing']);

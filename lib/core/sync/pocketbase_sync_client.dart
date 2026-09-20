@@ -1,17 +1,32 @@
+import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
+import 'package:taskframe/core/sync/paginate.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
 
 const _identityKey = 'account_identity';
 const _tokenKey = 'account_token';
+
+/// How long a single network call to PocketBase is allowed to take
+/// before this client gives up on it. Without this, a call made on a
+/// bad connection (as opposed to a fast-failing "no network at all") can
+/// hang far longer than a user will wait — see `restoreSession()` and
+/// `_authenticate()`, the two calls this app makes before/without the
+/// user having taken any explicit "try again" action.
+const _networkTimeout = Duration(seconds: 8);
 
 /// Talks to a self-hosted PocketBase instance: account registration/login
 /// and the push/pull operations [SyncEngine] needs.
 class PocketBaseSyncClient implements SyncBackend {
   /// Creates a [PocketBaseSyncClient] talking to the PocketBase instance
   /// at [baseUrl], persisting sessions/cursors via [settings].
-  new({required String baseUrl, required this.settings})
-    : _pb = PocketBase(baseUrl);
+  /// [httpClientFactory], primarily for tests, overrides the underlying
+  /// HTTP client PocketBase uses.
+  new({
+    required String baseUrl,
+    required this.settings,
+    http.Client Function()? httpClientFactory,
+  }) : _pb = PocketBase(baseUrl, httpClientFactory: httpClientFactory);
 
   final PocketBase _pb;
 
@@ -30,7 +45,8 @@ class PocketBaseSyncClient implements SyncBackend {
             'password': password,
             'passwordConfirm': password,
           },
-        );
+        )
+        .timeout(_networkTimeout);
     await _authenticate(email, password);
   }
 
@@ -41,7 +57,8 @@ class PocketBaseSyncClient implements SyncBackend {
   Future<void> _authenticate(String email, String password) async {
     final auth = await _pb
         .collection('users')
-        .authWithPassword(email, password);
+        .authWithPassword(email, password)
+        .timeout(_networkTimeout);
     await settings.setValue(_identityKey, email);
     await settings.setValue(_tokenKey, auth.token);
     _pb.authStore.save(auth.token, auth.record);
@@ -75,7 +92,10 @@ class PocketBaseSyncClient implements SyncBackend {
     if (!_pb.authStore.isValid) return false;
 
     try {
-      final auth = await _pb.collection('users').authRefresh();
+      final auth = await _pb
+          .collection('users')
+          .authRefresh()
+          .timeout(_networkTimeout);
       await settings.setValue(_tokenKey, auth.token);
       _pb.authStore.save(auth.token, auth.record);
       return true;
@@ -108,7 +128,11 @@ class PocketBaseSyncClient implements SyncBackend {
   }
 
   @override
-  Future<void> upsert(String collection, Map<String, Object?> record) async {
+  Future<String> upsert(
+    String collection,
+    Map<String, Object?> record, {
+    String? remoteId,
+  }) async {
     final entityId = record['id']! as String;
     final owner = _requireOwner();
 
@@ -120,21 +144,13 @@ class PocketBaseSyncClient implements SyncBackend {
       'data': record,
     };
 
-    final existing = await _pb
-        .collection(collection)
-        .getList(
-          page: 1,
-          perPage: 1,
-          filter: 'entity_id = "$entityId" && owner = "$owner"',
-        );
-    if (existing.items.isEmpty) {
-      await _pb.collection(collection).create(body: body);
-    } else {
-      await _pb
-          .collection(collection)
-          .update(existing.items.first.id, body: body);
-    }
+    final saved = remoteId == null
+        ? await _pb.collection(collection).create(body: body)
+        : await _pb.collection(collection).update(remoteId, body: body);
+    return saved.id;
   }
+
+  static const _pageSize = 200;
 
   @override
   Future<List<Map<String, Object?>>> listChangedSince(
@@ -142,18 +158,22 @@ class PocketBaseSyncClient implements SyncBackend {
     DateTime cursor,
   ) async {
     _requireOwner();
-    final result = await _pb
-        .collection(collection)
-        .getList(
-          page: 1,
-          perPage: 200,
-          filter: 'updated > "${_filterDateTime(cursor)}"',
-          sort: 'updated',
-        );
+    final items = await fetchAllPages<RecordModel>((page) async {
+      final result = await _pb
+          .collection(collection)
+          .getList(
+            page: page,
+            perPage: _pageSize,
+            filter: 'updated > "${_filterDateTime(cursor)}"',
+            sort: 'updated',
+          );
+      return result.items;
+    }, perPage: _pageSize);
     return [
-      for (final item in result.items)
+      for (final item in items)
         {
           'entity_id': item.data['entity_id'],
+          'remote_id': item.id,
           'updated_at': item.data['updated_at'],
           'server_updated': item.get<String>('updated'),
           'deleted': item.data['deleted'],

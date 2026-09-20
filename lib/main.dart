@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/app.dart';
@@ -37,12 +39,18 @@ Future<void> main() async {
     settings: appSettings,
     backend: syncClient,
   );
-  // Restore (and, if needed, refresh) any previously-authenticated
-  // session before the first sync trigger fires, so an already-logged-in
-  // device doesn't spuriously throw/skip its first sync of this session.
-  // A genuinely unauthenticated (guest) device still legitimately
-  // fails-and-retries here - it has nothing to sync to yet.
-  await syncClient.restoreSession();
+  // Restores (and, if needed, refreshes) any previously-authenticated
+  // session, so an already-logged-in device's syncs succeed instead of
+  // failing `_requireOwner()` until the account screen happens to be
+  // opened. Deliberately NOT awaited: the local-first UI below doesn't
+  // need this to render, and this app must still start promptly while
+  // fully offline (no timeout on a real network call would otherwise
+  // block `runApp` — see PocketBaseSyncClient's own bounded timeout).
+  // A sync attempt that races ahead of this finishing just fails
+  // `_requireOwner()` harmlessly and retries on the next trigger (30s
+  // timer, connectivity regained, or the sync right after this call
+  // resolves below).
+  unawaited(syncClient.restoreSession());
 
   // Built explicitly (rather than letting ProviderScope create one
   // implicitly) so startSyncTriggers' onSynced callback below can reach

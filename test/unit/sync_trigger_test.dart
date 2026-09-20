@@ -45,8 +45,13 @@ class _CountingBackend implements SyncBackend {
   bool hasRemoteChange = false;
 
   @override
-  Future<void> upsert(String collection, Map<String, Object?> record) async {
+  Future<String> upsert(
+    String collection,
+    Map<String, Object?> record, {
+    String? remoteId,
+  }) async {
     upsertCalls++;
+    return remoteId ?? 'remote-id';
   }
 
   @override
@@ -70,6 +75,8 @@ class _CountingBackend implements SyncBackend {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late Database db;
   late _FakeConnectivityPlatform fakePlatform;
   late _CountingBackend backend;
@@ -214,6 +221,91 @@ void main() {
 
       async.elapse(const Duration(seconds: 60));
       fakePlatform.emit([ConnectivityResult.wifi]);
+      async.flushMicrotasks();
+
+      expect(backend.listCalls, afterDispose);
+    });
+  });
+
+  test('stops firing the periodic timer while not visible (backgrounded '
+      'tab/app)', () {
+    fakeAsync((async) {
+      final visibility = StreamController<bool>();
+      addTearDown(visibility.close);
+      final handle = startSyncTriggers(
+        engine: engine,
+        connectivity: Connectivity(),
+        visibilityChanges: visibility.stream,
+        // Explicit even though it matches startSyncTriggers' own default
+        // - these tests are specifically about the periodic interval.
+        // ignore: avoid_redundant_argument_values
+        interval: const Duration(seconds: 30),
+      );
+      addTearDown(handle.dispose);
+      async.flushMicrotasks();
+
+      visibility.add(false);
+      async.flushMicrotasks();
+      final afterHidden = backend.listCalls;
+
+      async.elapse(const Duration(seconds: 90));
+
+      expect(backend.listCalls, afterHidden);
+    });
+  });
+
+  test('syncs immediately and resumes the periodic timer when visibility '
+      'is regained', () {
+    fakeAsync((async) {
+      final visibility = StreamController<bool>();
+      addTearDown(visibility.close);
+      final handle = startSyncTriggers(
+        engine: engine,
+        connectivity: Connectivity(),
+        visibilityChanges: visibility.stream,
+        // Explicit even though it matches startSyncTriggers' own default
+        // - these tests are specifically about the periodic interval.
+        // ignore: avoid_redundant_argument_values
+        interval: const Duration(seconds: 30),
+      );
+      addTearDown(handle.dispose);
+      async.flushMicrotasks();
+
+      visibility.add(false);
+      async.flushMicrotasks();
+      final afterHidden = backend.listCalls;
+
+      visibility.add(true);
+      async.flushMicrotasks();
+
+      expect(backend.listCalls, greaterThan(afterHidden));
+      final afterShown = backend.listCalls;
+
+      async.elapse(const Duration(seconds: 30));
+
+      expect(backend.listCalls, greaterThan(afterShown));
+    });
+  });
+
+  test('dispose also stops the visibility subscription', () {
+    fakeAsync((async) {
+      final visibility = StreamController<bool>();
+      addTearDown(visibility.close);
+      final handle = startSyncTriggers(
+        engine: engine,
+        connectivity: Connectivity(),
+        visibilityChanges: visibility.stream,
+        // Explicit even though it matches startSyncTriggers' own default
+        // - these tests are specifically about the periodic interval.
+        // ignore: avoid_redundant_argument_values
+        interval: const Duration(seconds: 30),
+      );
+      async.flushMicrotasks();
+
+      handle.dispose();
+      final afterDispose = backend.listCalls;
+
+      visibility.add(true);
       async.flushMicrotasks();
 
       expect(backend.listCalls, afterDispose);

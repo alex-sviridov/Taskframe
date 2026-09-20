@@ -14,18 +14,34 @@ class FakeSyncBackend implements SyncBackend {
   /// failing (e.g. a network blip) while the rest of the batch succeeds.
   Set<String> failUpsertFor = {};
 
+  /// Every `remoteId` [upsert] was called with, in call order — `null`
+  /// means "no known remote id yet" (a first-ever push of that entity).
+  /// Lets tests assert a push never re-derives a remote id it was
+  /// already given, instead of just asserting on the end state.
+  final List<String?> remoteIdsSeen = [];
+
+  var _nextId = 1;
+
   @override
-  Future<void> upsert(String collection, Map<String, Object?> record) async {
+  Future<String> upsert(
+    String collection,
+    Map<String, Object?> record, {
+    String? remoteId,
+  }) async {
+    remoteIdsSeen.add(remoteId);
     if (failUpsertFor.contains(record['entity_id'])) {
       throw StateError('simulated upsert failure for ${record['entity_id']}');
     }
     final list = remote.putIfAbsent(collection, () => []);
     final index = list.indexWhere((r) => r['entity_id'] == record['entity_id']);
+    final id = remoteId ?? 'remote-${_nextId++}';
+    final stored = {...record, 'remote_id': id};
     if (index == -1) {
-      list.add(record);
+      list.add(stored);
     } else {
-      list[index] = record;
+      list[index] = stored;
     }
+    return id;
   }
 
   @override
@@ -390,4 +406,135 @@ void main() {
       );
     },
   );
+
+  test('a first-ever push has no known remote id, and a later push of the '
+      'same entity reuses the id the backend assigned it — never asking '
+      'the backend whether the record already exists', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'first',
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+    final assignedId = backend.remote['things']!.single['remote_id'];
+
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'second',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+
+    expect(backend.remoteIdsSeen, [null, assignedId]);
+  });
+
+  test('the remote id survives a non-merging write to the domain record made '
+      'in between two syncs (as every real repository write does)', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'first',
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+    final assignedId = backend.remote['things']!.single['remote_id'];
+
+    // A plain (non-merge) put, as a domain repository's update() does —
+    // this must not be able to erase sync's own remote-id bookkeeping,
+    // since that bookkeeping isn't kept on the domain record itself.
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'second',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+
+    expect(backend.remoteIdsSeen.last, assignedId);
+  });
+
+  test('a record pulled from the remote learns its remote id locally too, so '
+      'a later local edit updates that record instead of creating a '
+      'duplicate', () async {
+    backend.remote['things'] = [
+      {
+        'entity_id': 'a',
+        'remote_id': 'existing-remote-id',
+        'updated_at': DateTime.utc(2026).toIso8601String(),
+        'server_updated': DateTime.utc(2026).toIso8601String(),
+        'deleted': false,
+        'data': {
+          'id': 'a',
+          'title': 'from-remote',
+          'updatedAt': DateTime.utc(2026).toIso8601String(),
+          'deleted': false,
+        },
+      },
+    ];
+    await engine.syncAll([things]);
+
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'edited-locally',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+
+    expect(backend.remoteIdsSeen, contains('existing-remote-id'));
+    expect(backend.remote['things'], hasLength(1));
+  });
+
+  test('a record pulled but losing LWW (local stays newer) still learns its '
+      'remote id, so the not-yet-pushed local edit updates it rather than '
+      'creating a duplicate', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'newer-local',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    backend.remote['things'] = [
+      {
+        'entity_id': 'a',
+        'remote_id': 'existing-remote-id',
+        'updated_at': DateTime.utc(2026).toIso8601String(),
+        'server_updated': DateTime.utc(2026).toIso8601String(),
+        'deleted': false,
+        'data': {
+          'id': 'a',
+          'title': 'older-remote',
+          'updatedAt': DateTime.utc(2026).toIso8601String(),
+          'deleted': false,
+        },
+      },
+    ];
+
+    await engine.syncAll([things]);
+
+    expect(backend.remoteIdsSeen, ['existing-remote-id']);
+  });
+
+  test('the local remote-id bookkeeping is never sent as part of the pushed '
+      'record itself', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+
+    await store.record('a').put(db, {
+      'id': 'a',
+      'title': 'second',
+      'updatedAt': DateTime.utc(2026, 1, 2).toIso8601String(),
+      'deleted': false,
+    });
+    await engine.syncAll([things]);
+
+    final pushed = backend.remote['things']!.single;
+    expect(pushed.containsKey('_pbId'), isFalse);
+  });
 }
