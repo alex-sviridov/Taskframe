@@ -80,6 +80,8 @@ Future<void> main() async {
         if (provider != null) container.invalidate(provider);
       }
     },
+    onStatusChanged: (status) =>
+        container.read(syncStatusProvider.notifier).current = status,
   );
 
   runApp(UncontrolledProviderScope(container: container, child: const App()));

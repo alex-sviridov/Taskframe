@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
+import 'package:taskframe/core/sync/sync_status.dart';
 
 /// Handle returned by [startSyncTriggers], to stop triggering sync
 /// (tests, or a future "sign out").
@@ -56,19 +57,29 @@ Stream<bool> _defaultVisibilityChanges() {
 /// storage with no other way to tell the app's already-running UI state
 /// that new data arrived, so a composition root wires this to
 /// invalidate the matching providers.
+///
+/// [onStatusChanged], when given, is called with [SyncStatus.syncing]
+/// right before each attempt and [SyncStatus.idle]/[SyncStatus.error]
+/// right after, based on [SyncOutcome.hadError] — a composition root
+/// wires this to a status indicator's provider.
 SyncTriggerHandle startSyncTriggers({
   required SyncEngine engine,
   Connectivity? connectivity,
   Stream<bool>? visibilityChanges,
   Duration interval = const Duration(seconds: 30),
   void Function(Set<String> changedCollections)? onSynced,
+  void Function(SyncStatus status)? onStatusChanged,
 }) {
   final connectivityChecker = connectivity ?? Connectivity();
   final visibility = visibilityChanges ?? _defaultVisibilityChanges();
 
   Future<void> sync() async {
-    final changed = await engine.syncAll(syncCollections);
-    onSynced?.call(changed);
+    onStatusChanged?.call(SyncStatus.syncing);
+    final outcome = await engine.syncAll(syncCollections);
+    onStatusChanged?.call(
+      outcome.hadError ? SyncStatus.error : SyncStatus.idle,
+    );
+    onSynced?.call(outcome.changed);
   }
 
   Timer? timer;

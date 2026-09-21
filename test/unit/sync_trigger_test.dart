@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
+import 'package:taskframe/core/sync/sync_status.dart';
 import 'package:taskframe/core/sync/sync_trigger.dart';
 
 /// Lets tests drive [Connectivity.onConnectivityChanged] without a real
@@ -44,6 +45,11 @@ class _CountingBackend implements SyncBackend {
   /// sync_engine.dart's own push/pull mechanics (covered elsewhere).
   bool hasRemoteChange = false;
 
+  /// When true, [listChangedSince] throws — simulates a sync attempt
+  /// failing (e.g. offline, dead session), for tests exercising
+  /// [startSyncTriggers]'s `onStatusChanged` callback.
+  bool failPull = false;
+
   @override
   Future<String> upsert(
     String collection,
@@ -60,6 +66,7 @@ class _CountingBackend implements SyncBackend {
     DateTime cursor,
   ) async {
     listCalls++;
+    if (failPull) throw StateError('simulated pull failure');
     if (!hasRemoteChange) return [];
     final now = DateTime.now().toUtc().toIso8601String();
     return [
@@ -286,6 +293,41 @@ void main() {
       expect(backend.listCalls, greaterThan(afterShown));
     });
   });
+
+  test('calls onStatusChanged with syncing then idle around a successful '
+      'sync attempt', () async {
+    final statuses = <SyncStatus>[];
+    final handle = startSyncTriggers(
+      engine: engine,
+      connectivity: Connectivity(),
+      interval: const Duration(minutes: 10),
+      onStatusChanged: statuses.add,
+    );
+    addTearDown(handle.dispose);
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(statuses, [SyncStatus.syncing, SyncStatus.idle]);
+  });
+
+  test(
+    'calls onStatusChanged with error when the sync attempt fails',
+    () async {
+      backend.failPull = true;
+      final statuses = <SyncStatus>[];
+      final handle = startSyncTriggers(
+        engine: engine,
+        connectivity: Connectivity(),
+        interval: const Duration(minutes: 10),
+        onStatusChanged: statuses.add,
+      );
+      addTearDown(handle.dispose);
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(statuses, [SyncStatus.syncing, SyncStatus.error]);
+    },
+  );
 
   test('dispose also stops the visibility subscription', () {
     fakeAsync((async) {

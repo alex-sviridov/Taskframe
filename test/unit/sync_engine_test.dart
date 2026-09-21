@@ -14,6 +14,10 @@ class FakeSyncBackend implements SyncBackend {
   /// failing (e.g. a network blip) while the rest of the batch succeeds.
   Set<String> failUpsertFor = {};
 
+  /// When true, [listChangedSince] throws instead of returning — simulates
+  /// a pull failing (e.g. a network blip or a dead session).
+  bool failListChangedSince = false;
+
   /// Every `remoteId` [upsert] was called with, in call order — `null`
   /// means "no known remote id yet" (a first-ever push of that entity).
   /// Lets tests assert a push never re-derives a remote id it was
@@ -49,6 +53,9 @@ class FakeSyncBackend implements SyncBackend {
     String collection,
     DateTime cursor,
   ) async {
+    if (failListChangedSince) {
+      throw StateError('simulated listChangedSince failure');
+    }
     final list = remote[collection] ?? [];
     return [
       for (final record in list)
@@ -298,9 +305,9 @@ void main() {
       },
     ];
 
-    final changed = await engine.syncAll([things]);
+    final outcome = await engine.syncAll([things]);
 
-    expect(changed, {'things'});
+    expect(outcome.changed, {'things'});
   });
 
   test('syncAll returns an empty set when a remote record loses LWW '
@@ -326,15 +333,15 @@ void main() {
       },
     ];
 
-    final changed = await engine.syncAll([things]);
+    final outcome = await engine.syncAll([things]);
 
-    expect(changed, isEmpty);
+    expect(outcome.changed, isEmpty);
   });
 
   test('syncAll returns an empty set when there is nothing to pull', () async {
-    final changed = await engine.syncAll([things]);
+    final outcome = await engine.syncAll([things]);
 
-    expect(changed, isEmpty);
+    expect(outcome.changed, isEmpty);
   });
 
   test('syncAll only reports collections that actually had a change applied, '
@@ -358,9 +365,43 @@ void main() {
     ];
     // 'others' has nothing on the remote at all.
 
-    final changed = await engine.syncAll([things, others]);
+    final outcome = await engine.syncAll([things, others]);
 
-    expect(changed, {'things'});
+    expect(outcome.changed, {'things'});
+  });
+
+  test('syncAll reports hadError: false when every collection syncs '
+      'cleanly', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
+      'deleted': false,
+    });
+
+    final outcome = await engine.syncAll([things]);
+
+    expect(outcome.hadError, isFalse);
+  });
+
+  test('syncAll reports hadError: true when a record fails to push', () async {
+    await store.record('a').put(db, {
+      'id': 'a',
+      'updatedAt': DateTime.utc(2026).toIso8601String(),
+      'deleted': false,
+    });
+    backend.failUpsertFor = {'a'};
+
+    final outcome = await engine.syncAll([things]);
+
+    expect(outcome.hadError, isTrue);
+  });
+
+  test('syncAll reports hadError: true when a pull fails', () async {
+    backend.failListChangedSince = true;
+
+    final outcome = await engine.syncAll([things]);
+
+    expect(outcome.hadError, isTrue);
   });
 
   test(

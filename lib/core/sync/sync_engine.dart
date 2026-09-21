@@ -4,6 +4,26 @@ import 'package:sembast/sembast.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
 
+/// The result of one [SyncEngine.syncAll] call.
+class SyncOutcome {
+  /// Creates a [SyncOutcome].
+  const new({required this.changed, required this.hadError});
+
+  /// The names of the collections that actually had at least one remote
+  /// record applied to local storage this call (i.e. a pull that won
+  /// LWW) — a pushed-only or no-op collection is never included.
+  final Set<String> changed;
+
+  /// Whether any collection's push or pull failed this call (e.g. a
+  /// network error, or no/dead session) — always best-effort and
+  /// retried on the next trigger, never thrown. A caller (e.g. a sync
+  /// status indicator) uses this to tell "sync is working" from "sync
+  /// is currently failing", which [changed] alone can't: an empty
+  /// [changed] set is also the normal, healthy outcome of "nothing new
+  /// to pull".
+  final bool hadError;
+}
+
 /// What [SyncEngine] needs from a remote backend. `PocketBaseSyncClient`
 /// (see `pocketbase_sync_client.dart`) is the real implementation; tests
 /// use an in-memory fake.
@@ -109,34 +129,37 @@ class SyncEngine {
   /// store wipe), so a sync never races a concurrent operation that
   /// wipes the very stores it's reading/writing.
   ///
-  /// Returns the names of the collections that actually had at least one
-  /// remote record applied to local storage this call (i.e. a pull that
-  /// won LWW) — a pushed-only or no-op collection is never included.
-  /// This is what lets a caller (see `sync_trigger.dart`'s `onSynced`)
-  /// tell the already-running UI's cached state to refresh only where
-  /// something genuinely changed underneath it, instead of either doing
-  /// nothing (leaving new server data invisible until a full reload) or
-  /// refreshing everything on every tick.
-  Future<Set<String>> syncAll(List<SyncCollection> collections) {
+  /// See [SyncOutcome] for what's returned — a caller (see
+  /// `sync_trigger.dart`) uses it both to refresh only the UI state that
+  /// actually changed and to report sync health (e.g. a status
+  /// indicator) without this method needing to throw for a failure it
+  /// already intends to retry on its own.
+  Future<SyncOutcome> syncAll(List<SyncCollection> collections) {
     return runExclusive(() async {
       final changed = <String>{};
+      var hadError = false;
       for (final collection in collections) {
         try {
           if (await _pull(collection)) changed.add(collection.name);
         } on Object {
           // Best-effort; retried on the next trigger.
+          hadError = true;
         }
         try {
-          await _push(collection);
+          if (!await _push(collection)) hadError = true;
         } on Object {
           // Best-effort; retried on the next trigger.
+          hadError = true;
         }
       }
-      return changed;
+      return SyncOutcome(changed: changed, hadError: hadError);
     });
   }
 
-  Future<void> _push(SyncCollection collection) async {
+  /// Returns whether every locally-changed record was pushed
+  /// successfully — `false` means at least one failed (see the
+  /// per-record `break` below) and will be retried on the next trigger.
+  Future<bool> _push(SyncCollection collection) async {
     final cursor = await _cursor('sync_push_${collection.name}');
     // Sorted ascending by updatedAt so a mid-batch failure (see below)
     // stops at a deterministic point: everything before it in time has
@@ -147,8 +170,9 @@ class SyncEngine {
       sortOrders: [SortOrder('updatedAt')],
     );
     final records = await collection.store.find(_db, finder: finder);
-    if (records.isEmpty) return;
+    if (records.isEmpty) return true;
 
+    var succeeded = true;
     DateTime? maxSeen;
     for (final record in records) {
       final entityId = record.key;
@@ -167,6 +191,7 @@ class SyncEngine {
         // already succeeded and its cursor progress below must not be
         // lost. This record (and anything after it) is retried on the
         // next trigger.
+        succeeded = false;
         break;
       }
       if (maxSeen == null || updatedAt.isAfter(maxSeen)) maxSeen = updatedAt;
@@ -177,6 +202,7 @@ class SyncEngine {
         maxSeen.toIso8601String(),
       );
     }
+    return succeeded;
   }
 
   /// Returns whether any remote record was actually applied to local

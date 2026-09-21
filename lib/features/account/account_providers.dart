@@ -2,11 +2,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/platform/pocketbase_base_url.dart';
 import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
+import 'package:taskframe/core/sync/sync_status.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_blocks_provider.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/template/providers.dart';
+
+/// Backs [syncStatusProvider] — `main.dart` writes to [current] from
+/// `startSyncTriggers`'s `onStatusChanged` callback.
+class SyncStatusNotifier extends Notifier<SyncStatus> {
+  @override
+  SyncStatus build() => SyncStatus.idle;
+
+  /// The latest reported [SyncStatus].
+  SyncStatus get current => state;
+
+  set current(SyncStatus status) => state = status;
+}
+
+/// This device's current [SyncStatus] — updated by `main.dart` wiring
+/// `startSyncTriggers`'s `onStatusChanged` callback into this provider.
+/// Meaningless while [accountProvider]'s email is `null` (guest mode):
+/// see [SyncStatus]'s doc comment.
+final syncStatusProvider = NotifierProvider<SyncStatusNotifier, SyncStatus>(
+  SyncStatusNotifier.new,
+);
 
 const _pocketBaseBaseUrlOverride = String.fromEnvironment('POCKETBASE_URL');
 
