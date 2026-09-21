@@ -135,6 +135,47 @@ void main() {
       expect(events, ['sync-running']);
     },
   );
+
+  test('logout() pushes a not-yet-synced local edit before wiping it, even '
+      'when no sync happens to already be in flight', () async {
+    final db = await newDatabaseFactoryMemory().openDatabase('test3.db');
+    final settings = SembastAppSettingsRepository(db);
+    final client = PocketBaseSyncClient(
+      baseUrl: 'http://localhost:8090',
+      settings: settings,
+    );
+    final backend = _NoopSyncBackend();
+    final syncEngine = SyncEngine(db: db, settings: settings, backend: backend);
+
+    // An edit made just now, never yet pushed (no sync trigger has run
+    // since it was made) — reproduces "edit made, then logged out
+    // before the next sync tick, edit lost forever".
+    await tasksStore.record('t1').put(db, {
+      'id': 't1',
+      'title': 'unsynced edit',
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      'deleted': false,
+    });
+
+    var pushed = false;
+    backend.onRun = () => pushed = true;
+
+    await logout(
+      db: db,
+      settings: settings,
+      client: client,
+      syncEngine: syncEngine,
+    );
+
+    expect(
+      pushed,
+      isTrue,
+      reason:
+          'logout() must flush pending pushes before wiping, not '
+          'just rely on some other sync happening to already be in '
+          'flight',
+    );
+  });
 }
 
 final _tasksCollection = SyncCollection(name: 'tasks', store: tasksStore);

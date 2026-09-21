@@ -29,9 +29,20 @@ Future<void> _wipeSyncedStores({
 /// dismissal flag) and the PocketBase account/server-side data
 /// untouched. Logging back in re-pulls everything from the account.
 ///
-/// Runs exclusively of any in-flight or subsequent [SyncEngine.syncAll]
-/// call via [SyncEngine.runExclusive], and clears the session *first*
-/// (before wiping stores), so that:
+/// First gives any not-yet-pushed local edit one last chance to reach
+/// the server via a best-effort [SyncEngine.syncAll] — without this, an
+/// edit made since the last sync trigger (e.g. moments before the user
+/// hits "Log out", with no sync yet in flight to carry it) would be
+/// silently discarded below with no server copy to fall back on. That
+/// call runs and fully completes its own [SyncEngine.runExclusive]
+/// section *before* this function's own begins — nesting one inside the
+/// other would deadlock the mutex. If the device is offline, this flush
+/// is a no-op (as with any sync attempt) and the edit is lost; there's
+/// no way to push without a network.
+///
+/// The wipe itself runs exclusively of any in-flight or subsequent
+/// [SyncEngine.syncAll] call via [SyncEngine.runExclusive], and clears
+/// the session *first* (before wiping stores), so that:
 ///  - an already-in-flight sync's pull step can't write into a store this
 ///    call is about to wipe (it waits behind this call instead), and
 ///  - a sync that starts after this call begins immediately fails
@@ -42,8 +53,10 @@ Future<void> logout({
   required AppSettingsRepository settings,
   required PocketBaseSyncClient client,
   required SyncEngine syncEngine,
-}) {
-  return syncEngine.runExclusive(() async {
+}) async {
+  await syncEngine.syncAll(syncCollections);
+
+  await syncEngine.runExclusive(() async {
     await client.clearSession();
     await _wipeSyncedStores(db: db, settings: settings);
   });
