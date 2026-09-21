@@ -4,6 +4,15 @@ services:
     build: .
     ports:
       - "8080:8080"
+    environment:
+      # HTTP subpath to serve the app under, e.g. "/taskframe/". Leave
+      # unset to serve at "/". Rewritten into index.html's <base href> at
+      # container start — no rebuild needed to change this.
+      - BASE_HREF=${BASE_HREF:-/}
+      # host:port of the PocketBase backend nginx proxies /api/ to. Leave
+      # unset to use the "pocketbase" compose service. Rewritten into
+      # nginx.conf at container start — no rebuild needed to change this.
+      - PB_UPSTREAM=${PB_UPSTREAM:-pocketbase:8090}
     depends_on:
       - pocketbase
 

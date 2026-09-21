@@ -1,5 +1,6 @@
 // lib/features/account/account_providers.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskframe/core/platform/pocketbase_base_url.dart';
 import 'package:taskframe/core/sync/pocketbase_sync_client.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/day_blocks_provider.dart';
@@ -7,15 +8,29 @@ import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/template/providers.dart';
 
-/// The PocketBase base URL. Defaults to `/` (same-origin) — nginx
-/// (`nginx.conf`) proxies `/api/` to the `pocketbase` service, so the web
-/// app never needs to know PocketBase's real host. Override at build time
+const _pocketBaseBaseUrlOverride = String.fromEnvironment('POCKETBASE_URL');
+
+/// Picks the PocketBase client's base URL: [override] (the raw
+/// `--dart-define=POCKETBASE_URL=...` value, empty when unset) wins when
+/// given; otherwise falls back to calling [defaultUrl]. Split out from
+/// [pocketBaseBaseUrl] so the precedence logic is testable without a
+/// browser.
+String resolvePocketBaseBaseUrl({
+  required String override,
+  required String Function() defaultUrl,
+}) => override.isNotEmpty ? override : defaultUrl();
+
+/// The PocketBase base URL. Defaults to the page's own `<base href>` on
+/// web (same-origin, whatever prefix the app is actually served under —
+/// see [defaultPocketBaseBaseUrl]) — nginx (`nginx.conf`) proxies `/api/`
+/// under that same prefix to the `pocketbase` service, so the web app
+/// never needs to know PocketBase's real host. Override at build time
 /// with `--dart-define=POCKETBASE_URL=...` for a deployment where the app
 /// isn't served through that proxy (e.g. a native build talking to a
 /// PocketBase host directly).
-const pocketBaseBaseUrl = String.fromEnvironment(
-  'POCKETBASE_URL',
-  defaultValue: '/',
+final String pocketBaseBaseUrl = resolvePocketBaseBaseUrl(
+  override: _pocketBaseBaseUrlOverride,
+  defaultUrl: defaultPocketBaseBaseUrl,
 );
 
 /// Riverpod-accessible form of [pocketBaseBaseUrl], for widgets/tests.
