@@ -23,6 +23,12 @@ class SyncTriggerHandle {
 /// notifications — covers a browser tab being hidden/shown as well as a
 /// mobile app being backgrounded/foregrounded, with no platform-specific
 /// code of its own.
+///
+/// [AppLifecycleListener] fires more than one callback for a single
+/// visible/hidden transition (e.g. both `onShow` and `onResume` on
+/// foregrounding), each of which would otherwise map to its own `true`/
+/// `false` event here. `.distinct()` collapses consecutive repeats so a
+/// single resume triggers exactly one downstream sync, not two.
 Stream<bool> _defaultVisibilityChanges() {
   late final AppLifecycleListener listener;
   final controller = StreamController<bool>(onCancel: () => listener.dispose());
@@ -32,7 +38,7 @@ Stream<bool> _defaultVisibilityChanges() {
     onHide: () => controller.add(false),
     onPause: () => controller.add(false),
   );
-  return controller.stream;
+  return controller.stream.distinct();
 }
 
 /// Starts syncing [engine] against [syncCollections] on: right now (app
