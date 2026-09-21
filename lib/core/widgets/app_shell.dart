@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/core/widgets/ios_install_hint_banner.dart';
 import 'package:taskframe/core/widgets/sidebar_row.dart';
+import 'package:taskframe/core/widgets/sync_status_indicator.dart';
 import 'package:taskframe/features/saved_search/models/saved_search.dart';
 import 'package:taskframe/features/saved_search/providers.dart';
 
@@ -161,6 +162,7 @@ class _SidebarContent extends StatelessWidget {
           selected: currentIndex == _destinations.length,
           onTap: () => onDestinationSelected(_destinations.length),
         ),
+        const SyncStatusIndicator(),
       ],
     );
   }

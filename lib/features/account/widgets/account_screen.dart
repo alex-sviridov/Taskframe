@@ -21,6 +21,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   bool _isRegisterMode = true;
   String? _error;
 
+  /// True while a register/log-in/re-authenticate call is in flight.
+  /// Disables the submit button so a fast double-tap can't fire two
+  /// concurrent calls — e.g. two `register()`s racing, where the second
+  /// comes back "email already in use" even though the first succeeded.
+  bool _isSubmitting = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -29,7 +35,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   }
 
   Future<void> _submit() async {
-    setState(() => _error = null);
+    if (_isSubmitting) return;
+    setState(() {
+      _error = null;
+      _isSubmitting = true;
+    });
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     try {
@@ -44,6 +54,25 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             ? 'Could not register. That email may already be in use.'
             : 'Could not log in. Check your email and password.',
       );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _reauthenticate(String email) async {
+    if (_isSubmitting) return;
+    setState(() {
+      _error = null;
+      _isSubmitting = true;
+    });
+    try {
+      await ref
+          .read(accountProvider.notifier)
+          .login(email, _passwordController.text);
+    } on Object {
+      setState(() => _error = 'Could not log in. Check your password.');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -57,8 +86,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final content = account.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => _buildForm(context),
-      data: (email) =>
-          email != null ? _buildLoggedIn(email) : _buildForm(context),
+      data: (state) {
+        final email = state.email;
+        if (email == null) return _buildForm(context);
+        if (state.sessionExpired) return _buildExpiredSession(context, email);
+        return _buildLoggedIn(email);
+      },
     );
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
@@ -88,6 +121,40 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     ],
   );
 
+  /// Shown instead of [_buildLoggedIn] when the stored session was
+  /// rejected by the server (see [AccountState.sessionExpired]) — sync
+  /// will keep failing silently otherwise, so this prompts for the
+  /// password rather than claiming the account is still logged in.
+  Widget _buildExpiredSession(BuildContext context, String email) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        'Your session for $email expired. Log in again to resume syncing.',
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+      const SizedBox(height: 16),
+      TextField(
+        controller: _passwordController,
+        decoration: const InputDecoration(labelText: 'Password'),
+        obscureText: true,
+      ),
+      const SizedBox(height: 16),
+      ElevatedButton(
+        onPressed: _isSubmitting ? null : () => _reauthenticate(email),
+        child: const Text('Log in again'),
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: 16),
+        Text(
+          _error!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
+      const SizedBox(height: 8),
+      TextButton(onPressed: _logout, child: const Text('Log out instead')),
+    ],
+  );
+
   Widget _buildForm(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -114,7 +181,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       ),
       const SizedBox(height: 16),
       ElevatedButton(
-        onPressed: _submit,
+        onPressed: _isSubmitting ? null : _submit,
         child: Text(_isRegisterMode ? 'Register' : 'Log in'),
       ),
       if (_error != null) ...[

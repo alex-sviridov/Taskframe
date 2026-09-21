@@ -2,8 +2,15 @@
 //
 // Covers the network-free parts of PocketBaseSyncClient that don't need a
 // live PocketBase (that's test/integration/pocketbase_sync_test.dart):
-// specifically, that a hung network call doesn't block the app forever —
-// see the offline-startup fix in main.dart, which this backs.
+// - that a hung network call doesn't block the app forever — see the
+//   offline-startup fix in main.dart, which this backs.
+// - that restoreSession() distinguishes "couldn't verify, treat as still
+//   logged in" (offline/timeout) from "server rejected the token" (a
+//   genuinely dead session that needs a fresh login) — see AccountNotifier,
+//   which surfaces the latter as `sessionExpired` so the UI can prompt for
+//   re-authentication instead of letting sync fail silently forever.
+// - that concurrent restoreSession() calls (main.dart's startup call and
+//   AccountNotifier.build()'s can overlap) share one network request.
 import 'dart:async';
 import 'dart:convert';
 
@@ -24,6 +31,40 @@ class _HangingClient extends http.BaseClient {
   void close() {}
 }
 
+/// An [http.Client] that responds to every request with a fixed status
+/// code and JSON body, for simulating a specific PocketBase API response
+/// without a live server.
+class _FixedResponseClient extends http.BaseClient {
+  new({required this.statusCode});
+
+  final int statusCode;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(Stream.value(utf8.encode('{}')), statusCode);
+  }
+
+  @override
+  void close() {}
+}
+
+/// An [http.Client] whose every `send()` call is routed through a single
+/// shared callback — lets a test resolve every concurrent caller with
+/// one response and count how many requests were actually made, proving
+/// they shared a single in-flight request instead of each firing their
+/// own.
+class _SharedResponseClient extends http.BaseClient {
+  new(this._onSend);
+
+  final Future<http.StreamedResponse> Function() _onSend;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) => _onSend();
+
+  @override
+  void close() {}
+}
+
 Future<T> _neverCompletes<T>() => Completer<T>().future;
 
 /// A syntactically-valid (unsigned) JWT with the given expiry, matching
@@ -37,8 +78,21 @@ String _fakeJwt({required DateTime expiry}) {
   return '$header.$payload.sig';
 }
 
+http.StreamedResponse _authRefreshOkResponse(String newToken) =>
+    http.StreamedResponse(
+      Stream.value(
+        utf8.encode(
+          jsonEncode({
+            'token': newToken,
+            'record': {'id': 'user123'},
+          }),
+        ),
+      ),
+      200,
+    );
+
 void main() {
-  test('restoreSession() gives up and returns false instead of hanging '
+  test('restoreSession() gives up and returns offline instead of hanging '
       'forever when the network never responds', () {
     fakeAsync((async) {
       final settings = InMemoryAppSettingsRepository();
@@ -56,12 +110,82 @@ void main() {
         httpClientFactory: _HangingClient.new,
       );
 
-      bool? result;
+      SessionRestoreResult? result;
       unawaited(client.restoreSession().then((r) => result = r));
 
       async.elapse(const Duration(minutes: 1));
 
-      expect(result, isFalse);
+      expect(result, SessionRestoreResult.offline);
     });
   });
+
+  test('restoreSession() returns expired when the server rejects the '
+      'stored token (not just a network failure)', () async {
+    final settings = InMemoryAppSettingsRepository();
+    await settings.setValue(
+      'account_token',
+      _fakeJwt(expiry: DateTime.now().add(const Duration(days: 1))),
+    );
+
+    final client = PocketBaseSyncClient(
+      baseUrl: 'http://localhost:8090',
+      settings: settings,
+      httpClientFactory: () => _FixedResponseClient(statusCode: 401),
+    );
+
+    final result = await client.restoreSession();
+
+    expect(result, SessionRestoreResult.expired);
+  });
+
+  test('restoreSession() returns noSession when nothing is stored', () async {
+    final client = PocketBaseSyncClient(
+      baseUrl: 'http://localhost:8090',
+      settings: InMemoryAppSettingsRepository(),
+    );
+
+    final result = await client.restoreSession();
+
+    expect(result, SessionRestoreResult.noSession);
+  });
+
+  test(
+    'concurrent restoreSession() calls share a single network request',
+    () async {
+      final settings = InMemoryAppSettingsRepository();
+      await settings.setValue(
+        'account_token',
+        _fakeJwt(expiry: DateTime.now().add(const Duration(days: 1))),
+      );
+
+      var sendCount = 0;
+      final responseCompleter = Completer<http.StreamedResponse>();
+      Future<http.StreamedResponse> onSend() {
+        sendCount++;
+        return responseCompleter.future;
+      }
+
+      final client = PocketBaseSyncClient(
+        baseUrl: 'http://localhost:8090',
+        settings: settings,
+        httpClientFactory: () => _SharedResponseClient(onSend),
+      );
+
+      final first = client.restoreSession();
+      final second = client.restoreSession();
+
+      // Let both calls actually start (and reach the network layer) before
+      // resolving the one shared response.
+      await Future<void>.delayed(Duration.zero);
+      responseCompleter.complete(_authRefreshOkResponse('new-token'));
+
+      final results = await Future.wait([first, second]);
+
+      expect(sendCount, 1);
+      expect(results, [
+        SessionRestoreResult.restored,
+        SessionRestoreResult.restored,
+      ]);
+    },
+  );
 }

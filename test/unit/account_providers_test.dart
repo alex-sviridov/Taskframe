@@ -10,6 +10,12 @@
 // network-free unit test — real end-to-end cross-account behavior is
 // covered by `test/integration/pocketbase_sync_test.dart` against a live
 // PocketBase.
+//
+// Also covers `build()` surfacing `AccountState.sessionExpired` when
+// `restoreSession()` reports the stored token was rejected by the
+// server (as opposed to merely being unreachable) — see the debugging
+// session that found sync silently dying forever with no UI signal once
+// a session genuinely expired.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
@@ -18,9 +24,15 @@ import 'package:taskframe/features/account/account_providers.dart';
 
 /// Stands in for the real network round-trip: just stores the new
 /// identity, like the real `_authenticate` does, without calling out to
-/// PocketBase.
+/// PocketBase. [restoreSessionResult] lets tests control what `build()`
+/// sees without a real PocketBase server.
 class _FakePocketBaseSyncClient extends PocketBaseSyncClient {
-  new({required super.settings}) : super(baseUrl: 'http://localhost:8090');
+  new({
+    required super.settings,
+    this.restoreSessionResult = SessionRestoreResult.noSession,
+  }) : super(baseUrl: 'http://localhost:8090');
+
+  final SessionRestoreResult restoreSessionResult;
 
   @override
   Future<void> register(String email, String password) =>
@@ -32,6 +44,9 @@ class _FakePocketBaseSyncClient extends PocketBaseSyncClient {
 
   @override
   Future<String?> currentEmail() => settings.getValue('account_identity');
+
+  @override
+  Future<SessionRestoreResult> restoreSession() async => restoreSessionResult;
 }
 
 void main() {
@@ -63,7 +78,7 @@ void main() {
           .login('new@example.com', 'testpass123');
 
       expect(wipeCalls, 1);
-      expect(container.read(accountProvider).value, 'new@example.com');
+      expect(container.read(accountProvider).value?.email, 'new@example.com');
     },
   );
 
@@ -114,6 +129,49 @@ void main() {
         .register('brand-new@example.com', 'testpass123');
 
     expect(wipeCalls, 0);
-    expect(container.read(accountProvider).value, 'brand-new@example.com');
+    expect(
+      container.read(accountProvider).value?.email,
+      'brand-new@example.com',
+    );
+  });
+
+  test('build() reports sessionExpired when restoreSession() says the '
+      'server rejected the stored token', () async {
+    final settings = InMemoryAppSettingsRepository();
+    await settings.setValue('account_identity', 'me@example.com');
+    final client = _FakePocketBaseSyncClient(
+      settings: settings,
+      restoreSessionResult: SessionRestoreResult.expired,
+    );
+
+    final container = ProviderContainer(
+      overrides: [pocketBaseSyncClientProvider.overrideWithValue(client)],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(accountProvider.future);
+
+    expect(state.email, 'me@example.com');
+    expect(state.sessionExpired, isTrue);
+  });
+
+  test('build() does NOT report sessionExpired when restoreSession() '
+      'merely could not reach the network (offline)', () async {
+    final settings = InMemoryAppSettingsRepository();
+    await settings.setValue('account_identity', 'me@example.com');
+    final client = _FakePocketBaseSyncClient(
+      settings: settings,
+      restoreSessionResult: SessionRestoreResult.offline,
+    );
+
+    final container = ProviderContainer(
+      overrides: [pocketBaseSyncClientProvider.overrideWithValue(client)],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(accountProvider.future);
+
+    expect(state.email, 'me@example.com');
+    expect(state.sessionExpired, isFalse);
   });
 }

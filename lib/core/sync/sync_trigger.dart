@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:taskframe/core/sync/sync_collection.dart';
 import 'package:taskframe/core/sync/sync_engine.dart';
+import 'package:taskframe/core/sync/sync_status.dart';
 
 /// Handle returned by [startSyncTriggers], to stop triggering sync
 /// (tests, or a future "sign out").
@@ -23,6 +24,12 @@ class SyncTriggerHandle {
 /// notifications — covers a browser tab being hidden/shown as well as a
 /// mobile app being backgrounded/foregrounded, with no platform-specific
 /// code of its own.
+///
+/// [AppLifecycleListener] fires more than one callback for a single
+/// visible/hidden transition (e.g. both `onShow` and `onResume` on
+/// foregrounding), each of which would otherwise map to its own `true`/
+/// `false` event here. `.distinct()` collapses consecutive repeats so a
+/// single resume triggers exactly one downstream sync, not two.
 Stream<bool> _defaultVisibilityChanges() {
   late final AppLifecycleListener listener;
   final controller = StreamController<bool>(onCancel: () => listener.dispose());
@@ -32,7 +39,7 @@ Stream<bool> _defaultVisibilityChanges() {
     onHide: () => controller.add(false),
     onPause: () => controller.add(false),
   );
-  return controller.stream;
+  return controller.stream.distinct();
 }
 
 /// Starts syncing [engine] against [syncCollections] on: right now (app
@@ -50,19 +57,29 @@ Stream<bool> _defaultVisibilityChanges() {
 /// storage with no other way to tell the app's already-running UI state
 /// that new data arrived, so a composition root wires this to
 /// invalidate the matching providers.
+///
+/// [onStatusChanged], when given, is called with [SyncStatus.syncing]
+/// right before each attempt and [SyncStatus.idle]/[SyncStatus.error]
+/// right after, based on [SyncOutcome.hadError] — a composition root
+/// wires this to a status indicator's provider.
 SyncTriggerHandle startSyncTriggers({
   required SyncEngine engine,
   Connectivity? connectivity,
   Stream<bool>? visibilityChanges,
   Duration interval = const Duration(seconds: 30),
   void Function(Set<String> changedCollections)? onSynced,
+  void Function(SyncStatus status)? onStatusChanged,
 }) {
   final connectivityChecker = connectivity ?? Connectivity();
   final visibility = visibilityChanges ?? _defaultVisibilityChanges();
 
   Future<void> sync() async {
-    final changed = await engine.syncAll(syncCollections);
-    onSynced?.call(changed);
+    onStatusChanged?.call(SyncStatus.syncing);
+    final outcome = await engine.syncAll(syncCollections);
+    onStatusChanged?.call(
+      outcome.hadError ? SyncStatus.error : SyncStatus.idle,
+    );
+    onSynced?.call(outcome.changed);
   }
 
   Timer? timer;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:taskframe/core/storage/app_settings_repository.dart';
@@ -6,6 +8,27 @@ import 'package:taskframe/core/sync/sync_engine.dart';
 
 const _identityKey = 'account_identity';
 const _tokenKey = 'account_token';
+
+/// The outcome of [PocketBaseSyncClient.restoreSession].
+enum SessionRestoreResult {
+  /// No session was ever stored on this device (guest mode).
+  noSession,
+
+  /// A stored session was successfully refreshed and is usable.
+  restored,
+
+  /// The stored session couldn't be verified because of a network
+  /// failure (offline, timeout) — not a rejection by the server. The
+  /// stored identity should still be treated as logged in; sync will
+  /// keep retrying on its own triggers.
+  offline,
+
+  /// The server rejected the stored token (or its locally-decoded
+  /// expiry has already passed) — this is a genuinely dead session, not
+  /// a connectivity blip. Retrying it won't help; the identity needs to
+  /// log in again.
+  expired,
+}
 
 /// How long a single network call to PocketBase is allowed to take
 /// before this client gives up on it. Without this, a call made on a
@@ -79,17 +102,34 @@ class PocketBaseSyncClient implements SyncBackend {
   /// restored/refreshed).
   Future<String?> currentEmail() => settings.getValue(_identityKey);
 
+  /// In-flight [restoreSession] call, if any — shared by every concurrent
+  /// caller instead of each starting its own network request. Startup
+  /// (`main.dart`) and `AccountNotifier.build()` can both call this
+  /// within moments of each other; without sharing, that's two redundant
+  /// auth-refresh round trips for the same outcome.
+  Future<SessionRestoreResult>? _restoreInFlight;
+
   /// Restores a previously-saved auth session, if any, so the app
   /// doesn't need to log in on every restart. Also attempts to refresh
   /// the token against PocketBase (tokens expire — PocketBase's default
-  /// is roughly 2 weeks — and a silently-dead session would otherwise
-  /// stop syncing forever with no way to recover short of logging in
-  /// again). Returns whether a valid, usable session was restored.
-  Future<bool> restoreSession() async {
+  /// is roughly 2 weeks). See [SessionRestoreResult] for what each
+  /// outcome means and how callers should react to it — in particular,
+  /// [SessionRestoreResult.expired] (as opposed to
+  /// [SessionRestoreResult.offline]) means retrying won't help; the
+  /// identity needs to log in again.
+  Future<SessionRestoreResult> restoreSession() {
+    return _restoreInFlight ??= _restoreSession().whenComplete(() {
+      _restoreInFlight = null;
+    });
+  }
+
+  Future<SessionRestoreResult> _restoreSession() async {
     final token = await settings.getValue(_tokenKey);
-    if (token == null) return false;
+    if (token == null) return SessionRestoreResult.noSession;
     _pb.authStore.save(token, null);
-    if (!_pb.authStore.isValid) return false;
+    // The token's own decoded expiry has already passed — no point
+    // asking the server, since an expired token can't refresh itself.
+    if (!_pb.authStore.isValid) return SessionRestoreResult.expired;
 
     try {
       final auth = await _pb
@@ -98,12 +138,19 @@ class PocketBaseSyncClient implements SyncBackend {
           .timeout(_networkTimeout);
       await settings.setValue(_tokenKey, auth.token);
       _pb.authStore.save(auth.token, auth.record);
-      return true;
+      return SessionRestoreResult.restored;
+    } on TimeoutException {
+      return SessionRestoreResult.offline;
+    } on ClientException catch (e) {
+      // A real response from the server (as opposed to a connection
+      // failure, which PocketBase surfaces as `statusCode == 0`) means
+      // it actively rejected the token — genuinely expired/revoked, not
+      // just unreachable.
+      return e.statusCode > 0
+          ? SessionRestoreResult.expired
+          : SessionRestoreResult.offline;
     } on Object {
-      // Refresh failed - the session is genuinely dead (expired/revoked).
-      // Leave the stale token in place; callers should treat this as "no
-      // usable session" without throwing out of restoreSession.
-      return false;
+      return SessionRestoreResult.offline;
     }
   }
 
