@@ -81,21 +81,42 @@ final syncedProvidersByCollection = {
 };
 
 /// This device's account state: the logged-in email, or `null` for guest
-/// mode. Also exposes the actions to register/log in/log out.
-class AccountNotifier extends AsyncNotifier<String?> {
+/// mode.
+class AccountState {
+  /// Creates an [AccountState].
+  const new({required this.email, this.sessionExpired = false});
+
+  /// The logged-in account's email, or `null` for guest mode.
+  final String? email;
+
+  /// True when [email] is non-null but the stored session was rejected
+  /// by the server (not just unreachable) — see
+  /// [SessionRestoreResult.expired]. Sync will keep failing silently
+  /// until this identity logs in again, so the UI must prompt for that
+  /// rather than showing a plain "logged in" state.
+  final bool sessionExpired;
+}
+
+/// This device's account state — see [AccountState]. Also exposes the
+/// actions to register/log in/log out.
+class AccountNotifier extends AsyncNotifier<AccountState> {
   @override
-  Future<String?> build() async {
+  Future<AccountState> build() async {
     final client = ref.watch(pocketBaseSyncClientProvider);
-    // `restoreSession()` returns false on ANY refresh failure, including a
-    // plain offline/network error — not just a genuinely dead/expired
-    // token (see its doc comment: it deliberately leaves the stale token
-    // in place so the identity is still known). Gating the returned
-    // identity on that boolean would show an already-logged-in offline
-    // user a blank guest register/login form. `currentEmail()` reads the
-    // stored identity key regardless of refresh outcome, so use that as
-    // the source of truth for "am I logged in" instead.
-    await client.restoreSession();
-    return await client.currentEmail();
+    // `restoreSession()`'s `offline` result means the refresh couldn't be
+    // verified due to a network failure — not a rejection by the server
+    // — so the stored identity should still be treated as logged in.
+    // Gating the returned identity on that would show an already-logged-
+    // in offline user a blank guest register/login form. `currentEmail()`
+    // reads the stored identity key regardless of the refresh outcome,
+    // so use that as the source of truth for "am I logged in", and only
+    // `expired` (a genuine server rejection) flips [sessionExpired].
+    final result = await client.restoreSession();
+    final email = await client.currentEmail();
+    return AccountState(
+      email: email,
+      sessionExpired: email != null && result == SessionRestoreResult.expired,
+    );
   }
 
   /// Registers a new account, uploading any local guest data to it on
@@ -103,15 +124,17 @@ class AccountNotifier extends AsyncNotifier<String?> {
   Future<void> register(String email, String password) async {
     await _wipeIfSwitchingIdentity(email);
     await ref.read(pocketBaseSyncClientProvider).register(email, password);
-    state = AsyncData(email);
+    state = AsyncData(AccountState(email: email));
   }
 
   /// Logs into an existing account, merging local guest data into it on
-  /// the next sync.
+  /// the next sync. Also used to re-authenticate after
+  /// [AccountState.sessionExpired] — same identity, so
+  /// [_wipeIfSwitchingIdentity] is a no-op in that case.
   Future<void> login(String email, String password) async {
     await _wipeIfSwitchingIdentity(email);
     await ref.read(pocketBaseSyncClientProvider).login(email, password);
-    state = AsyncData(email);
+    state = AsyncData(AccountState(email: email));
   }
 
   /// If a *different* identity than [email] is currently stored (i.e.
@@ -137,7 +160,7 @@ class AccountNotifier extends AsyncNotifier<String?> {
   Future<void> logout() async {
     await ref.read(accountLogoutProvider)();
     _invalidateSyncedProviders();
-    state = const AsyncData(null);
+    state = const AsyncData(AccountState(email: null));
   }
 
   /// Invalidates every provider that caches data read from one of the
@@ -162,6 +185,6 @@ class AccountNotifier extends AsyncNotifier<String?> {
 }
 
 /// This device's account state — see [AccountNotifier].
-final accountProvider = AsyncNotifierProvider<AccountNotifier, String?>(
+final accountProvider = AsyncNotifierProvider<AccountNotifier, AccountState>(
   AccountNotifier.new,
 );
