@@ -834,6 +834,35 @@ void main() {
       });
 
       testWidgets(
+        'replacing the entire title with "@category " keeps the old title '
+        'instead of blanking it',
+        (tester) async {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          final work = await container
+              .read(categoryListProvider.notifier)
+              .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+          final created = await container
+              .read(taskListProvider.notifier)
+              .addTask(title: 'Buy milk');
+          await _pumpOpenButton(tester, container, task: created);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            '@work ',
+          );
+          await tester.pump();
+
+          final tasks = container.read(taskListProvider).value!;
+          final updated = tasks.singleWhere((t) => t.id == created.id);
+          expect(updated.title, 'Buy milk');
+          expect(updated.categoryId, work.id);
+        },
+      );
+
+      testWidgets(
         'a trailing "@category" with no space is still applied when the '
         'modal is dismissed',
         (tester) async {

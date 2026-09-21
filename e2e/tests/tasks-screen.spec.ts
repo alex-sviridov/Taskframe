@@ -293,6 +293,23 @@ test.describe('wide viewport', () => {
     await expect(page.getByRole('checkbox')).toHaveCount(0);
   });
 
+  test('typing a Cyrillic "@категория " sets the category and does not '
+    + 'blank the title', async ({ page }) => {
+    await addCategoryAndGoToTasks(page, 'Работа');
+
+    await page.getByRole('button', { name: 'Add task' }).click();
+    await fillTextboxUntilSet(modalTextbox(page), 'Отправить отчёт');
+    await fillTextboxUntilTrue(
+      modalTextbox(page),
+      'Отправить отчёт @работа ',
+      async () =>
+        (await modalTextbox(page).inputValue().catch(() => '')) === 'Отправить отчёт ',
+    );
+
+    await expect(page.getByRole('button', { name: 'Работа' })).toBeVisible();
+    await expect(modalTextbox(page)).toHaveValue('Отправить отчёт ');
+  });
+
   test.describe('unified search query', () => {
     test('a #tag anywhere in the search text filters to tasks with that '
       + 'tag', async ({ page }) => {
@@ -465,6 +482,41 @@ test.describe('wide viewport', () => {
       await page.waitForTimeout(300);
 
       await expect(search).toHaveValue('#groceries ');
+    });
+
+    test('a Cyrillic #tag typed into the search field shows a suggestion '
+      + 'that completes on click', async ({ page }) => {
+      await addTaskWithTags(page, 'Купить молоко', ['покупки']);
+
+      const search = searchTextbox(page);
+      await fillTextboxUntilSet(search, '#пок');
+
+      const suggestion = page.getByRole('button', { name: 'покупки' });
+      await expect(suggestion).toBeVisible();
+      const box = (await suggestion.boundingBox())!;
+      await clickUntilHidden(
+        page,
+        { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+        suggestion,
+      );
+
+      // See "typing #groceries into an empty search field..." above for why
+      // the field is re-focused before reading its value back.
+      await search.focus();
+      await page.waitForTimeout(300);
+      await expect(search).toHaveValue('#покупки ');
+    });
+
+    test('Cyrillic free text in the search field filters the task list', async ({
+      page,
+    }) => {
+      await addTaskWithTags(page, 'Купить молоко', []);
+      await addTaskWithTags(page, 'Погулять с собакой', []);
+
+      await fillTextboxUntilSet(searchTextbox(page), 'молоко');
+
+      await expect(page.getByRole('button', { name: 'Купить молоко' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Погулять с собакой' })).toHaveCount(0);
     });
 
     test('tapping the /status filter button opens the "opened" '
