@@ -203,6 +203,28 @@ test.describe('wide viewport', () => {
     await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
   });
 
+  test('replacing an existing task\'s entire title with "@category " keeps '
+    + 'the old title instead of blanking it', async ({ page }) => {
+    await addCategoryAndGoToTasks(page, 'Work');
+    await page.getByRole('button', { name: 'Add task' }).click();
+    await fillTextboxUntilSet(modalTextbox(page), 'Buy milk');
+    await dismissTaskModal(page);
+
+    await page.getByRole('button', { name: 'Buy milk' }).click();
+    // A trailing space commits the extraction directly (no suggestion
+    // popup involved) — see the "typing @category " tests above. Here the
+    // token is the field's *entire* contents, which used to strip the
+    // title down to '' and persist that, silently blanking the task.
+    await fillTextboxUntilTrue(modalTextbox(page), '@work ', async () =>
+      (await modalTextbox(page).inputValue().catch(() => '')) === 'Buy milk');
+
+    await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
+    await expect(modalTextbox(page)).toHaveValue('Buy milk');
+
+    await dismissTaskModal(page);
+    await expect(page.getByRole('button', { name: 'Buy milk' })).toBeVisible();
+  });
+
   test('typing "#tag " strips it from the title and shows a tag pill', async ({
     page,
   }) => {
