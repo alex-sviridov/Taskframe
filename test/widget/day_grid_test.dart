@@ -75,7 +75,7 @@ final _workBlock = TimeObject(
   title: 'Work',
   start: DateTime(2026, 9, 9, 9),
   end: DateTime(2026, 9, 9, 13),
-  kind: BlockKind.frame,
+  kind: BlockKind.anchor,
   locked: false,
 );
 
@@ -225,13 +225,30 @@ void main() {
           title: 'Work',
           start: DateTime(2026, 9, 9, 9),
           end: DateTime(2026, 9, 9, 13),
-          kind: BlockKind.frame,
+          kind: BlockKind.anchor,
           locked: false,
         ),
       ]);
 
       expect(find.text('Breakfast'), findsOneWidget);
       expect(find.text('Work'), findsOneWidget);
+    });
+
+    testWidgets("never shows a frame block's title, even a non-empty one", (
+      tester,
+    ) async {
+      await _pump(tester, [
+        TimeObject(
+          id: '1',
+          title: 'Work',
+          start: DateTime(2026, 9, 9, 9),
+          end: DateTime(2026, 9, 9, 13),
+          kind: BlockKind.frame,
+          locked: false,
+        ),
+      ]);
+
+      expect(find.text('Work'), findsNothing);
     });
 
     testWidgets("passes each block's resolved category to its BlockView", (
@@ -312,7 +329,7 @@ void main() {
                       title: 'Thirty',
                       start: DateTime(2026, 9, 9, 9, 15),
                       end: DateTime(2026, 9, 9, 9, 45),
-                      kind: BlockKind.frame,
+                      kind: BlockKind.anchor,
                       locked: false,
                     ),
                   ],

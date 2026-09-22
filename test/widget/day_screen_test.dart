@@ -59,7 +59,8 @@ void main() {
 
       expect(find.widgetWithText(AppBar, 'Day Frame'), findsOneWidget);
       expect(find.text('Breakfast'), findsOneWidget);
-      expect(find.text('Work'), findsOneWidget);
+      // "Work" is a seeded frame block, whose title is never shown.
+      expect(find.text('Lunch'), findsOneWidget);
     });
 
     testWidgets('the next-day arrow switches to a day with no blocks', (

@@ -23,7 +23,9 @@ class BlockView extends StatelessWidget {
   /// Whether to draw the title inside this box. `false` for the main day
   /// grid, whose own title-overlay layer draws every title on top of all
   /// blocks instead (see `DayGrid`), so a short block's title is never
-  /// covered by a neighbor's box painted after it.
+  /// covered by a neighbor's box painted after it. Ignored for a
+  /// [BlockKind.frame] block, whose title is never shown — a frame marks
+  /// where attention goes, not a named activity.
   final bool showTitle;
 
   /// The category [block] is tagged with, or `null` while categories are
@@ -47,7 +49,7 @@ class BlockView extends StatelessWidget {
             : Border.all(color: categoryColor ?? scheme.primary),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: showTitle
+      child: showTitle && block.kind != BlockKind.frame
           ? Text(
               category?.formatTitle(block.title) ?? block.title,
               style: Theme.of(context).textTheme.bodySmall,

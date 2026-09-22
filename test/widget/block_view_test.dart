@@ -126,5 +126,12 @@ void main() {
 
       expect(find.text('Work'), findsOneWidget);
     });
+
+    testWidgets('never shows the title for a frame block, even with '
+        'showTitle true', (tester) async {
+      await _pump(tester, _block(BlockKind.frame));
+
+      expect(find.text('Work'), findsNothing);
+    });
   });
 }
