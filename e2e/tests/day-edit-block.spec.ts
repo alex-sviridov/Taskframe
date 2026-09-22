@@ -55,8 +55,10 @@ test('the type selector switches Event/Frame without closing the modal '
 
   await page.getByRole('button', { name: 'Frame' }).click();
 
-  // Switching type doesn't close the modal.
+  // Switching type doesn't close the modal. A frame's title is hidden
+  // (not cleared), so it reappears once switched back to Event.
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await page.getByRole('button', { name: 'Event' }).click();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText('Breakfast')).toBeVisible();
 });

@@ -16,7 +16,8 @@ test('shows the app title and today’s hardcoded blocks', async ({
     page.getByRole('heading', { name: 'Day Frame' }),
   ).toBeVisible();
   await expect(page.getByText('Breakfast')).toBeVisible();
-  await expect(page.getByText('Work')).toBeVisible();
+  // "Work" is a seeded frame block, whose title is never shown.
+  await expect(page.getByText('Lunch')).toBeVisible();
 });
 
 test('the next-day arrow switches to a day with no blocks', async ({
