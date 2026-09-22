@@ -10,13 +10,14 @@ import {
 
 test.use({ viewport: { width: 800, height: 720 } });
 
-// The AppBar's "Add template" action, clicked before accessibility is
-// enabled — see the comment on `templates-edit-block.spec.ts`'s
-// `addTemplateAndOpenDraft` for why: a raw double-tap gesture (used below
-// to open the block draft) stops being recognized once Flutter's full
-// semantics tree is active, so this and the double-click both have to
-// happen first.
-const addTemplateButton = { x: 780, y: 28 } as const;
+// The trailing add-template slot (a bordered, full-width "Add template"
+// button pinned to the top of the sole column shown when no template
+// exists yet), clicked before accessibility is enabled — see the comment
+// on `templates-edit-block.spec.ts`'s `addTemplateAndOpenDraft` for why:
+// a raw double-tap gesture (used below to open the block draft) stops
+// being recognized once Flutter's full semantics tree is active, so this
+// and the double-click both have to happen first.
+const addTemplateSlot = { x: 507, y: 128 } as const;
 
 // The sidebar's "Day" destination isn't exposed in Flutter's semantics
 // tree (only the active screen's own content is), so switching branches
@@ -40,7 +41,7 @@ async function addTemplateWithEventAt(
   await openDraftWithRetry(
     page,
     async () => {
-      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.mouse.click(addTemplateSlot.x, addTemplateSlot.y);
       await page.waitForTimeout(300);
 
       await page.mouse.click(300, y);

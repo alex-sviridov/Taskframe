@@ -10,8 +10,10 @@ import {
 
 // A new block's title starts empty, so it can't be located by text right
 // after creation; every test in this suite names it this instead, purely
-// so the drag logic below has stable text to locate the block by.
-const blockTitle = 'Block';
+// so the drag logic below has stable text to locate the block by. Not
+// "Block": the AppBar's own "Add block" button would then also match a
+// plain `getByText`.
+const blockTitle = 'Meeting';
 
 /**
  * Adds a template (raw click — see the comment in
@@ -22,13 +24,13 @@ const blockTitle = 'Block';
  */
 async function addTemplateWithBlock(
   page: Page,
-  addTemplateButton: { x: number; y: number },
+  addTemplateSlot: { x: number; y: number },
   blockPosition: { x: number; y: number },
 ) {
   await openDraftWithRetry(
     page,
     async () => {
-      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.mouse.click(addTemplateSlot.x, addTemplateSlot.y);
       await page.waitForTimeout(300);
 
       await page.mouse.click(blockPosition.x, blockPosition.y);
@@ -49,7 +51,10 @@ async function addTemplateWithBlock(
 
 test.describe('single template', () => {
   test.use({ viewport: { width: 800, height: 720 } });
-  const addTemplateButton = { x: 780, y: 28 } as const;
+  // The trailing add-template slot: a bordered, full-width button pinned
+  // to the top of the sole column shown when no template exists yet (see
+  // templates-edit-block.spec.ts).
+  const addTemplateSlot = { x: 507, y: 128 } as const;
   const blockPosition = { x: 300, y: 300 } as const;
 
   test.beforeEach(async ({ page }) => {
@@ -57,7 +62,7 @@ test.describe('single template', () => {
   });
 
   test('dragging a block to a new time moves it there', async ({ page }) => {
-    await addTemplateWithBlock(page, addTemplateButton, blockPosition);
+    await addTemplateWithBlock(page, addTemplateSlot, blockPosition);
 
     const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);
@@ -75,12 +80,17 @@ test.describe('single template', () => {
 
 test.describe('two templates side by side', () => {
   test.use({ viewport: { width: 1200, height: 800 } });
-  const addTemplateButton = { x: 1180, y: 28 } as const;
-  // Comfortably inside the left column of a two-column, 1200px-wide
-  // layout (HourGutter columns flank both sides of the grid).
+  // The trailing add-template slot for the first (only) template — still
+  // a single full-width column even at this wider viewport.
+  const addTemplateSlot = { x: 707, y: 128 } as const;
+  // Comfortably inside the left column once a second template exists:
+  // three columns share the row at this width (template 1, template 2,
+  // then the trailing add-template slot), HourGutter-flanked on both
+  // sides of the grid.
   const leftColumnPosition = { x: 300, y: 300 } as const;
-  // Comfortably inside the right column at the same width.
-  const rightColumnX = 900;
+  // Comfortably inside the middle (second template's) column — not the
+  // add-template slot, which now occupies the row's third column.
+  const rightColumnX = 600;
 
   test.beforeEach(async ({ page }) => {
     await gotoAndWaitForBoot(page, '/#/templates');
@@ -88,12 +98,12 @@ test.describe('two templates side by side', () => {
 
   test('dragging a block across the gap moves it into the other '
     + 'template\'s column', async ({ page }) => {
-    await addTemplateWithBlock(page, addTemplateButton, leftColumnPosition);
-    // A second template, so there's somewhere to drag into.
+    await addTemplateWithBlock(page, addTemplateSlot, leftColumnPosition);
+    // A second template, so there's somewhere to drag into. Rename
+    // fields (always visible, unlike the hover-only delete button) are
+    // a reliable count of real template columns.
     await page.getByRole('button', { name: 'Add template' }).click();
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(2);
+    await expect(page.getByRole('textbox')).toHaveCount(2);
 
     const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);
@@ -112,7 +122,10 @@ test.describe('two templates side by side', () => {
 
 test.describe('regression: dragging after visiting the Day screen first', () => {
   test.use({ viewport: { width: 800, height: 720 } });
-  const addTemplateButton = { x: 780, y: 28 } as const;
+  // The trailing add-template slot: a bordered, full-width button pinned
+  // to the top of the sole column shown when no template exists yet (see
+  // templates-edit-block.spec.ts).
+  const addTemplateSlot = { x: 507, y: 128 } as const;
   const blockPosition = { x: 300, y: 300 } as const;
 
   // Once both the Day screen and the Templates screen have been visited
@@ -137,7 +150,7 @@ test.describe('regression: dragging after visiting the Day screen first', () => 
     page.on('pageerror', (error) => pageErrors.push(error));
 
     await gotoAndWaitForBoot(page, '/#/templates');
-    await addTemplateWithBlock(page, addTemplateButton, blockPosition);
+    await addTemplateWithBlock(page, addTemplateSlot, blockPosition);
 
     // Hash-only navigation to Day and back — both branches' widget
     // trees stay mounted underneath, exactly the scenario the fix

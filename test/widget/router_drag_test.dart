@@ -51,7 +51,7 @@ Future<Template> _pumpBothBranchesWithTemplateBlock(
 
   await tester.tap(find.text('Templates'));
   await tester.pumpAndSettle();
-  await tester.tap(find.byTooltip('Add template'));
+  await tester.tap(find.widgetWithText(OutlinedButton, 'Add template'));
   await tester.pumpAndSettle();
 
   final template = (await container.read(templateListProvider.future)).single;

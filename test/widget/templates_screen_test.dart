@@ -1,7 +1,9 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/day/widgets/day_grid.dart';
+import 'package:taskframe/features/template/providers.dart';
 import 'package:taskframe/features/template/widgets/templates_screen.dart';
 
 void _resizeViewport(WidgetTester tester, Size size) {
@@ -18,27 +20,59 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// Taps the trailing "+" add-template slot. Callers must already be on the
+/// page it's showing on (it only exists right after the last template).
+Future<void> _tapAddTemplateSlot(WidgetTester tester) async {
+  await tester.tap(find.widgetWithText(OutlinedButton, 'Add template'));
+  await tester.pumpAndSettle();
+}
+
+/// Hovers a mouse pointer over [finder] and settles — desktop's signal to
+/// reveal a template header's floating delete button (see
+/// `_ColumnHeaderState.build`; mobile shows it on focus instead, so tap
+/// the rename field directly there rather than using this).
+Future<void> _hoverOver(WidgetTester tester, Finder finder) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  addTearDown(gesture.removePointer);
+  await gesture.addPointer(location: tester.getCenter(finder));
+  await tester.pump();
+}
+
 void main() {
   group('TemplatesScreen', () {
-    testWidgets('starts with no templates and an add button', (tester) async {
-      _resizeViewport(tester, const Size(800, 1000));
-      await _pump(tester);
-
-      expect(find.widgetWithText(AppBar, 'Templates'), findsOneWidget);
-      expect(find.byTooltip('Add template'), findsOneWidget);
-    });
-
-    testWidgets('the add button creates a template named "Template 1"', (
+    testWidgets('starts with no templates and an add-template slot', (
       tester,
     ) async {
       _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
 
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Template 1'), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Templates'), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Add template'),
+        findsOneWidget,
+      );
+      // No template to add a block to yet, so the AppBar button is
+      // disabled.
+      final addBlockButton = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byTooltip('Add block'),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(addBlockButton.onPressed, isNull);
     });
+
+    testWidgets(
+      'tapping the add-template slot creates a template named "Template 1"',
+      (tester) async {
+        _resizeViewport(tester, const Size(800, 1000));
+        await _pump(tester);
+
+        await _tapAddTemplateSlot(tester);
+
+        expect(find.text('Template 1'), findsOneWidget);
+      },
+    );
 
     testWidgets('a second added template is named "Template 2"', (
       tester,
@@ -46,10 +80,8 @@ void main() {
       _resizeViewport(tester, const Size(1200, 1000));
       await _pump(tester);
 
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
+      await _tapAddTemplateSlot(tester);
+      await _tapAddTemplateSlot(tester);
 
       expect(find.text('Template 1'), findsOneWidget);
       expect(find.text('Template 2'), findsOneWidget);
@@ -62,15 +94,14 @@ void main() {
     ) async {
       _resizeViewport(tester, const Size(1200, 1000));
       await _pump(tester);
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
+      await _tapAddTemplateSlot(tester);
+      await _tapAddTemplateSlot(tester);
 
-      await tester.tap(find.byTooltip('Delete template').first);
+      // Desktop only shows a header's delete button on hover.
+      await _hoverOver(tester, find.text('Template 1'));
+      await tester.tap(find.byTooltip('Delete template'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
+      await _tapAddTemplateSlot(tester);
 
       expect(find.text('Template 1'), findsNothing);
       expect(find.text('Template 2'), findsOneWidget);
@@ -82,26 +113,34 @@ void main() {
     ) async {
       _resizeViewport(tester, const Size(800, 1000));
       await _pump(tester);
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
+      await _tapAddTemplateSlot(tester);
 
+      // Desktop only shows a header's delete button on hover.
+      await _hoverOver(tester, find.text('Template 1'));
       await tester.tap(find.byTooltip('Delete template'));
       await tester.pumpAndSettle();
 
       expect(find.text('Template 1'), findsNothing);
-      expect(find.byTooltip('Add template'), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Add template'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('on a narrow width, adding two templates pages to the second '
         'with the next-template arrow', (tester) async {
       _resizeViewport(tester, const Size(500, 1000));
       await _pump(tester);
-      await tester.tap(find.byTooltip('Add template'));
+      await _tapAddTemplateSlot(tester);
+      // Adding opens straight to the new template, so the add-template
+      // slot is now on the next page, reachable via the next-template
+      // arrow.
+      expect(find.byTooltip('Next template'), findsOneWidget);
+      await tester.tap(find.byTooltip('Next template'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add template'));
-      await tester.pumpAndSettle();
-      // Adding opens straight to the new template, so we're on
-      // "Template 2"; page back to confirm "Template 1" is reachable.
+      await _tapAddTemplateSlot(tester);
+      // Adding again opens straight to "Template 2"; page back to confirm
+      // "Template 1" is reachable.
       expect(find.byTooltip('Previous template'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Previous template'));
@@ -115,13 +154,12 @@ void main() {
       (tester) async {
         _resizeViewport(tester, const Size(500, 1000));
         await _pump(tester);
-        await tester.tap(find.byTooltip('Add template'));
+        await _tapAddTemplateSlot(tester);
+        await tester.tap(find.byTooltip('Next template'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
-        // Adding opens straight to the new template ("Template 2"); page
-        // back to "Template 1" first so there's somewhere to swipe
-        // forward to.
+        await _tapAddTemplateSlot(tester);
+        // Adding opens straight to "Template 2"; page back to "Template 1"
+        // first so there's somewhere to swipe forward to.
         await tester.tap(find.byTooltip('Previous template'));
         await tester.pumpAndSettle();
         expect(find.text('Template 1'), findsOneWidget);
@@ -144,10 +182,16 @@ void main() {
       (tester) async {
         _resizeViewport(tester, const Size(1200, 1000));
         await _pump(tester);
-        for (var i = 0; i < 8; i++) {
-          await tester.tap(find.byTooltip('Add template'));
-          await tester.pumpAndSettle();
+        for (var i = 0; i < 7; i++) {
+          await _tapAddTemplateSlot(tester);
         }
+        // The 7 real templates fill page one; the add-template slot is
+        // alone on page two.
+        expect(find.byTooltip('Previous templates'), findsOneWidget);
+        await tester.tap(find.byTooltip('Next templates'));
+        await tester.pumpAndSettle();
+        await _tapAddTemplateSlot(tester);
+
         // Adding opens straight to the new template's page, so "Template 8"
         // is alone on page two; templates 1-7 are on page one.
         expect(find.text('Template 8'), findsOneWidget);
@@ -170,10 +214,12 @@ void main() {
       'tapping a column opens the block edit modal without a date row or '
       'copy button',
       (tester) async {
-        _resizeViewport(tester, const Size(800, 1000));
+        // Narrow so the lone real template is alone on its page (a single
+        // column, full width) rather than sharing the row with the
+        // trailing add-template slot.
+        _resizeViewport(tester, const Size(500, 1000));
         await _pump(tester);
-        await tester.tap(find.byTooltip('Add template'));
-        await tester.pumpAndSettle();
+        await _tapAddTemplateSlot(tester);
 
         await tester.longPressAt(const Offset(200, 192));
         await tester.pump();
@@ -182,6 +228,75 @@ void main() {
         await tester.tap(find.byIcon(Icons.event).last);
         await tester.pumpAndSettle();
 
+        expect(find.byIcon(Icons.calendar_today), findsNothing);
+        expect(find.byTooltip('Copy to next day'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the delete button is not obscured by the next-template arrow at a '
+      'narrow width (regression: a single-column header centered its '
+      'content across the full width, putting the delete button under '
+      'the arrow)',
+      (tester) async {
+        _resizeViewport(tester, const Size(500, 1000));
+        await _pump(tester);
+        await _tapAddTemplateSlot(tester);
+        await tester.tap(find.byTooltip('Next template'));
+        await tester.pumpAndSettle();
+        await _tapAddTemplateSlot(tester);
+        await tester.tap(find.byTooltip('Previous template'));
+        await tester.pumpAndSettle();
+
+        // Mobile only shows a header's delete button once its rename
+        // field is focused (entered edit mode).
+        await tester.tap(find.text('Template 1'));
+        await tester.pump();
+
+        final deleteRight = tester
+            .getTopRight(find.byTooltip('Delete template'))
+            .dx;
+        final arrowLeft = tester.getTopLeft(find.byTooltip('Next template')).dx;
+        expect(deleteRight, lessThanOrEqualTo(arrowLeft));
+      },
+    );
+
+    testWidgets('editing a template name autosaves after a pause, without '
+        'pressing enter', (tester) async {
+      _resizeViewport(tester, const Size(800, 1000));
+      await _pump(tester);
+      await _tapAddTemplateSlot(tester);
+
+      await tester.enterText(find.text('Template 1'), 'Morning routine');
+      // Not settled/submitted yet, so the rename hasn't landed.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TemplatesScreen)),
+      );
+      expect(
+        container.read(templateListProvider).value!.single.name,
+        'Template 1',
+      );
+
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(
+        container.read(templateListProvider).value!.single.name,
+        'Morning routine',
+      );
+    });
+
+    testWidgets(
+      'the AppBar add button adds a block to the first template on the '
+      'current page',
+      (tester) async {
+        _resizeViewport(tester, const Size(800, 1000));
+        await _pump(tester);
+        await _tapAddTemplateSlot(tester);
+
+        await tester.tap(find.byTooltip('Add block'));
+        await tester.pumpAndSettle();
+
+        // The block edit modal opened for a freshly created block.
         expect(find.byIcon(Icons.calendar_today), findsNothing);
         expect(find.byTooltip('Copy to next day'), findsNothing);
       },

@@ -9,12 +9,13 @@ import {
 
 test.use({ viewport: { width: 800, height: 720 } });
 
-// The AppBar's sole action ("Add template") sits top-right; measured via
-// its real bounding box at this viewport width. Raw coordinates are used
-// (rather than `getByRole`) because this click must happen *before*
-// accessibility is enabled — see the comment on `addTemplateAndOpenDraft`
-// below for why.
-const addTemplateButton = { x: 780, y: 28 } as const;
+// The trailing add-template slot: a bordered, full-width "Add template"
+// button pinned to the top of the sole column shown when no template
+// exists yet (AppBar height 56 + column header height 56, then the
+// button's own ~32px height). Raw coordinates are used (rather than
+// `getByRole`) because this click must happen *before* accessibility is
+// enabled — see the comment on `addTemplateAndOpenDraft` below for why.
+const addTemplateSlot = { x: 507, y: 128 } as const;
 
 // Free grid space, comfortably below the AppBar + column header and away
 // from the grid's edges regardless of which template is showing (there's
@@ -26,21 +27,21 @@ const freeSpace = { x: 300, y: 300 } as const;
  * block-creation draft, leaving both buttons ("Create Event"/"Create
  * Frame") ready to click and accessibility enabled.
  *
- * Both the "Add template" click and the double-click must happen *before*
- * `enableFlutterAccessibility`: once Flutter's full semantics tree is
- * active, raw double-tap gestures on the canvas stop being recognized
- * (confirmed empirically — the draft simply never opens), so there is no
- * later point at which a *new* template's grid could be double-clicked
- * after accessibility is on. `Add template` has to run without
- * `getByRole` for the same reason: enabling accessibility first, just to
- * click that one button by role, would already be too late for the
- * double-click that follows.
+ * Both the add-template-slot click and the double-click must happen
+ * *before* `enableFlutterAccessibility`: once Flutter's full semantics
+ * tree is active, raw double-tap gestures on the canvas stop being
+ * recognized (confirmed empirically — the draft simply never opens), so
+ * there is no later point at which a *new* template's grid could be
+ * double-clicked after accessibility is on. The add-template slot has to
+ * be clicked by raw coordinates for the same reason: enabling
+ * accessibility first, just to click that one button by role, would
+ * already be too late for the double-click that follows.
  */
 async function addTemplateAndOpenDraft(page: import('@playwright/test').Page) {
   await openDraftWithRetry(
     page,
     async () => {
-      await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+      await page.mouse.click(addTemplateSlot.x, addTemplateSlot.y);
       await page.waitForTimeout(300);
 
       await page.mouse.click(freeSpace.x, freeSpace.y);
