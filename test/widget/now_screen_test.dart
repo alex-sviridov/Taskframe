@@ -8,13 +8,15 @@ import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/now/now_screen.dart';
 import 'package:taskframe/features/task/providers.dart';
 
+DateTime _dateOnly(DateTime t) => DateTime(t.year, t.month, t.day);
+
 /// A [DayBlocksRepository] that always returns a fixed set of blocks for
 /// today, anchored to the current time so the "current" slot is
 /// deterministic regardless of when the test runs.
 class _FixedDayBlocksRepository implements DayBlocksRepository {
-  new(this.blocks);
+  new(List<TimeObject> blocks) : blocks = [...blocks];
 
-  final List<TimeObject> blocks;
+  List<TimeObject> blocks;
 
   @override
   Future<List<TimeObject>> load(DateTime date) async => blocks;
@@ -47,7 +49,22 @@ class _FixedDayBlocksRepository implements DayBlocksRepository {
     DateTime? end,
     BlockKind? kind,
     String? categoryId,
-  }) => throw UnimplementedError();
+  }) async {
+    final updated = TimeObject(
+      id: block.id,
+      title: title ?? block.title,
+      start: start ?? block.start,
+      end: end ?? block.end,
+      kind: kind ?? block.kind,
+      locked: block.locked,
+      categoryId: categoryId ?? block.categoryId,
+    );
+    blocks = [
+      for (final b in blocks)
+        if (b.id == block.id) updated else b,
+    ];
+    return updated;
+  }
 
   @override
   Future<void> delete(TimeObject block, {required DateTime date}) =>
@@ -281,6 +298,137 @@ void main() {
       // Previous is empty (1 placeholder); the second Next slot has none
       // of its own since next2 doesn't exist here.
       expect(find.text('Nothing scheduled'), findsOneWidget);
+    });
+
+    group('swipe to postpone', () {
+      testWidgets('swiping a block card right postpones it 15 minutes into '
+          'the future', (tester) async {
+        final now = DateTime.now();
+        final blocks = [
+          _blockAround(
+            now,
+            id: 'Working',
+            startOffsetMinutes: -30,
+            endOffsetMinutes: 30,
+          ),
+        ];
+        final container = ProviderContainer(
+          overrides: [
+            dayBlocksRepositoryProvider.overrideWithValue(
+              _FixedDayBlocksRepository(blocks),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: NowScreen()),
+          ),
+        );
+        await tester.pump();
+
+        await tester.drag(find.text('Working'), const Offset(200, 0));
+        await tester.pumpAndSettle();
+
+        final updated = container
+            .read(dayBlocksProvider(_dateOnly(now)))
+            .value!
+            .singleWhere((b) => b.id == 'Working');
+        expect(
+          updated.start,
+          blocks.first.start.add(const Duration(minutes: 15)),
+        );
+        expect(updated.end, blocks.first.end.add(const Duration(minutes: 15)));
+      });
+
+      testWidgets('swiping a block card left postpones it 15 minutes into '
+          'the past', (tester) async {
+        final now = DateTime.now();
+        final blocks = [
+          _blockAround(
+            now,
+            id: 'Working',
+            startOffsetMinutes: -30,
+            endOffsetMinutes: 30,
+          ),
+        ];
+        final container = ProviderContainer(
+          overrides: [
+            dayBlocksRepositoryProvider.overrideWithValue(
+              _FixedDayBlocksRepository(blocks),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: NowScreen()),
+          ),
+        );
+        await tester.pump();
+
+        await tester.drag(find.text('Working'), const Offset(-200, 0));
+        await tester.pumpAndSettle();
+
+        final updated = container
+            .read(dayBlocksProvider(_dateOnly(now)))
+            .value!
+            .singleWhere((b) => b.id == 'Working');
+        expect(
+          updated.start,
+          blocks.first.start.subtract(const Duration(minutes: 15)),
+        );
+        expect(
+          updated.end,
+          blocks.first.end.subtract(const Duration(minutes: 15)),
+        );
+      });
+
+      testWidgets('does not respond to swipes on a locked block', (
+        tester,
+      ) async {
+        final now = DateTime.now();
+        DateTime onGrid(DateTime t) =>
+            DateTime(t.year, t.month, t.day, t.hour, t.minute ~/ 15 * 15);
+        final lockedBlock = TimeObject(
+          id: 'Fixed',
+          title: 'Fixed',
+          start: onGrid(now.subtract(const Duration(minutes: 30))),
+          end: onGrid(now.add(const Duration(minutes: 30))),
+          kind: BlockKind.anchor,
+          locked: true,
+        );
+        final container = ProviderContainer(
+          overrides: [
+            dayBlocksRepositoryProvider.overrideWithValue(
+              _FixedDayBlocksRepository([lockedBlock]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: NowScreen()),
+          ),
+        );
+        await tester.pump();
+
+        await tester.drag(find.text('Fixed'), const Offset(200, 0));
+        await tester.pumpAndSettle();
+
+        final unchanged = container
+            .read(dayBlocksProvider(_dateOnly(now)))
+            .value!
+            .singleWhere((b) => b.id == 'Fixed');
+        expect(unchanged.start, lockedBlock.start);
+        expect(unchanged.end, lockedBlock.end);
+      });
     });
   });
 }

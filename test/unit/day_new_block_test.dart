@@ -503,6 +503,196 @@ void main() {
     });
   });
 
+  group('postponeRange', () {
+    final block = TimeObject(
+      id: 'current',
+      title: 'Current',
+      start: DateTime(2026, 9, 9, 10),
+      end: DateTime(2026, 9, 9, 11),
+      kind: BlockKind.anchor,
+      locked: false,
+    );
+
+    test('swiping to the future shifts both start and end forward 15 '
+        'minutes when nothing blocks it', () {
+      final range = postponeRange(
+        block: block,
+        toFuture: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range, isNotNull);
+      expect(range!.start, DateTime(2026, 9, 9, 10, 15));
+      expect(range.end, DateTime(2026, 9, 9, 11, 15));
+    });
+
+    test('swiping to the past shifts both start and end back 15 minutes '
+        'when nothing blocks it', () {
+      final range = postponeRange(
+        block: block,
+        toFuture: false,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range, isNotNull);
+      expect(range!.start, DateTime(2026, 9, 9, 9, 45));
+      expect(range.end, DateTime(2026, 9, 9, 10, 45));
+    });
+
+    test('a barrier right after the block makes a future swipe move only '
+        'the start, shrinking the block by 15 minutes', () {
+      final range = postponeRange(
+        block: block,
+        toFuture: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'after',
+            title: 'After',
+            start: DateTime(2026, 9, 9, 11),
+            end: DateTime(2026, 9, 9, 12),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range, isNotNull);
+      expect(range!.start, DateTime(2026, 9, 9, 10, 15));
+      expect(range.end, DateTime(2026, 9, 9, 11));
+    });
+
+    test('a barrier right before the block makes a past swipe move only '
+        'the end, shrinking the block by 15 minutes', () {
+      final range = postponeRange(
+        block: block,
+        toFuture: false,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'before',
+            title: 'Before',
+            start: DateTime(2026, 9, 9, 9),
+            end: DateTime(2026, 9, 9, 10),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range, isNotNull);
+      expect(range!.start, DateTime(2026, 9, 9, 10));
+      expect(range.end, DateTime(2026, 9, 9, 10, 45));
+    });
+
+    test('returns null when the block is already at the minimum duration '
+        'and a barrier blocks the future swipe on both edges', () {
+      final short = TimeObject(
+        id: 'short',
+        title: 'Short',
+        start: DateTime(2026, 9, 9, 10),
+        end: DateTime(2026, 9, 9, 10, 15),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+
+      final range = postponeRange(
+        block: short,
+        toFuture: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: [
+          TimeObject(
+            id: 'after',
+            title: 'After',
+            start: DateTime(2026, 9, 9, 10, 15),
+            end: DateTime(2026, 9, 9, 11),
+            kind: BlockKind.anchor,
+            locked: false,
+          ),
+        ],
+      );
+
+      expect(range, isNull);
+    });
+
+    test('a future swipe still shifts fully when it lands exactly on the '
+        'day end boundary', () {
+      final atEnd = TimeObject(
+        id: 'atEnd',
+        title: 'AtEnd',
+        start: DateTime(2026, 9, 9, 22, 30),
+        end: DateTime(2026, 9, 9, 22, 45),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+
+      final range = postponeRange(
+        block: atEnd,
+        toFuture: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range, isNotNull);
+      expect(range!.start, DateTime(2026, 9, 9, 22, 45));
+      expect(range.end, DateTime(2026, 9, 9, 23));
+    });
+
+    test('returns null when a block at the minimum duration, right at the '
+        'day end, can neither shift forward (day boundary) nor shrink '
+        '(already at the minimum)', () {
+      final atEnd = TimeObject(
+        id: 'atEnd',
+        title: 'AtEnd',
+        start: DateTime(2026, 9, 9, 22, 45),
+        end: DateTime(2026, 9, 9, 23),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+
+      final range = postponeRange(
+        block: atEnd,
+        toFuture: true,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range, isNull);
+    });
+
+    test('returns null when a block at the minimum duration, right at the '
+        'day start, can neither shift back (day boundary) nor shrink '
+        '(already at the minimum)', () {
+      final atStart = TimeObject(
+        id: 'atStart',
+        title: 'AtStart',
+        start: DateTime(2026, 9, 9, 6),
+        end: DateTime(2026, 9, 9, 6, 15),
+        kind: BlockKind.anchor,
+        locked: false,
+      );
+
+      final range = postponeRange(
+        block: atStart,
+        toFuture: false,
+        day: DateTime(2026, 9, 9),
+        settings: _settings,
+        others: const [],
+      );
+
+      expect(range, isNull);
+    });
+  });
+
   group('copyToNextDayWouldOverlap', () {
     final block = TimeObject(
       id: '1',

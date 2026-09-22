@@ -234,6 +234,54 @@ bool isValidBlockEdit({
   return others.every((block) => !block.overlaps(start, end));
 }
 
+/// How far a postpone swipe shifts (or shrinks) a block.
+const _postponeStep = Duration(minutes: 15);
+
+/// The `[start, end)` range [block] should move to for a postpone swipe on
+/// [day], or `null` if the swipe has nowhere valid to go.
+///
+/// Normally shifts both [block]'s start and end by [_postponeStep] — forward
+/// for [toFuture], backward otherwise. If that full shift would overlap one
+/// of [others] or run past the day's bounds (see [isValidBlockEdit]), falls
+/// back to moving only the edge in the swipe's direction (the start for
+/// [toFuture], the end otherwise), shrinking the block by [_postponeStep]
+/// instead. Returns `null` if even that shrunk edit is invalid, e.g. the
+/// block is already at the minimum duration with a barrier on that side.
+({DateTime start, DateTime end})? postponeRange({
+  required TimeObject block,
+  required bool toFuture,
+  required DateTime day,
+  required DaySettings settings,
+  required List<TimeObject> others,
+}) {
+  final delta = toFuture ? _postponeStep : -_postponeStep;
+  final fullStart = block.start.add(delta);
+  final fullEnd = block.end.add(delta);
+  if (isValidBlockEdit(
+    start: fullStart,
+    end: fullEnd,
+    settings: settings,
+    day: day,
+    others: others,
+  )) {
+    return (start: fullStart, end: fullEnd);
+  }
+
+  final partialStart = toFuture ? fullStart : block.start;
+  final partialEnd = toFuture ? block.end : fullEnd;
+  if (isValidBlockEdit(
+    start: partialStart,
+    end: partialEnd,
+    settings: settings,
+    day: day,
+    others: others,
+  )) {
+    return (start: partialStart, end: partialEnd);
+  }
+
+  return null;
+}
+
 /// Whether copying [block] to [nextDate] (same time of day, same duration)
 /// would overlap any of [nextDayBlocks].
 bool copyToNextDayWouldOverlap({
