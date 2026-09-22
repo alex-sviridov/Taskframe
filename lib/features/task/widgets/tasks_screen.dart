@@ -480,34 +480,44 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         // target's own focusable ink response steals focus on the way
         // down, which would hide the dropdown (and remove the tapped
         // row) before the tap completes.
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final option in suggestions.options)
-                  GestureDetector(
-                    // Selection fires on tap-DOWN, not tap-up: by tap-up,
-                    // the search field may already have lost focus (see
-                    // above) and this row rebuilt away.
-                    onTapDown: (_) =>
-                        _selectSuggestion(option, kind: suggestions.kind),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(switch (suggestions.kind) {
-                        _TokenKind.status => Icons.radio_button_unchecked,
-                        _TokenKind.tag => Icons.tag,
-                        _TokenKind.category => Icons.category,
-                      }),
-                      title: Text(option),
+        //
+        // TextFieldTapRegion additionally keeps the search field itself
+        // focused *after* the tap completes: the dropdown lives in the
+        // ambient Overlay, outside the field's own widget subtree, so
+        // without this a completed tap still counts as "outside" the
+        // field and triggers its default tap-outside unfocus behavior.
+        // TextFieldTapRegion's default groupId groups it with every text
+        // field, so this works regardless of which field is focused.
+        child: TextFieldTapRegion(
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(8),
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final option in suggestions.options)
+                    GestureDetector(
+                      // Selection fires on tap-DOWN, not tap-up: by tap-up,
+                      // the search field may already have lost focus (see
+                      // above) and this row rebuilt away.
+                      onTapDown: (_) =>
+                          _selectSuggestion(option, kind: suggestions.kind),
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(switch (suggestions.kind) {
+                          _TokenKind.status => Icons.radio_button_unchecked,
+                          _TokenKind.tag => Icons.tag,
+                          _TokenKind.category => Icons.category,
+                        }),
+                        title: Text(option),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -1,4 +1,5 @@
 // test/widget/task_edit_modal_test.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1126,6 +1127,52 @@ void main() {
           expect(created.categoryId, work.id);
         },
       );
+
+      testWidgets('tapping a suggestion row keeps the title field focused', (
+        tester,
+      ) async {
+        // TextField's default tap-outside-unfocus behavior only fires on
+        // web or desktop platforms (see `_EditableTextTapOutsideAction`
+        // in the Flutter framework) — `flutter test` runs on the VM with
+        // `kIsWeb` false and defaults to a mobile platform, so it would
+        // never reproduce this app's actual (web) behavior without this
+        // override.
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+        try {
+          final container = await _seededContainer();
+          addTearDown(container.dispose);
+          await container
+              .read(categoryListProvider.notifier)
+              .addCategory(name: 'Work', colorValue: 0xFF2196F3);
+          await _pumpOpenButton(tester, container);
+
+          await tester.tap(find.text('Open'));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const Key('task-title-field')),
+            'Ship it @wo',
+          );
+          await tester.pump();
+          await tester.pump();
+
+          final focusBeforeTap = FocusManager.instance.primaryFocus;
+          expect(focusBeforeTap, isNotNull);
+
+          // The suggestion row lives in an OverlayEntry, outside the
+          // title field's own widget subtree — without
+          // TextFieldTapRegion wrapping it, this tap counts as tapping
+          // "outside" the field and unfocuses it (TextField's default
+          // onTapOutside behavior), even though the row's own
+          // onTapDown still applies the suggestion correctly.
+          await tester.tap(find.widgetWithText(ListTile, 'work'));
+          await tester.pump();
+          await tester.pump();
+
+          expect(FocusManager.instance.primaryFocus, same(focusBeforeTap));
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
 
       testWidgets('pressing Escape closes the dropdown', (tester) async {
         final container = await _seededContainer();
