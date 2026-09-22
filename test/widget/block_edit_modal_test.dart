@@ -927,6 +927,78 @@ void main() {
       expect(blocks.single.kind, BlockKind.frame);
     });
 
+    testWidgets('hides the title field for a frame block, without '
+        "changing the dialog's overall size", (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(dayBlocksProvider(_date).future);
+      final anchorBlock = await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 9),
+            end: DateTime(2000, 1, 1, 9, 30),
+            kind: BlockKind.anchor,
+            title: 'Work',
+          );
+      await _pumpOpenButton(tester, container, anchorBlock);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      final anchorSize = tester.getSize(find.byType(Dialog));
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      final frameBlock = await container
+          .read(dayBlocksProvider(_date).notifier)
+          .addBlock(
+            start: DateTime(2000, 1, 1, 10),
+            end: DateTime(2000, 1, 1, 10, 30),
+            kind: BlockKind.frame,
+            title: 'Deep work',
+          );
+      await _pumpOpenButton(tester, container, frameBlock);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      final visibility = tester.widget<Visibility>(
+        find.ancestor(
+          of: find.byType(TextField),
+          matching: find.byType(Visibility),
+        ),
+      );
+      // `Visibility(visible: false)` keeps the field (and its text) in the
+      // tree — needed so `maintainSize` can reserve its layout space — but
+      // renders it via `Offstage`, so it's never actually painted/shown to
+      // the user; `visible: false` is the signal that matters here.
+      expect(visibility.visible, isFalse);
+      expect(tester.getSize(find.byType(Dialog)), anchorSize);
+    });
+
+    testWidgets('keeps a title set while the block was an event after it '
+        'is switched to a frame and back', (tester) async {
+      final (container, block) = await _seededContainer();
+      addTearDown(container.dispose);
+      await _pumpOpenButton(tester, container, block);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Frame'));
+      await tester.pumpAndSettle();
+      expect(
+        container.read(dayBlocksProvider(_date)).value!.single.title,
+        'Work',
+      );
+
+      await tester.tap(find.text('Event'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(dayBlocksProvider(_date)).value!.single.title,
+        'Work',
+      );
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'Work');
+    });
+
     testWidgets('confirming delete twice removes the block and closes', (
       tester,
     ) async {

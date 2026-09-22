@@ -225,6 +225,11 @@ class _DayGridState extends ConsumerState<DayGrid> {
         : trueTop;
     final category = _categoryFor(block);
 
+    // A frame marks where attention goes rather than a named activity, so
+    // its title (kept internally so it survives a round-trip transform to
+    // an anchor and back — see `BlockEditModal`) is never shown here.
+    final showTitle = block.kind != BlockKind.frame;
+
     return Positioned(
       key: key,
       top: boxTop,
@@ -232,21 +237,27 @@ class _DayGridState extends ConsumerState<DayGrid> {
       right: 0,
       height: _titleOverlayHeight,
       child: IgnorePointer(
-        child: Padding(
-          // A tall block keeps its title hugging the top-left corner
-          // (minimal top inset); a too-short block's box is already
-          // centered on the block above, so its text is centered within
-          // that box too rather than hugging its own top.
-          padding: EdgeInsets.only(left: 6, right: 6, top: isShort ? 0 : 1),
-          child: Align(
-            alignment: isShort ? Alignment.centerLeft : Alignment.topLeft,
-            child: Text(
-              category?.formatTitle(block.title) ?? block.title,
-              style: Theme.of(context).textTheme.bodySmall,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
+        child: !showTitle
+            ? const SizedBox.shrink()
+            : Padding(
+                // A tall block keeps its title hugging the top-left corner
+                // (minimal top inset); a too-short block's box is already
+                // centered on the block above, so its text is centered
+                // within that box too rather than hugging its own top.
+                padding: EdgeInsets.only(
+                  left: 6,
+                  right: 6,
+                  top: isShort ? 0 : 1,
+                ),
+                child: Align(
+                  alignment: isShort ? Alignment.centerLeft : Alignment.topLeft,
+                  child: Text(
+                    category?.formatTitle(block.title) ?? block.title,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
       ),
     );
   }

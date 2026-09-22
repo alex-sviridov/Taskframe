@@ -60,7 +60,7 @@ Future<Template> _pumpBothBranchesWithTemplateBlock(
       .addBlock(
         start: templateAnchorDate.add(const Duration(hours: 9)),
         end: templateAnchorDate.add(const Duration(hours: 10)),
-        kind: BlockKind.frame,
+        kind: BlockKind.anchor,
         title: 'Template block',
       );
   await tester.pumpAndSettle();

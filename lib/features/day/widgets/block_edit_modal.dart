@@ -467,7 +467,9 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
     super.initState();
     _titleController = TextEditingController(text: widget.initialBlock.title);
     _titleFocus = FocusNode()..addListener(_handleFocusChange);
-    _autofocusTitle = widget.initialBlock.title.trim().isEmpty;
+    _autofocusTitle =
+        widget.initialBlock.kind != BlockKind.frame &&
+        widget.initialBlock.title.trim().isEmpty;
     _currentColumn = widget.column;
   }
 
@@ -868,24 +870,37 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                CompositedTransformTarget(
-                  link: _titleSuggestions.link,
-                  child: Focus(
-                    onKeyEvent: (node, event) =>
-                        _handleTitleKeyEvent(current, node, event),
-                    child: Container(
-                      key: _titleSuggestions.fieldBoxKey,
-                      child: TextField(
-                        controller: _titleController,
-                        focusNode: _titleFocus,
-                        autofocus: _autofocusTitle,
-                        onChanged: (value) => _onTitleChanged(current, value),
-                        onSubmitted: (_) => _commitTitle(current),
-                        decoration: const InputDecoration(
-                          border: UnderlineInputBorder(),
-                          isDense: true,
+                // A frame marks where attention goes rather than a named
+                // activity, so its title is never shown — but it's kept
+                // (see `_commitTitle`/`_setKind`) so an event's title
+                // survives a round-trip transform to a frame and back.
+                // `Visibility` (rather than omitting the field) reserves
+                // this row's exact height so switching kind never resizes
+                // or reflows the rest of the dialog.
+                Visibility(
+                  visible: current.kind != BlockKind.frame,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: CompositedTransformTarget(
+                    link: _titleSuggestions.link,
+                    child: Focus(
+                      onKeyEvent: (node, event) =>
+                          _handleTitleKeyEvent(current, node, event),
+                      child: Container(
+                        key: _titleSuggestions.fieldBoxKey,
+                        child: TextField(
+                          controller: _titleController,
+                          focusNode: _titleFocus,
+                          autofocus: _autofocusTitle,
+                          onChanged: (value) => _onTitleChanged(current, value),
+                          onSubmitted: (_) => _commitTitle(current),
+                          decoration: const InputDecoration(
+                            border: UnderlineInputBorder(),
+                            isDense: true,
+                          ),
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
                   ),
