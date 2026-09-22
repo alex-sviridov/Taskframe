@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,17 @@ Future<void> _pump(WidgetTester tester) async {
 Future<void> _tapAddTemplateSlot(WidgetTester tester) async {
   await tester.tap(find.widgetWithText(OutlinedButton, 'Add template'));
   await tester.pumpAndSettle();
+}
+
+/// Hovers a mouse pointer over [finder] and settles — desktop's signal to
+/// reveal a template header's floating delete button (see
+/// `_ColumnHeaderState.build`; mobile shows it on focus instead, so tap
+/// the rename field directly there rather than using this).
+Future<void> _hoverOver(WidgetTester tester, Finder finder) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  addTearDown(gesture.removePointer);
+  await gesture.addPointer(location: tester.getCenter(finder));
+  await tester.pump();
 }
 
 void main() {
@@ -85,7 +97,9 @@ void main() {
       await _tapAddTemplateSlot(tester);
       await _tapAddTemplateSlot(tester);
 
-      await tester.tap(find.byTooltip('Delete template').first);
+      // Desktop only shows a header's delete button on hover.
+      await _hoverOver(tester, find.text('Template 1'));
+      await tester.tap(find.byTooltip('Delete template'));
       await tester.pumpAndSettle();
       await _tapAddTemplateSlot(tester);
 
@@ -101,6 +115,8 @@ void main() {
       await _pump(tester);
       await _tapAddTemplateSlot(tester);
 
+      // Desktop only shows a header's delete button on hover.
+      await _hoverOver(tester, find.text('Template 1'));
       await tester.tap(find.byTooltip('Delete template'));
       await tester.pumpAndSettle();
 
@@ -231,6 +247,11 @@ void main() {
         await _tapAddTemplateSlot(tester);
         await tester.tap(find.byTooltip('Previous template'));
         await tester.pumpAndSettle();
+
+        // Mobile only shows a header's delete button once its rename
+        // field is focused (entered edit mode).
+        await tester.tap(find.text('Template 1'));
+        await tester.pump();
 
         final deleteRight = tester
             .getTopRight(find.byTooltip('Delete template'))

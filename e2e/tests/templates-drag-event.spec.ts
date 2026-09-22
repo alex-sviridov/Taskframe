@@ -99,11 +99,11 @@ test.describe('two templates side by side', () => {
   test('dragging a block across the gap moves it into the other '
     + 'template\'s column', async ({ page }) => {
     await addTemplateWithBlock(page, addTemplateSlot, leftColumnPosition);
-    // A second template, so there's somewhere to drag into.
+    // A second template, so there's somewhere to drag into. Rename
+    // fields (always visible, unlike the hover-only delete button) are
+    // a reliable count of real template columns.
     await page.getByRole('button', { name: 'Add template' }).click();
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(2);
+    await expect(page.getByRole('textbox')).toHaveCount(2);
 
     const block = page.getByText(blockTitle);
     const box = await waitForBoundingBox(block);

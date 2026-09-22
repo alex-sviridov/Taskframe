@@ -387,6 +387,11 @@ class _ColumnHeaderState extends ConsumerState<_ColumnHeader> {
   Timer? _debounce;
   late String _lastSaved;
 
+  /// Whether the pointer is over this header — desktop's signal to show
+  /// the floating delete button (mobile uses [_focusNode] instead: see
+  /// [build]).
+  bool _hovering = false;
+
   @override
   void initState() {
     super.initState();
@@ -420,6 +425,9 @@ class _ColumnHeaderState extends ConsumerState<_ColumnHeader> {
 
   void _onFocusChange() {
     if (!_focusNode.hasFocus) _save();
+    // Mobile shows the delete button while focused (see build), which
+    // this focus change itself needs to trigger a rebuild for.
+    if (mounted) setState(() {});
   }
 
   void _scheduleSave() {
@@ -442,29 +450,44 @@ class _ColumnHeaderState extends ConsumerState<_ColumnHeader> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            textAlign: TextAlign.center,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
+    // The delete button floats over the header rather than sharing the
+    // row with the title, so the title stays centered whether or not
+    // the button is showing. Desktop shows it on hover; touch has no
+    // hover, so mobile shows it while the rename field is focused
+    // (entered edit mode) instead.
+    final showDelete = isNarrow(context) ? _focusNode.hasFocus : _hovering;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              onChanged: (_) => _scheduleSave(),
+              onSubmitted: (_) => _save(),
             ),
-            onChanged: (_) => _scheduleSave(),
-            onSubmitted: (_) => _save(),
           ),
-        ),
-        IconButton(
-          tooltip: 'Delete template',
-          icon: const Icon(Icons.delete_outline),
-          visualDensity: VisualDensity.compact,
-          onPressed: widget.onDelete,
-        ),
-      ],
+          if (showDelete)
+            Positioned(
+              right: 0,
+              child: IconButton(
+                tooltip: 'Delete template',
+                icon: const Icon(Icons.delete_outline),
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.onDelete,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

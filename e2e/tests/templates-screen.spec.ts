@@ -105,9 +105,6 @@ test.describe('wide viewport', () => {
     await page.getByRole('button', { name: 'Add template' }).click();
 
     await expect(await readTemplateName(page)).toEqual('Template 1');
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Add block' })).toBeEnabled();
   });
 
@@ -142,17 +139,56 @@ test.describe('wide viewport', () => {
     await expect(await readTemplateName(page)).toEqual('Weekday');
   });
 
-  test('the delete button removes the template', async ({ page }) => {
-    await page.getByRole('button', { name: 'Add template' }).click();
+});
+
+test.describe('wide viewport, hover-revealed delete button', () => {
+  test.use({ viewport: { width: 800, height: 720 } });
+
+  // These interact via raw coordinates and enable accessibility only at
+  // the end, unlike this file's other tests — Flutter web's semantics
+  // tree, once active, no longer forwards raw pointer-hover transitions
+  // to the framework (confirmed empirically: identical mouse-move
+  // sequences reveal the button before accessibility is enabled and
+  // never after), so hover has to happen first. The button's govern
+  // state (`_hovering`) doesn't reset when accessibility turns on, so a
+  // button already revealed by hover stays revealed and clickable by
+  // role afterward — that's what lets the deletion itself still be
+  // asserted through the accessibility tree below.
+  const addTemplateButton = { x: 507, y: 128 } as const;
+  // Within Template 1's header cell, right of its title text — clear of
+  // the sidebar (which extends to ~x=213) and left of the second
+  // (add-template) column. The whole cell is one `MouseRegion`, not
+  // just the title text, so this doesn't need to be pixel-precise.
+  const template1Header = { x: 400, y: 84 } as const;
+  const awayFromAnyHeader = { x: 400, y: 400 } as const;
+
+  test('the delete button only shows on hover, and removes the template '
+    + 'when clicked', async ({ page }) => {
+    await gotoAndWaitForBoot(page, '/#/templates');
+    // A settle pause before the very first raw interaction: right after
+    // `gotoAndWaitForBoot` resolves, Flutter has injected its semantics
+    // placeholder but can still be a beat away from being hit-testable,
+    // so an immediate click can silently miss (confirmed empirically).
+    // Every other raw-coordinate flow in this suite is wrapped in
+    // `openDraftWithRetry`, which absorbs the same race by retrying;
+    // this test has no such wrapper, so it waits instead.
+    await page.waitForTimeout(500);
+    await page.mouse.click(addTemplateButton.x, addTemplateButton.y);
+    await page.waitForTimeout(500);
+
+    // Two-step move (away, then onto the header) so Flutter's
+    // MouseTracker sees a real enter transition rather than a jump.
+    await page.mouse.move(awayFromAnyHeader.x, awayFromAnyHeader.y);
+    await page.mouse.move(template1Header.x, template1Header.y, { steps: 5 });
+    await page.waitForTimeout(300);
+
+    await enableFlutterAccessibility(page);
     await expect(
       page.getByRole('button', { name: 'Delete template' }),
     ).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Delete template' }).click();
 
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Add template' }),
     ).toBeVisible();
@@ -173,9 +209,9 @@ test.describe('wide viewport with two templates', () => {
     await page.getByRole('button', { name: 'Add template' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();
 
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(2);
+    // Two rename fields (always visible, unlike the hover-only delete
+    // button) mean two real template columns.
+    await expect(page.getByRole('textbox')).toHaveCount(2);
   });
 });
 
@@ -188,20 +224,18 @@ test.describe('wide viewport with eight templates', () => {
 
     // The first 7 adds all land on page one alongside the add-template
     // slot, which is pushed to page two only once page one is full.
+    // Rename fields (always visible, unlike the hover/focus-only delete
+    // button) are a page's real-template count.
     for (let i = 0; i < 7; i++) {
       await page.getByRole('button', { name: 'Add template' }).click();
     }
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(7);
+    await expect(page.getByRole('textbox')).toHaveCount(7);
 
     await page.getByRole('button', { name: 'Next templates' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();
 
     // Adding opens straight to the new (8th) template's page.
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(1);
+    await expect(page.getByRole('textbox')).toHaveCount(1);
     await expect(
       page.getByRole('button', { name: 'Next templates' }),
     ).toBeDisabled();
@@ -211,9 +245,7 @@ test.describe('wide viewport with eight templates', () => {
 
     await page.getByRole('button', { name: 'Previous templates' }).click();
 
-    await expect(
-      page.getByRole('button', { name: 'Delete template' }),
-    ).toHaveCount(7);
+    await expect(page.getByRole('textbox')).toHaveCount(7);
     await expect(
       page.getByRole('button', { name: 'Previous templates' }),
     ).toBeDisabled();
@@ -230,6 +262,27 @@ test.describe('narrow viewport', () => {
     await expect(
       page.getByRole('button', { name: 'Next template' }),
     ).toHaveCount(0);
+  });
+
+  test('the delete button only shows once the rename field is focused '
+    + '(entered edit mode)', async ({ page }) => {
+    await gotoAndWaitForBoot(page, '/#/templates');
+    await enableFlutterAccessibility(page);
+    await page.getByRole('button', { name: 'Add template' }).click();
+
+    // Hidden until the title is tapped into edit mode — hover doesn't
+    // apply on a touch viewport.
+    await expect(
+      page.getByRole('button', { name: 'Delete template' }),
+    ).toHaveCount(0);
+
+    // A plain `.click()` centers on the textbox's reported box, which
+    // (nested in a `PageView`) can run tall enough to land past the
+    // field itself — see `clickNearFieldTop`'s doc comment.
+    await clickNearFieldTop(page, page.getByRole('textbox'));
+    await expect(
+      page.getByRole('button', { name: 'Delete template' }),
+    ).toHaveCount(1);
   });
 
   test('the next-template arrow pages between a template and the '
