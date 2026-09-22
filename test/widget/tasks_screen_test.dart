@@ -1,4 +1,5 @@
 // test/widget/tasks_screen_test.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -864,6 +865,50 @@ void main() {
       await tester.pump();
 
       expect(field.controller!.text, '#groceries  rest');
+    });
+
+    testWidgets('tapping a suggestion row keeps the search field focused', (
+      tester,
+    ) async {
+      // TextField's default tap-outside-unfocus behavior only fires on
+      // web or desktop platforms (see `_EditableTextTapOutsideAction` in
+      // the Flutter framework) — `flutter test` runs on the VM with
+      // `kIsWeb` false and defaults to a mobile platform, so it would
+      // never reproduce this app's actual (web) behavior without this
+      // override.
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      try {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await container.read(categoryListProvider.future);
+        await container.read(taskListProvider.future);
+        final notifier = container.read(taskListProvider.notifier);
+        final milk = await notifier.addTask(title: 'Buy milk');
+        await notifier.updateTask(milk, tags: ['groceries']);
+        await _pump(tester, container: container);
+
+        await tester.tap(find.byType(TextField));
+        await tester.enterText(find.byType(TextField), '#gro');
+        await tester.pump();
+        await tester.pump();
+
+        final focusBeforeTap = FocusManager.instance.primaryFocus;
+        expect(focusBeforeTap, isNotNull);
+
+        // The suggestion row lives in an OverlayEntry, outside the search
+        // field's own widget subtree — without TextFieldTapRegion
+        // wrapping it, this tap counts as tapping "outside" the field and
+        // unfocuses it (TextField's default onTapOutside behavior), even
+        // though the row's own onTapDown still applies the suggestion
+        // correctly.
+        await tester.tap(find.widgetWithText(ListTile, 'groceries'));
+        await tester.pump();
+        await tester.pump();
+
+        expect(FocusManager.instance.primaryFocus, same(focusBeforeTap));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
 
     testWidgets('typing "/" shows "opened" and "active", each only while '

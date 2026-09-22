@@ -215,13 +215,18 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         ? extractTrailingRepeat(afterActiveFrom)
         : null;
     final title = repeatExtraction?.title ?? afterActiveFrom;
+    // `title` may have been stripped down to '' by the extraction above
+    // (e.g. the whole title was just "@category "). Rather than blanking
+    // an existing task's title, fall back to showing/keeping its current
+    // title — there's nothing left to extract a new one from.
+    final displayTitle = title.isEmpty ? (_task?.title ?? title) : title;
     if (tagExtraction != null ||
         categoryExtraction != null ||
         activeFromExtraction != null ||
         repeatExtraction != null) {
       _titleController.value = TextEditingValue(
-        text: title,
-        selection: TextSelection.collapsed(offset: title.length),
+        text: displayTitle,
+        selection: TextSelection.collapsed(offset: displayTitle.length),
       );
     }
     final newTags = tagExtraction != null && !_tags.contains(tagExtraction.tag)
@@ -250,7 +255,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     if (_task != null) {
       await notifier.updateTask(
         _task!,
-        title: title,
+        title: displayTitle,
         tags: newTags,
         categoryId: newCategoryId,
         activeFrom: newActiveFrom,
@@ -261,9 +266,19 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     if (_pendingCreate != null) {
       final created = await _pendingCreate!;
       if (!mounted) return;
+      // `_task` was still null when `displayTitle` was computed above, so
+      // it couldn't fall back to the already-created task's title — do
+      // that fallback here instead, now that `created` is available.
+      final createdTitle = title.isEmpty ? created.title : title;
+      if (createdTitle != displayTitle) {
+        _titleController.value = TextEditingValue(
+          text: createdTitle,
+          selection: TextSelection.collapsed(offset: createdTitle.length),
+        );
+      }
       await notifier.updateTask(
         created,
-        title: title,
+        title: createdTitle,
         tags: newTags,
         categoryId: newCategoryId,
         activeFrom: newActiveFrom,

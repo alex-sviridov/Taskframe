@@ -69,26 +69,36 @@ class TitleSuggestionsController {
         link: link,
         showWhenUnlinked: false,
         offset: Offset(0, fieldSize.height + 4),
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final row in rows)
-                  GestureDetector(
-                    onTapDown: (_) => row.onSelect(),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(row.icon),
-                      title: Text(row.label),
+        // Without this, tapping a row counts as tapping "outside" the text
+        // field (the dropdown lives in the ambient Overlay, not inside the
+        // field's own widget subtree), which triggers TextField's default
+        // tap-outside behavior of unfocusing it — dropping the keyboard
+        // focus the user was actively typing in right as they pick a
+        // suggestion. TextFieldTapRegion's default groupId groups it with
+        // every text field, so this is enough regardless of which field the
+        // dropdown is currently anchored to.
+        child: TextFieldTapRegion(
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(8),
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final row in rows)
+                    GestureDetector(
+                      onTapDown: (_) => row.onSelect(),
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(row.icon),
+                        title: Text(row.label),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
