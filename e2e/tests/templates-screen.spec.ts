@@ -30,21 +30,25 @@ import {
  * viewport regardless of which page it's on — see `clickNearFieldTop`'s
  * doc comment for the matching quirk in its *height*.)
  *
- * Retries the whole search-and-read for a couple of seconds: called
- * right after an action that changes which page is showing (a page
- * turn, or a template just added), the new page's field can still be a
- * beat away from existing at all, from being the one truly centered, or
+ * Retries the whole search-and-read for up to [timeoutMs]: called right
+ * after an action that changes which page is showing (a page turn, or
+ * a template just added), the new page's field can still be a beat
+ * away from existing at all, from being the one truly centered, or
  * from having synced its DOM value once focused — every template here
  * always has a non-empty name, so an empty read is always this
- * transient lag, never a real value.
+ * transient lag, never a real value. Time-based rather than a fixed
+ * attempt count so it scales with how loaded the machine running it
+ * is — confirmed flaky under CI load at a fixed 10 attempts (~3.5s),
+ * which a quieter local run never hit.
  */
 async function readTemplateName(
   page: import('@playwright/test').Page,
-  attempts = 10,
+  timeoutMs = 10_000,
 ): Promise<string> {
   const viewportWidth = page.viewportSize()?.width ?? 800;
   const targetCenter = viewportWidth / 2;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
     const inputs = page.getByRole('textbox');
     const count = await inputs.count();
     let best: Locator | null = null;
@@ -75,7 +79,7 @@ async function readTemplateName(
       const value = await best.inputValue();
       if (value !== '') return value;
     }
-    if (attempt < attempts) await page.waitForTimeout(150);
+    await page.waitForTimeout(150);
   }
   throw new Error('No on-screen template rename field with a synced value found');
 }
