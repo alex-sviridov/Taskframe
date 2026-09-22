@@ -51,9 +51,10 @@ async function addTemplateWithBlock(
 
 test.describe('single template', () => {
   test.use({ viewport: { width: 800, height: 720 } });
-  // The trailing add-template slot: centered in the sole column shown
-  // when no template exists yet (see templates-edit-block.spec.ts).
-  const addTemplateSlot = { x: 507, y: 416 } as const;
+  // The trailing add-template slot: a bordered, full-width button pinned
+  // to the top of the sole column shown when no template exists yet (see
+  // templates-edit-block.spec.ts).
+  const addTemplateSlot = { x: 507, y: 128 } as const;
   const blockPosition = { x: 300, y: 300 } as const;
 
   test.beforeEach(async ({ page }) => {
@@ -81,7 +82,7 @@ test.describe('two templates side by side', () => {
   test.use({ viewport: { width: 1200, height: 800 } });
   // The trailing add-template slot for the first (only) template — still
   // a single full-width column even at this wider viewport.
-  const addTemplateSlot = { x: 707, y: 456 } as const;
+  const addTemplateSlot = { x: 707, y: 128 } as const;
   // Comfortably inside the left column once a second template exists:
   // three columns share the row at this width (template 1, template 2,
   // then the trailing add-template slot), HourGutter-flanked on both
@@ -121,9 +122,10 @@ test.describe('two templates side by side', () => {
 
 test.describe('regression: dragging after visiting the Day screen first', () => {
   test.use({ viewport: { width: 800, height: 720 } });
-  // The trailing add-template slot: centered in the sole column shown
-  // when no template exists yet (see templates-edit-block.spec.ts).
-  const addTemplateSlot = { x: 507, y: 416 } as const;
+  // The trailing add-template slot: a bordered, full-width button pinned
+  // to the top of the sole column shown when no template exists yet (see
+  // templates-edit-block.spec.ts).
+  const addTemplateSlot = { x: 507, y: 128 } as const;
   const blockPosition = { x: 300, y: 300 } as const;
 
   // Once both the Day screen and the Templates screen have been visited

@@ -354,13 +354,15 @@ class _AddTemplateSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: IconButton(
-        tooltip: 'Add template',
-        iconSize: 40,
-        icon: const Icon(Icons.add),
-        onPressed: onTap,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.add),
+          label: const Text('Add template'),
+        ),
+      ],
     );
   }
 }

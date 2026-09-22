@@ -9,14 +9,13 @@ import {
 
 test.use({ viewport: { width: 800, height: 720 } });
 
-// The trailing add-template slot: a large centered "+" filling the sole
-// column shown when no template exists yet (AppBar height 56 + column
-// header height 56, then vertically centered in the remaining grid area;
-// horizontally centered across the full body width). Raw coordinates are
-// used (rather than `getByRole`) because this click must happen *before*
-// accessibility is enabled — see the comment on `addTemplateAndOpenDraft`
-// below for why.
-const addTemplateSlot = { x: 507, y: 416 } as const;
+// The trailing add-template slot: a bordered, full-width "Add template"
+// button pinned to the top of the sole column shown when no template
+// exists yet (AppBar height 56 + column header height 56, then the
+// button's own ~32px height). Raw coordinates are used (rather than
+// `getByRole`) because this click must happen *before* accessibility is
+// enabled — see the comment on `addTemplateAndOpenDraft` below for why.
+const addTemplateSlot = { x: 507, y: 128 } as const;
 
 // Free grid space, comfortably below the AppBar + column header and away
 // from the grid's edges regardless of which template is showing (there's

@@ -22,7 +22,7 @@ Future<void> _pump(WidgetTester tester) async {
 /// Taps the trailing "+" add-template slot. Callers must already be on the
 /// page it's showing on (it only exists right after the last template).
 Future<void> _tapAddTemplateSlot(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Add template'));
+  await tester.tap(find.widgetWithText(OutlinedButton, 'Add template'));
   await tester.pumpAndSettle();
 }
 
@@ -35,7 +35,10 @@ void main() {
       await _pump(tester);
 
       expect(find.widgetWithText(AppBar, 'Templates'), findsOneWidget);
-      expect(find.byTooltip('Add template'), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Add template'),
+        findsOneWidget,
+      );
       // No template to add a block to yet, so the AppBar button is
       // disabled.
       final addBlockButton = tester.widget<IconButton>(
@@ -102,7 +105,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Template 1'), findsNothing);
-      expect(find.byTooltip('Add template'), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Add template'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('on a narrow width, adding two templates pages to the second '
