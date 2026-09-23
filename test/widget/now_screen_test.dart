@@ -4,11 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/data/day_blocks_repository.dart';
 import 'package:taskframe/features/day/day_blocks_provider.dart';
+import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/now/now_screen.dart';
 import 'package:taskframe/features/task/providers.dart';
 
 DateTime _dateOnly(DateTime t) => DateTime(t.year, t.month, t.day);
+
+/// A day spanning the full 24 hours, so postpone-swipe tests built around
+/// the live `DateTime.now()` never spuriously hit the day-boundary check
+/// just because the test happens to run outside a typical 6-23 day.
+const _fullDaySettings = DaySettings(
+  dayStartHour: 0,
+  dayEndHour: 24,
+  firstDayOfWeek: DateTime.monday,
+  dateFormat: 'dd/MM/yyyy',
+);
 
 /// A [DayBlocksRepository] that always returns a fixed set of blocks for
 /// today, anchored to the current time so the "current" slot is
@@ -196,8 +207,8 @@ void main() {
     });
 
     testWidgets(
-      'shows one placeholder per slot, and a single "Next" label, when '
-      'nothing is scheduled',
+      'shows a single "nothing planned" message, with no slot labels or '
+      'per-slot placeholders, when no blocks exist today',
       (tester) async {
         await tester.pumpWidget(
           ProviderScope(
@@ -211,8 +222,46 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.text('Nothing scheduled'), findsNWidgets(3));
-        expect(find.text('Next'), findsOneWidget);
+        expect(find.text('Nothing planned for today'), findsOneWidget);
+        expect(find.text('Nothing scheduled'), findsNothing);
+        expect(find.text('Previous'), findsNothing);
+        expect(find.text('Current'), findsNothing);
+        expect(find.text('Next'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'shows the last block as Previous plus a "relax" message, with no '
+      'Current/Next placeholders, once the day is over',
+      (tester) async {
+        final now = DateTime.now();
+        final blocks = [
+          _blockAround(
+            now,
+            id: 'Wrapped up',
+            startOffsetMinutes: -90,
+            endOffsetMinutes: -30,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              dayBlocksRepositoryProvider.overrideWithValue(
+                _FixedDayBlocksRepository(blocks),
+              ),
+            ],
+            child: const MaterialApp(home: NowScreen()),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Previous'), findsOneWidget);
+        expect(find.text('Wrapped up'), findsOneWidget);
+        expect(find.text('Relax time 🌙 — nothing left today'), findsOneWidget);
+        expect(find.text('Nothing scheduled'), findsNothing);
+        expect(find.text('Current'), findsNothing);
+        expect(find.text('Next'), findsNothing);
       },
     );
 
@@ -317,6 +366,7 @@ void main() {
             dayBlocksRepositoryProvider.overrideWithValue(
               _FixedDayBlocksRepository(blocks),
             ),
+            daySettingsProvider.overrideWithValue(_fullDaySettings),
           ],
         );
         addTearDown(container.dispose);
@@ -359,6 +409,7 @@ void main() {
             dayBlocksRepositoryProvider.overrideWithValue(
               _FixedDayBlocksRepository(blocks),
             ),
+            daySettingsProvider.overrideWithValue(_fullDaySettings),
           ],
         );
         addTearDown(container.dispose);

@@ -57,6 +57,13 @@ class _NowBody extends ConsumerWidget {
     final categories = ref.watch(categoryListProvider).value ?? const [];
     final day = _today();
 
+    if (selection.previous == null && selection.current == null) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: const [_NowMessage('Nothing planned for today')],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
@@ -67,25 +74,54 @@ class _NowBody extends ConsumerWidget {
           day: day,
           allBlocks: blocks,
         ),
-        _EventSlot(
-          label: 'Current',
-          block: selection.current,
-          categories: categories,
-          emphasize: true,
-          day: day,
-          allBlocks: blocks,
-        ),
-        _EventSlot(
-          label: 'Next',
-          block: selection.next1,
-          extraBlock: selection.next2,
-          categories: categories,
-          day: day,
-          allBlocks: blocks,
-        ),
+        if (selection.current == null)
+          const _NowMessage('Relax time 🌙 — nothing left today')
+        else ...[
+          _EventSlot(
+            label: 'Current',
+            block: selection.current,
+            categories: categories,
+            emphasize: true,
+            day: day,
+            allBlocks: blocks,
+          ),
+          _EventSlot(
+            label: 'Next',
+            block: selection.next1,
+            extraBlock: selection.next2,
+            categories: categories,
+            day: day,
+            allBlocks: blocks,
+          ),
+        ],
         if (selection.current?.kind == BlockKind.frame)
           _FrameTasks(categoryId: selection.current!.categoryId),
       ],
+    );
+  }
+}
+
+/// A centered message replacing the slot cards, e.g. when nothing is
+/// scheduled today or the day's last block has already ended.
+class _NowMessage extends StatelessWidget {
+  const new(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          title: Text(
+            message,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ),
     );
   }
 }
