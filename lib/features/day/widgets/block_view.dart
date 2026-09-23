@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:taskframe/core/widgets/colored_list_card.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 
@@ -38,12 +39,13 @@ class BlockView extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isAnchor = block.kind == BlockKind.anchor;
     final categoryColor = category == null ? null : Color(category!.colorValue);
+    final fillColor = categoryColor ?? scheme.primaryContainer;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isAnchor ? (categoryColor ?? scheme.primaryContainer) : null,
+        color: isAnchor ? fillColor : null,
         border: isAnchor
             ? null
             : Border.all(color: categoryColor ?? scheme.primary),
@@ -52,7 +54,8 @@ class BlockView extends StatelessWidget {
       child: showTitle && block.kind != BlockKind.frame
           ? Text(
               category?.formatTitle(block.title) ?? block.title,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: foregroundColorFor(fillColor)),
               overflow: TextOverflow.ellipsis,
             )
           : null,
