@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/widgets/colored_list_card.dart';
+import 'package:taskframe/core/widgets/swipe_action_card.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
 import 'package:taskframe/features/day/date_format.dart';
 import 'package:taskframe/features/day/day_blocks_provider.dart';
+import 'package:taskframe/features/day/day_new_block.dart';
+import 'package:taskframe/features/day/day_settings.dart';
 import 'package:taskframe/features/day/models/time_object.dart';
 import 'package:taskframe/features/now/now_selection.dart';
 import 'package:taskframe/features/task/models/task.dart';
@@ -50,6 +55,14 @@ class _NowBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selection = selectNowEvents(blocks, DateTime.now());
     final categories = ref.watch(categoryListProvider).value ?? const [];
+    final day = _today();
+
+    if (selection.previous == null && selection.current == null) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: const [_NowMessage('Nothing planned for today')],
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -58,22 +71,57 @@ class _NowBody extends ConsumerWidget {
           label: 'Previous',
           block: selection.previous,
           categories: categories,
+          day: day,
+          allBlocks: blocks,
         ),
-        _EventSlot(
-          label: 'Current',
-          block: selection.current,
-          categories: categories,
-          emphasize: true,
-        ),
-        _EventSlot(
-          label: 'Next',
-          block: selection.next1,
-          extraBlock: selection.next2,
-          categories: categories,
-        ),
+        if (selection.current == null)
+          const _NowMessage('Relax time 🌙 — nothing left today')
+        else ...[
+          _EventSlot(
+            label: 'Current',
+            block: selection.current,
+            categories: categories,
+            emphasize: true,
+            day: day,
+            allBlocks: blocks,
+          ),
+          _EventSlot(
+            label: 'Next',
+            block: selection.next1,
+            extraBlock: selection.next2,
+            categories: categories,
+            day: day,
+            allBlocks: blocks,
+          ),
+        ],
         if (selection.current?.kind == BlockKind.frame)
           _FrameTasks(categoryId: selection.current!.categoryId),
       ],
+    );
+  }
+}
+
+/// A centered message replacing the slot cards, e.g. when nothing is
+/// scheduled today or the day's last block has already ended.
+class _NowMessage extends StatelessWidget {
+  const new(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          title: Text(
+            message,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -88,6 +136,8 @@ class _EventSlot extends StatelessWidget {
     required this.label,
     required this.block,
     required this.categories,
+    required this.day,
+    required this.allBlocks,
     this.extraBlock,
     this.emphasize = false,
   });
@@ -97,6 +147,8 @@ class _EventSlot extends StatelessWidget {
   final TimeObject? extraBlock;
   final List<Category> categories;
   final bool emphasize;
+  final DateTime day;
+  final List<TimeObject> allBlocks;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +182,8 @@ class _EventSlot extends StatelessWidget {
               block: block!,
               categories: categories,
               emphasize: emphasize,
+              day: day,
+              allBlocks: allBlocks,
             ),
           if (extraBlock != null) ...[
             const SizedBox(height: 8),
@@ -137,6 +191,8 @@ class _EventSlot extends StatelessWidget {
               block: extraBlock!,
               categories: categories,
               emphasize: false,
+              day: day,
+              allBlocks: allBlocks,
             ),
           ],
         ],
@@ -145,19 +201,43 @@ class _EventSlot extends StatelessWidget {
   }
 }
 
-class _BlockCard extends StatelessWidget {
+class _BlockCard extends ConsumerWidget {
   const new({
     required this.block,
     required this.categories,
     required this.emphasize,
+    required this.day,
+    required this.allBlocks,
   });
 
   final TimeObject block;
   final List<Category> categories;
   final bool emphasize;
+  final DateTime day;
+  final List<TimeObject> allBlocks;
+
+  /// Applies a postpone swipe to [block], persisting the new range (if any)
+  /// via [dayBlocksProvider]'s notifier.
+  void _postpone(WidgetRef ref, {required bool toFuture}) {
+    final settings = ref.read(daySettingsProvider);
+    final others = allBlocks.where((b) => b.id != block.id).toList();
+    final range = postponeRange(
+      block: block,
+      toFuture: toFuture,
+      day: day,
+      settings: settings,
+      others: others,
+    );
+    if (range == null) return;
+    unawaited(
+      ref
+          .read(dayBlocksProvider(day).notifier)
+          .updateBlock(block, start: range.start, end: range.end),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final category = categories.isEmpty
         ? null
         : categoryById(categories, block.categoryId);
@@ -166,13 +246,17 @@ class _BlockCard extends StatelessWidget {
         : Color(category.colorValue);
     final title = category?.formatTitle(block.title) ?? block.title;
 
-    return ColoredListCard(
-      color: color,
-      title: Text(
-        title,
-        style: TextStyle(fontWeight: emphasize ? FontWeight.bold : null),
+    return SwipeActionCard(
+      onSwipeLeft: block.locked ? null : () => _postpone(ref, toFuture: false),
+      onSwipeRight: block.locked ? null : () => _postpone(ref, toFuture: true),
+      child: ColoredListCard(
+        color: color,
+        title: Text(
+          title,
+          style: TextStyle(fontWeight: emphasize ? FontWeight.bold : null),
+        ),
+        trailing: Text('${formatHm(block.start)}–${formatHm(block.end)}'),
       ),
-      trailing: Text('${formatHm(block.start)}–${formatHm(block.end)}'),
     );
   }
 }
