@@ -127,6 +127,36 @@ void main() {
       expect(find.text('Work'), findsOneWidget);
     });
 
+    testWidgets('uses white text on a dark category background', (
+      tester,
+    ) async {
+      final category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFF0D1B2A,
+      );
+
+      await _pump(tester, _block(BlockKind.anchor), category: category);
+
+      final text = tester.widget<Text>(find.text('Work'));
+      expect(text.style!.color, Colors.white);
+    });
+
+    testWidgets('uses black text on a light category background', (
+      tester,
+    ) async {
+      final category = Category(
+        id: 'category-1',
+        name: 'Work',
+        colorValue: 0xFFFFF8E1,
+      );
+
+      await _pump(tester, _block(BlockKind.anchor), category: category);
+
+      final text = tester.widget<Text>(find.text('Work'));
+      expect(text.style!.color, Colors.black);
+    });
+
     testWidgets('never shows the title for a frame block, even with '
         'showTitle true', (tester) async {
       await _pump(tester, _block(BlockKind.frame));
