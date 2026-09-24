@@ -48,6 +48,17 @@ void main() {
       expect(result!.tag, 'продукты');
       expect(result.title, 'Купить ');
     });
+
+    test('a hyphen is allowed inside a tag', () {
+      final result = extractTrailingTag('Buy #low-priority ');
+
+      expect(result!.tag, 'low-priority');
+    });
+
+    test('a symbol other than "-" right before the trailing space breaks '
+        'the tag, so nothing is extracted', () {
+      expect(extractTrailingTag('Buy #groceries! '), isNull);
+    });
   });
 
   group('extractFinalTag', () {
@@ -96,6 +107,17 @@ void main() {
       expect(result, isNotNull);
       expect(result!.tag, 'продукты');
       expect(result.title, 'Купить ');
+    });
+
+    test('a hyphen is allowed inside a tag', () {
+      final result = extractFinalTag('Buy #low-priority');
+
+      expect(result!.tag, 'low-priority');
+    });
+
+    test('a trailing symbol other than "-" breaks the tag, so nothing is '
+        'extracted', () {
+      expect(extractFinalTag('Buy #groceries!'), isNull);
     });
   });
 }

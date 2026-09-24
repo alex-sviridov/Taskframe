@@ -137,6 +137,19 @@ void main() {
       expect(parsed.categoryTokens.single.category, 'уборка');
     });
 
+    test('a hyphen is allowed inside a tag or category name', () {
+      final parsed = parseSearchQuery('#low-priority @side-project');
+      expect(parsed.tagTokens.single.tag, 'low-priority');
+      expect(parsed.categoryTokens.single.category, 'side-project');
+    });
+
+    test('a symbol other than "-" ends the token early, leaving the rest '
+        'as free text', () {
+      final parsed = parseSearchQuery('#foo.bar');
+      expect(parsed.tagTokens.single.tag, 'foo');
+      expect(parsed.freeText, '.bar');
+    });
+
     test('adjacent tokens with no space between them still parse as two', () {
       final parsed = parseSearchQuery('#a@home');
       expect(parsed.tagTokens.single.tag, 'a');

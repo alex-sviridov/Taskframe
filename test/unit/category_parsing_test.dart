@@ -10,7 +10,12 @@ void main() {
     name: 'уборка',
     colorValue: 0xFFFFC107,
   );
-  final categories = [work, home, housekeeping];
+  final sideProject = Category(
+    id: 'cat-4',
+    name: 'side-project',
+    colorValue: 0xFF9C27B0,
+  );
+  final categories = [work, home, housekeeping, sideProject];
 
   group('extractTrailingCategory', () {
     test('extracts a category typed at the start of the title', () {
@@ -65,6 +70,22 @@ void main() {
       expect(result!.categoryId, housekeeping.id);
       expect(result.title, 'Помыть пол ');
     });
+
+    test('extracts a category whose name has a hyphen', () {
+      final result = extractTrailingCategory(
+        'Fix bug @side-project ',
+        categories,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.categoryId, sideProject.id);
+      expect(result.title, 'Fix bug ');
+    });
+
+    test('a symbol other than "-" right before the trailing space breaks '
+        'the category word, so nothing is extracted', () {
+      expect(extractTrailingCategory('Buy milk @work! ', categories), isNull);
+    });
   });
 
   group('extractFinalCategory', () {
@@ -117,6 +138,19 @@ void main() {
       expect(result, isNotNull);
       expect(result!.categoryId, housekeeping.id);
       expect(result.title, 'Помыть пол ');
+    });
+
+    test('extracts a category whose name has a hyphen', () {
+      final result = extractFinalCategory('Fix bug @side-project', categories);
+
+      expect(result, isNotNull);
+      expect(result!.categoryId, sideProject.id);
+      expect(result.title, 'Fix bug ');
+    });
+
+    test('a trailing symbol other than "-" breaks the category word, so '
+        'nothing is extracted', () {
+      expect(extractFinalCategory('Buy milk @work!', categories), isNull);
     });
   });
 }

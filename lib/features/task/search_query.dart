@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart' show TextRange;
+import 'package:taskframe/features/task/token_chars.dart';
 
 /// The status words currently recognized — any other word after `/` is
 /// left alone as plain search text rather than treated as a token.
@@ -94,13 +95,7 @@ class ParsedQuery {
   final String freeText;
 }
 
-// Any non-space, non-trigger character, not `\w`, since `\w` in Dart's
-// RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to match
-// tags/categories containing letters outside that range (e.g. Cyrillic).
-// Trigger characters (#/@) stay excluded so a token typed right up
-// against the next one with no space still stops at the boundary, same
-// as `\w` did by not matching them either.
-final _tokenPattern = RegExp(r'(#|/|@)(!?)([^\s#/@]+)');
+final _tokenPattern = RegExp('(#|/|@)(!?)($tokenWordChar+)', unicode: true);
 
 /// Parses [text] for every `#tag`/`#!tag`, every `@category`/
 /// `@!category`, the first `/opened`/`/!opened` occurrence, and the

@@ -14,22 +14,21 @@ import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/repeat_parsing.dart';
 import 'package:taskframe/features/task/tag_parsing.dart';
+import 'package:taskframe/features/task/token_chars.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
 
 /// Matches an *unfinished* `#word` immediately before the cursor — no
 /// trailing space yet — so suggestions can be offered while the user is
 /// still typing it, wherever the cursor currently sits. The title's own
 /// `!`-exclusion isn't a concept here (unlike the search bar's tokens),
-/// so this is simpler than `tasks_screen.dart`'s counterpart.
-///
-/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
-/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
-/// match tags containing letters outside that range (e.g. Cyrillic);
-/// trigger characters (#/@) stay excluded so this still stops at a
-/// following token typed with no space. The `@` counterpart lives as
-/// [partialCategoryPattern] in `category_parsing.dart`, shared with
-/// every other title field that offers `@category` autocomplete.
-final _partialTitleTagPattern = RegExp(r'(^|\s)#([^\s#/@]*)$');
+/// so this is simpler than `tasks_screen.dart`'s counterpart. The `@`
+/// counterpart lives as [partialCategoryPattern] in
+/// `category_parsing.dart`, shared with every other title field that
+/// offers `@category` autocomplete.
+final _partialTitleTagPattern = RegExp(
+  '(^|\\s)#($tokenWordChar*)\$',
+  unicode: true,
+);
 
 /// The title's suggestions dropdown never lists more than this many
 /// options — matches the search bar's own limit.
