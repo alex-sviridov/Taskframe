@@ -9,7 +9,7 @@ void main() {
     setUp(() => appRouter.go('/'));
 
     testWidgets(
-      '/ redirects to /now, shown inside the shell with Now selected',
+      '/ redirects to /day, shown inside the shell with Day selected',
       (tester) async {
         await tester.pumpWidget(
           ProviderScope(child: MaterialApp.router(routerConfig: appRouter)),
@@ -17,9 +17,9 @@ void main() {
         await tester.pump();
 
         expect(find.byType(AppShell), findsOneWidget);
-        expect(find.text('Now'), findsWidgets);
+        expect(find.text('Day Frame'), findsOneWidget);
         final shell = tester.widget<AppShell>(find.byType(AppShell));
-        expect(shell.navigationShell.currentIndex, 0);
+        expect(shell.navigationShell.currentIndex, 1);
       },
     );
 
