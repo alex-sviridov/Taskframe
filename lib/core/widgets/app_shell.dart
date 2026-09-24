@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -341,7 +342,16 @@ class _SavedViewRowState extends ConsumerState<_SavedViewRow> {
               builder: (context) => TextField(
                 controller: _nameController,
                 autofocus: true,
-                style: DefaultTextStyle.of(context).style,
+                // At least 16px: below that, iOS Safari auto-zooms the
+                // page when the field gains focus, and in standalone
+                // PWA mode there's no browser chrome to zoom back out
+                // with, leaving the app stuck zoomed in until restart.
+                style: DefaultTextStyle.of(context).style.copyWith(
+                  fontSize: math.max(
+                    DefaultTextStyle.of(context).style.fontSize ?? 16,
+                    16,
+                  ),
+                ),
                 cursorColor: colorScheme.primary,
                 decoration: InputDecoration(
                   isDense: true,
