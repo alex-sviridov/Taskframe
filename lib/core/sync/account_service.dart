@@ -61,3 +61,26 @@ Future<void> logout({
     await _wipeSyncedStores(db: db, settings: settings);
   });
 }
+
+/// Authenticates as an existing account, then discards any local guest
+/// data instead of merging it — the account's own data is pulled fresh
+/// on the next sync. Unlike [logout], this does *not* flush pending
+/// local edits first: guest data is being dropped, not preserved.
+///
+/// Authenticating and wiping both run inside one [SyncEngine.runExclusive]
+/// section so a sync trigger (the 30s timer, connectivity regained) can't
+/// slip in between them and push the guest data to the newly-authenticated
+/// account before it's wiped.
+Future<void> loginDroppingGuestData({
+  required Database db,
+  required AppSettingsRepository settings,
+  required PocketBaseSyncClient client,
+  required SyncEngine syncEngine,
+  required String email,
+  required String password,
+}) {
+  return syncEngine.runExclusive(() async {
+    await client.login(email, password);
+    await _wipeSyncedStores(db: db, settings: settings);
+  });
+}

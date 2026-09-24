@@ -79,6 +79,18 @@ final accountLogoutProvider = Provider<Future<void> Function()>((ref) {
   );
 });
 
+/// Runs `loginDroppingGuestData()` in `account_service.dart` — logs in,
+/// then discards local guest data instead of merging it. Overridden at
+/// the composition root, where the raw `Database` this needs is
+/// available — see `main.dart`.
+final accountLoginDroppingGuestDataProvider =
+    Provider<Future<void> Function(String email, String password)>((ref) {
+      throw UnimplementedError(
+        'Override with a closure calling loginDroppingGuestData(...) at '
+        'the composition root — see main.dart.',
+      );
+    });
+
 /// Every provider that caches a list/family read from one of the six
 /// synced sembast stores, keyed by the `SyncCollection.name` it's backed
 /// by. Invalidating one after a mutation to local storage that didn't
@@ -148,13 +160,15 @@ class AccountNotifier extends AsyncNotifier<AccountState> {
     state = AsyncData(AccountState(email: email));
   }
 
-  /// Logs into an existing account, merging local guest data into it on
-  /// the next sync. Also used to re-authenticate after
-  /// [AccountState.sessionExpired] — same identity, so
-  /// [_wipeIfSwitchingIdentity] is a no-op in that case.
+  /// Logs into an existing account, then discards any local guest data
+  /// rather than merging it — see [accountLoginDroppingGuestDataProvider].
+  /// Also used to re-authenticate after [AccountState.sessionExpired] —
+  /// same identity, so [_wipeIfSwitchingIdentity] is a no-op in that
+  /// case.
   Future<void> login(String email, String password) async {
     await _wipeIfSwitchingIdentity(email);
-    await ref.read(pocketBaseSyncClientProvider).login(email, password);
+    await ref.read(accountLoginDroppingGuestDataProvider)(email, password);
+    _invalidateSyncedProviders();
     state = AsyncData(AccountState(email: email));
   }
 

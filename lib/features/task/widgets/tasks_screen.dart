@@ -13,25 +13,29 @@ import 'package:taskframe/features/saved_search/providers.dart';
 import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/search_query.dart';
+import 'package:taskframe/features/task/token_chars.dart';
 import 'package:taskframe/features/task/widgets/task_card.dart';
 import 'package:taskframe/features/task/widgets/task_edit_modal.dart';
 
 /// Matches an *unfinished* `#word`/`#!word` immediately before the
 /// cursor — no trailing space yet — so suggestions can be offered while
 /// the user is still typing it, wherever the cursor currently sits.
-///
-/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
-/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
-/// match tags/categories containing letters outside that range (e.g.
-/// Cyrillic); trigger characters (#/@) stay excluded so this still stops
-/// at a following token typed with no space.
-final _partialTagPattern = RegExp(r'(^|\s)#(!?)([^\s#/@]*)$');
+final _partialTagPattern = RegExp(
+  '(^|\\s)#(!?)($tokenWordChar*)\$',
+  unicode: true,
+);
 
 /// The `/` counterpart of [_partialTagPattern].
-final _partialStatusPattern = RegExp(r'(^|\s)/(!?)([^\s#/@]*)$');
+final _partialStatusPattern = RegExp(
+  '(^|\\s)/(!?)($tokenWordChar*)\$',
+  unicode: true,
+);
 
 /// The `@` counterpart of [_partialTagPattern].
-final _partialCategoryPattern = RegExp(r'(^|\s)@(!?)([^\s#/@]*)$');
+final _partialCategoryPattern = RegExp(
+  '(^|\\s)@(!?)($tokenWordChar*)\$',
+  unicode: true,
+);
 
 /// Which kind of token the suggestions dropdown is currently offering —
 /// decides both the icon shown per row and which symbol/lookup
@@ -672,7 +676,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           IconButton(
             tooltip: 'Add task',
             icon: const Icon(Icons.add),
-            onPressed: () => showTaskEditModal(context: context),
+            onPressed: () {
+              final defaults = resolveNewTaskDefaults(
+                parseSearchQuery(_searchController.text),
+                categoriesAsync.value ?? const <Category>[],
+              );
+              unawaited(
+                showTaskEditModal(
+                  context: context,
+                  initialCategoryId: defaults.categoryId,
+                  initialTags: defaults.tags,
+                ),
+              );
+            },
           ),
         ],
         bottom: PreferredSize(

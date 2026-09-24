@@ -141,6 +141,35 @@ void main() {
         expect(created.colorValue, Colors.red.toARGB32());
       });
 
+      testWidgets('symbols and spaces are stripped as they are typed, only '
+          'letters, digits and "-" are kept', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Side Project #1!');
+        await tester.pump();
+
+        final categories = container.read(categoryListProvider).value!;
+        expect(categories.where((c) => c.name == 'SideProject1'), hasLength(1));
+      });
+
+      testWidgets('a hyphen is kept as typed', (tester) async {
+        final container = await _seededContainer();
+        addTearDown(container.dispose);
+        await _pumpOpenButton(tester, container);
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'side-project');
+        await tester.pump();
+
+        final categories = container.read(categoryListProvider).value!;
+        expect(categories.where((c) => c.name == 'side-project'), hasLength(1));
+      });
+
       testWidgets('typing further keystrokes updates the same category, not '
           'a new one', (tester) async {
         final container = await _seededContainer();

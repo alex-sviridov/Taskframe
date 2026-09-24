@@ -1,10 +1,21 @@
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' hide Category;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskframe/core/responsive.dart';
 import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/category/providers.dart';
+import 'package:taskframe/features/task/token_chars.dart';
+
+/// Restricts the category name field to the same characters allowed
+/// inside an `@category` token — Unicode letters, digits, and `-` — so a
+/// typed name can always be matched back by an `@category` reference.
+/// Any other character, symbols and spaces included, is silently
+/// dropped as it's typed.
+final _categoryNameFormatter = FilteringTextInputFormatter.allow(
+  RegExp(tokenWordChar, unicode: true),
+);
 
 /// Opens the edit sheet for [category] (edit mode) or, when [category] is
 /// `null`, for creating a new category (create mode). Near-fullscreen on a
@@ -197,6 +208,7 @@ class _CategoryEditSheetContentState
               controller: _nameController,
               enabled: !_isDefault,
               decoration: const InputDecoration(labelText: 'Name'),
+              inputFormatters: [_categoryNameFormatter],
               onChanged: _onNameChanged,
             ),
             const SizedBox(height: 16),

@@ -1,11 +1,10 @@
-// Any non-space, non-trigger character, not `\w`, since `\w` in Dart's
-// RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to match
-// tags containing letters outside that range (e.g. Cyrillic). Trigger
-// characters (#/@) stay excluded so this still stops at a following
-// token typed with no space, same as `\w` did by not matching them
-// either.
-final _trailingTagPattern = RegExp(r'(^|\s)#([^\s#/@]+) $');
-final _finalTagPattern = RegExp(r'(^|\s)#([^\s#/@]+)$');
+import 'package:taskframe/features/task/token_chars.dart';
+
+final _trailingTagPattern = RegExp(
+  '(^|\\s)#($tokenWordChar+) \$',
+  unicode: true,
+);
+final _finalTagPattern = RegExp('(^|\\s)#($tokenWordChar+)\$', unicode: true);
 
 /// If [text] ends with a `#tag` immediately followed by the space that was
 /// just typed, returns the lowercased tag and the title with that `#tag `

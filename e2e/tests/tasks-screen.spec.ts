@@ -462,6 +462,67 @@ test.describe('wide viewport', () => {
       await expect(page.getByRole('button', { name: 'Ship it' })).toHaveCount(0);
     });
 
+    test('adding a task while @category #tag filters are active pre-fills '
+      + 'that category and tag', async ({ page }) => {
+      await addCategoryAndGoToTasks(page, 'Work');
+      await fillTextboxUntilSet(searchTextbox(page), '@work #urgent');
+
+      await page.getByRole('button', { name: 'Add task' }).click();
+
+      // Pre-filled immediately, before any title is typed — no keystroke
+      // is what creates the task's category/tags here (see
+      // resolveNewTaskDefaults in search_query.dart).
+      await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'urgent' })).toBeVisible();
+      // The tag pill's entrance animation (~195ms — see chip.dart's
+      // _kSelectDuration) is still shifting the layout around the title
+      // field right after it first appears; let it settle first, as the
+      // "removing a tag pill" test above does before interacting with a
+      // pill.
+      await page.waitForTimeout(400);
+
+      await fillTextboxUntilSet(modalTextbox(page), 'Ship it');
+      // Proof the task itself (plus its pre-filled category/tags) finished
+      // persisting, not just that the field holds the right text, before
+      // dismissing — see "a trailing #tag with no space" above for the
+      // same guard. Persisting the initial tags here takes one more
+      // sequential await than a plain title-only create, so this matters
+      // more than usual. `.last()`: the "urgent" tag pill's own delete
+      // affordance is also named "Delete" (see "removing a tag pill"
+      // above) and renders first; the task's own Delete button is the
+      // modal's very last control.
+      await expect(page.getByRole('button', { name: 'Delete' }).last()).toBeVisible();
+      // Not the shared dismissTaskModal helper: waiting for the modal's
+      // own title textbox to go "hidden" is unreliable here — confirmed
+      // by tracing a failure where that wait kept timing out for several
+      // attempts in a row while the modal (and the created task, with its
+      // pre-filled category/tag intact) had, in fact, already closed and
+      // committed; a stale Flutter-web semantics node, not a real
+      // dismissal failure. The task card's own button appearing on the
+      // list is the meaningful signal here anyway — same marker the
+      // narrow-viewport "add button creates a task" test below uses.
+      await clickUntilVisible(
+        page,
+        { x: 770, y: 20 },
+        page.getByRole('button', { name: 'Ship it' }),
+      );
+
+      await page.getByRole('button', { name: 'Ship it' }).click();
+      await expect(page.getByRole('button', { name: 'Work' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'urgent' })).toBeVisible();
+    });
+
+    test('an excluded @!category/#!tag in the active filter is not '
+      + 'pre-filled when adding a task', async ({ page }) => {
+      await addCategoryAndGoToTasks(page, 'Work');
+      await fillTextboxUntilSet(searchTextbox(page), '@!work #!urgent');
+
+      await page.getByRole('button', { name: 'Add task' }).click();
+
+      await expect(page.getByRole('button', { name: 'Default' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'urgent' })).toHaveCount(0);
+    });
+
     test('typing #groceries into an empty search field shows a tag '
       + 'suggestion dropdown that completes on tap', async ({ page }) => {
       await addTaskWithTags(page, 'Buy milk', ['groceries']);

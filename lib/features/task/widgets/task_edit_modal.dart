@@ -14,22 +14,21 @@ import 'package:taskframe/features/task/models/task.dart';
 import 'package:taskframe/features/task/providers.dart';
 import 'package:taskframe/features/task/repeat_parsing.dart';
 import 'package:taskframe/features/task/tag_parsing.dart';
+import 'package:taskframe/features/task/token_chars.dart';
 import 'package:taskframe/features/task/widgets/tag_pills.dart';
 
 /// Matches an *unfinished* `#word` immediately before the cursor — no
 /// trailing space yet — so suggestions can be offered while the user is
 /// still typing it, wherever the cursor currently sits. The title's own
 /// `!`-exclusion isn't a concept here (unlike the search bar's tokens),
-/// so this is simpler than `tasks_screen.dart`'s counterpart.
-///
-/// The captured word uses `[^\s#/@]` rather than `\w`, since `\w` in
-/// Dart's RegExp is ASCII-only ([A-Za-z0-9_]) and would silently fail to
-/// match tags containing letters outside that range (e.g. Cyrillic);
-/// trigger characters (#/@) stay excluded so this still stops at a
-/// following token typed with no space. The `@` counterpart lives as
-/// [partialCategoryPattern] in `category_parsing.dart`, shared with
-/// every other title field that offers `@category` autocomplete.
-final _partialTitleTagPattern = RegExp(r'(^|\s)#([^\s#/@]*)$');
+/// so this is simpler than `tasks_screen.dart`'s counterpart. The `@`
+/// counterpart lives as [partialCategoryPattern] in
+/// `category_parsing.dart`, shared with every other title field that
+/// offers `@category` autocomplete.
+final _partialTitleTagPattern = RegExp(
+  '(^|\\s)#($tokenWordChar*)\$',
+  unicode: true,
+);
 
 /// The title's suggestions dropdown never lists more than this many
 /// options — matches the search bar's own limit.
@@ -75,12 +74,25 @@ const _repeatUnits = {'d': 'Day', 'w': 'Week', 'm': 'Month', 'y': 'Year'};
 /// for creating a new task (create mode). Near-fullscreen on a narrow
 /// (mobile) width, a centered fixed-width dialog on a wide one — matching
 /// `showCategoryEditSheet`'s responsive shell.
-Future<void> showTaskEditModal({required BuildContext context, Task? task}) {
+///
+/// [initialCategoryId]/[initialTags] seed the new task's category/tags in
+/// create mode (e.g. from an active search filter) — ignored in edit mode,
+/// where [task]'s own values are used instead.
+Future<void> showTaskEditModal({
+  required BuildContext context,
+  Task? task,
+  String? initialCategoryId,
+  List<String> initialTags = const [],
+}) {
   if (isNarrow(context)) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _TaskEditModalContent(task: task),
+      builder: (context) => _TaskEditModalContent(
+        task: task,
+        initialCategoryId: initialCategoryId,
+        initialTags: initialTags,
+      ),
     );
   }
   return showDialog<void>(
@@ -88,16 +100,26 @@ Future<void> showTaskEditModal({required BuildContext context, Task? task}) {
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
-        child: _TaskEditModalContent(task: task),
+        child: _TaskEditModalContent(
+          task: task,
+          initialCategoryId: initialCategoryId,
+          initialTags: initialTags,
+        ),
       ),
     ),
   );
 }
 
 class _TaskEditModalContent extends ConsumerStatefulWidget {
-  const new({this.task});
+  const new({this.task, this.initialCategoryId, this.initialTags = const []});
 
   final Task? task;
+
+  /// Create-mode-only initial category; ignored when [task] is set.
+  final String? initialCategoryId;
+
+  /// Create-mode-only initial tags; ignored when [task] is set.
+  final List<String> initialTags;
 
   @override
   ConsumerState<_TaskEditModalContent> createState() =>
@@ -114,6 +136,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   DateTime? _activeFrom;
   String _repeatUnit = 'w';
   late final FocusNode _titleFocusNode;
+  final ScrollController _titleScrollController = ScrollController();
 
   /// Manages the floating title-suggestions dropdown — same shared
   /// controller the search bar's own dropdown in `tasks_screen.dart`
@@ -151,9 +174,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     super.initState();
     _task = widget.task;
     _titleController = TextEditingController(text: widget.task?.title ?? '');
-    _categoryId = widget.task?.categoryId ?? Category.defaultId;
+    _categoryId =
+        widget.task?.categoryId ??
+        widget.initialCategoryId ??
+        Category.defaultId;
     _closed = widget.task?.closed ?? false;
-    _tags = widget.task?.tags ?? [];
+    _tags = widget.task?.tags ?? widget.initialTags;
     _activeFrom = widget.task?.activeFrom;
     _activeFromController = TextEditingController(
       text: _activeFrom == null ? '' : formatActiveFrom(_activeFrom!),
@@ -174,6 +200,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _activeFromController.dispose();
     _repeatCountController.dispose();
     _titleFocusNode.dispose();
+    _titleScrollController.dispose();
     _titleSuggestions.dispose();
     super.dispose();
   }
@@ -291,7 +318,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _pendingCreate = future;
     final created = await future;
     if (_closed) await notifier.updateTask(created, closed: true);
-    if (newTags != null) await notifier.updateTask(created, tags: newTags);
+    // `_tags` already reflects `newTags` merged in above (when non-null),
+    // plus any tags the create-mode modal started with via
+    // `widget.initialTags` — unlike `newTags`, which only covers a tag
+    // just extracted from this keystroke and would otherwise leave a
+    // pre-filled initial tag never persisted to the newly created task.
+    if (_tags.isNotEmpty) await notifier.updateTask(created, tags: _tags);
     if (newActiveFrom != null) {
       await notifier.updateTask(created, activeFrom: newActiveFrom);
     }
@@ -475,6 +507,14 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         return KeyEventResult.handled;
       }
     }
+    // The title field already saves on every keystroke via `onChanged`, so
+    // Enter has nothing left to commit — swallow it rather than let the
+    // now-multiline field insert a literal newline into the title.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
 
@@ -646,136 +686,147 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Checkbox(
-                    shape: const CircleBorder(),
-                    value: _closed,
-                    onChanged: (value) => _onClosedChanged(value ?? !_closed),
-                  ),
-                  Expanded(
-                    child: CompositedTransformTarget(
-                      link: _titleSuggestions.link,
-                      child: Focus(
-                        onKeyEvent: _handleTitleKeyEvent,
-                        child: Container(
-                          key: _titleSuggestions.fieldBoxKey,
-                          child: TextField(
-                            key: const Key('task-title-field'),
-                            controller: _titleController,
-                            focusNode: _titleFocusNode,
-                            style: TextStyle(
-                              decoration: _closed
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              color: _isFutureDated(_activeFrom)
-                                  ? Theme.of(context).disabledColor
-                                  : null,
-                              fontStyle: _isFutureDated(_activeFrom)
-                                  ? FontStyle.italic
-                                  : null,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Checkbox(
+                      shape: const CircleBorder(),
+                      value: _closed,
+                      onChanged: (value) => _onClosedChanged(value ?? !_closed),
+                    ),
+                    Expanded(
+                      child: CompositedTransformTarget(
+                        link: _titleSuggestions.link,
+                        child: Focus(
+                          onKeyEvent: _handleTitleKeyEvent,
+                          child: Container(
+                            key: _titleSuggestions.fieldBoxKey,
+                            child: Scrollbar(
+                              controller: _titleScrollController,
+                              child: TextField(
+                                key: const Key('task-title-field'),
+                                controller: _titleController,
+                                focusNode: _titleFocusNode,
+                                scrollController: _titleScrollController,
+                                minLines: 1,
+                                maxLines: 3,
+                                keyboardType: TextInputType.multiline,
+                                style: TextStyle(
+                                  decoration: _closed
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: _isFutureDated(_activeFrom)
+                                      ? Theme.of(context).disabledColor
+                                      : null,
+                                  fontStyle: _isFutureDated(_activeFrom)
+                                      ? FontStyle.italic
+                                      : null,
+                                ),
+                                onChanged: _onTitleChanged,
+                              ),
                             ),
-                            onChanged: _onTitleChanged,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              if (_tags.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                TagPills(tags: _tags, onRemoved: _onTagRemoved),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('task-active-from-field'),
-                      controller: _activeFromController,
-                      decoration: InputDecoration(
-                        labelText: 'Active from',
-                        hintText: 'dd/mm/yy',
-                        suffixIcon: _activeFromController.text.isEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.calendar_today),
-                                tooltip: 'Pick a date',
-                                onPressed: _pickActiveFrom,
-                              )
-                            : IconButton(
-                                key: const Key('task-active-from-clear'),
-                                icon: const Icon(Icons.clear),
-                                tooltip: 'Clear active-from date',
-                                onPressed: _clearActiveFrom,
-                              ),
-                      ),
-                      onTap: _pickActiveFrom,
-                      onChanged: _onActiveFromFieldChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('task-repeat-number-field'),
-                      controller: _repeatCountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        labelText: 'Repeat',
-                        hintText: '0',
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            DropdownButton<String>(
-                              key: const Key('task-repeat-unit-dropdown'),
-                              value: _repeatUnit,
-                              underline: const SizedBox.shrink(),
-                              items: [
-                                for (final entry in _repeatUnits.entries)
-                                  DropdownMenuItem(
-                                    value: entry.key,
-                                    child: Text(entry.value),
-                                  ),
-                              ],
-                              onChanged: _onRepeatUnitChanged,
-                            ),
-                            if (_repeatCountController.text.isNotEmpty)
-                              IconButton(
-                                key: const Key('task-repeat-clear'),
-                                icon: const Icon(Icons.clear),
-                                tooltip: 'Clear repeat',
-                                onPressed: _clearRepeat,
-                              ),
-                          ],
-                        ),
-                      ),
-                      onChanged: _onRepeatCountChanged,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              BlockCategoryPicker(
-                selectedCategoryId: _categoryId,
-                onSelected: _onCategorySelected,
-              ),
-              if (_task != null) ...[
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: _confirmDelete,
-                    child: const Text('Delete'),
-                  ),
+                  ],
                 ),
+                if (_tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  TagPills(tags: _tags, onRemoved: _onTagRemoved),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('task-active-from-field'),
+                        controller: _activeFromController,
+                        decoration: InputDecoration(
+                          labelText: 'Active from',
+                          hintText: 'dd/mm/yy',
+                          suffixIcon: _activeFromController.text.isEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.calendar_today),
+                                  tooltip: 'Pick a date',
+                                  onPressed: _pickActiveFrom,
+                                )
+                              : IconButton(
+                                  key: const Key('task-active-from-clear'),
+                                  icon: const Icon(Icons.clear),
+                                  tooltip: 'Clear active-from date',
+                                  onPressed: _clearActiveFrom,
+                                ),
+                        ),
+                        onTap: _pickActiveFrom,
+                        onChanged: _onActiveFromFieldChanged,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        key: const Key('task-repeat-number-field'),
+                        controller: _repeatCountController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Repeat',
+                          hintText: '0',
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              DropdownButton<String>(
+                                key: const Key('task-repeat-unit-dropdown'),
+                                value: _repeatUnit,
+                                underline: const SizedBox.shrink(),
+                                items: [
+                                  for (final entry in _repeatUnits.entries)
+                                    DropdownMenuItem(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    ),
+                                ],
+                                onChanged: _onRepeatUnitChanged,
+                              ),
+                              if (_repeatCountController.text.isNotEmpty)
+                                IconButton(
+                                  key: const Key('task-repeat-clear'),
+                                  icon: const Icon(Icons.clear),
+                                  tooltip: 'Clear repeat',
+                                  onPressed: _clearRepeat,
+                                ),
+                            ],
+                          ),
+                        ),
+                        onChanged: _onRepeatCountChanged,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                BlockCategoryPicker(
+                  selectedCategoryId: _categoryId,
+                  onSelected: _onCategorySelected,
+                ),
+                if (_task != null) ...[
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _confirmDelete,
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

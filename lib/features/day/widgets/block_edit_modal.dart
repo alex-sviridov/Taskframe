@@ -441,6 +441,7 @@ enum _TimeField { start, end }
 class _BlockEditModalState extends ConsumerState<BlockEditModal> {
   late final TextEditingController _titleController;
   late final FocusNode _titleFocus;
+  final ScrollController _titleScrollController = ScrollController();
   TimeObject? _currentBlock;
   _TimeField? _expandedField;
 
@@ -479,6 +480,7 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
       ..removeListener(_handleFocusChange)
       ..dispose();
     _titleController.dispose();
+    _titleScrollController.dispose();
     _titleSuggestions.dispose();
     super.dispose();
   }
@@ -652,6 +654,14 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
         setState(() => _titleSuggestionsDismissed = true);
         return KeyEventResult.handled;
       }
+    }
+    // Commit on Enter as before, rather than letting the now-multiline
+    // field insert a literal newline into the title.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      unawaited(_commitTitle(block));
+      return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
@@ -889,17 +899,25 @@ class _BlockEditModalState extends ConsumerState<BlockEditModal> {
                           _handleTitleKeyEvent(current, node, event),
                       child: Container(
                         key: _titleSuggestions.fieldBoxKey,
-                        child: TextField(
-                          controller: _titleController,
-                          focusNode: _titleFocus,
-                          autofocus: _autofocusTitle,
-                          onChanged: (value) => _onTitleChanged(current, value),
-                          onSubmitted: (_) => _commitTitle(current),
-                          decoration: const InputDecoration(
-                            border: UnderlineInputBorder(),
-                            isDense: true,
+                        child: Scrollbar(
+                          controller: _titleScrollController,
+                          child: TextField(
+                            controller: _titleController,
+                            focusNode: _titleFocus,
+                            scrollController: _titleScrollController,
+                            autofocus: _autofocusTitle,
+                            minLines: 1,
+                            maxLines: 3,
+                            keyboardType: TextInputType.multiline,
+                            onChanged: (value) =>
+                                _onTitleChanged(current, value),
+                            onSubmitted: (_) => _commitTitle(current),
+                            decoration: const InputDecoration(
+                              border: UnderlineInputBorder(),
+                              isDense: true,
+                            ),
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
                     ),

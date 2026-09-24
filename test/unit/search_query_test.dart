@@ -1,6 +1,10 @@
 import 'package:flutter/services.dart' show TextRange;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/task/search_query.dart';
+
+Category _category(String id, String name) =>
+    Category(id: id, name: name, colorValue: 0xFF000000);
 
 void main() {
   group('parseSearchQuery', () {
@@ -137,6 +141,19 @@ void main() {
       expect(parsed.categoryTokens.single.category, 'уборка');
     });
 
+    test('a hyphen is allowed inside a tag or category name', () {
+      final parsed = parseSearchQuery('#low-priority @side-project');
+      expect(parsed.tagTokens.single.tag, 'low-priority');
+      expect(parsed.categoryTokens.single.category, 'side-project');
+    });
+
+    test('a symbol other than "-" ends the token early, leaving the rest '
+        'as free text', () {
+      final parsed = parseSearchQuery('#foo.bar');
+      expect(parsed.tagTokens.single.tag, 'foo');
+      expect(parsed.freeText, '.bar');
+    });
+
     test('adjacent tokens with no space between them still parse as two', () {
       final parsed = parseSearchQuery('#a@home');
       expect(parsed.tagTokens.single.tag, 'a');
@@ -253,6 +270,83 @@ void main() {
       );
       expect(result.text, '@!work');
       expect(result.cursorOffset, 6);
+    });
+  });
+
+  group('resolveNewTaskDefaults', () {
+    final categories = [_category('1', 'Work'), _category('2', 'Home')];
+
+    test('no tokens resolves to the default category and no tags', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('Buy milk'),
+        categories,
+      );
+      expect(result.categoryId, Category.defaultId);
+      expect(result.tags, isEmpty);
+    });
+
+    test('a category token resolves to that category by name', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('@work'),
+        categories,
+      );
+      expect(result.categoryId, '1');
+    });
+
+    test('an unmatched category token falls back to the default', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('@nosuch'),
+        categories,
+      );
+      expect(result.categoryId, Category.defaultId);
+    });
+
+    test('the first of multiple category tokens wins', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('@work @home'),
+        categories,
+      );
+      expect(result.categoryId, '1');
+    });
+
+    test('an excluded category token is ignored', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('@!work'),
+        categories,
+      );
+      expect(result.categoryId, Category.defaultId);
+    });
+
+    test('an excluded category token is skipped in favor of the next', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('@!work @home'),
+        categories,
+      );
+      expect(result.categoryId, '2');
+    });
+
+    test('tag tokens resolve to their names, in order', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('#urgent #groceries'),
+        categories,
+      );
+      expect(result.tags, ['urgent', 'groceries']);
+    });
+
+    test('excluded tag tokens are ignored', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('#urgent #!archived'),
+        categories,
+      );
+      expect(result.tags, ['urgent']);
+    });
+
+    test('duplicate tag tokens are deduplicated', () {
+      final result = resolveNewTaskDefaults(
+        parseSearchQuery('#urgent #urgent'),
+        categories,
+      );
+      expect(result.tags, ['urgent']);
     });
   });
 }
