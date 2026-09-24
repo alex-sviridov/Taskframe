@@ -74,12 +74,25 @@ const _repeatUnits = {'d': 'Day', 'w': 'Week', 'm': 'Month', 'y': 'Year'};
 /// for creating a new task (create mode). Near-fullscreen on a narrow
 /// (mobile) width, a centered fixed-width dialog on a wide one — matching
 /// `showCategoryEditSheet`'s responsive shell.
-Future<void> showTaskEditModal({required BuildContext context, Task? task}) {
+///
+/// [initialCategoryId]/[initialTags] seed the new task's category/tags in
+/// create mode (e.g. from an active search filter) — ignored in edit mode,
+/// where [task]'s own values are used instead.
+Future<void> showTaskEditModal({
+  required BuildContext context,
+  Task? task,
+  String? initialCategoryId,
+  List<String> initialTags = const [],
+}) {
   if (isNarrow(context)) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _TaskEditModalContent(task: task),
+      builder: (context) => _TaskEditModalContent(
+        task: task,
+        initialCategoryId: initialCategoryId,
+        initialTags: initialTags,
+      ),
     );
   }
   return showDialog<void>(
@@ -87,16 +100,26 @@ Future<void> showTaskEditModal({required BuildContext context, Task? task}) {
     builder: (context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
-        child: _TaskEditModalContent(task: task),
+        child: _TaskEditModalContent(
+          task: task,
+          initialCategoryId: initialCategoryId,
+          initialTags: initialTags,
+        ),
       ),
     ),
   );
 }
 
 class _TaskEditModalContent extends ConsumerStatefulWidget {
-  const new({this.task});
+  const new({this.task, this.initialCategoryId, this.initialTags = const []});
 
   final Task? task;
+
+  /// Create-mode-only initial category; ignored when [task] is set.
+  final String? initialCategoryId;
+
+  /// Create-mode-only initial tags; ignored when [task] is set.
+  final List<String> initialTags;
 
   @override
   ConsumerState<_TaskEditModalContent> createState() =>
@@ -151,9 +174,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     super.initState();
     _task = widget.task;
     _titleController = TextEditingController(text: widget.task?.title ?? '');
-    _categoryId = widget.task?.categoryId ?? Category.defaultId;
+    _categoryId =
+        widget.task?.categoryId ??
+        widget.initialCategoryId ??
+        Category.defaultId;
     _closed = widget.task?.closed ?? false;
-    _tags = widget.task?.tags ?? [];
+    _tags = widget.task?.tags ?? widget.initialTags;
     _activeFrom = widget.task?.activeFrom;
     _activeFromController = TextEditingController(
       text: _activeFrom == null ? '' : formatActiveFrom(_activeFrom!),
@@ -292,7 +318,12 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _pendingCreate = future;
     final created = await future;
     if (_closed) await notifier.updateTask(created, closed: true);
-    if (newTags != null) await notifier.updateTask(created, tags: newTags);
+    // `_tags` already reflects `newTags` merged in above (when non-null),
+    // plus any tags the create-mode modal started with via
+    // `widget.initialTags` — unlike `newTags`, which only covers a tag
+    // just extracted from this keystroke and would otherwise leave a
+    // pre-filled initial tag never persisted to the newly created task.
+    if (_tags.isNotEmpty) await notifier.updateTask(created, tags: _tags);
     if (newActiveFrom != null) {
       await notifier.updateTask(created, activeFrom: newActiveFrom);
     }

@@ -676,7 +676,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           IconButton(
             tooltip: 'Add task',
             icon: const Icon(Icons.add),
-            onPressed: () => showTaskEditModal(context: context),
+            onPressed: () {
+              final defaults = resolveNewTaskDefaults(
+                parseSearchQuery(_searchController.text),
+                categoriesAsync.value ?? const <Category>[],
+              );
+              unawaited(
+                showTaskEditModal(
+                  context: context,
+                  initialCategoryId: defaults.categoryId,
+                  initialTags: defaults.tags,
+                ),
+              );
+            },
           ),
         ],
         bottom: PreferredSize(

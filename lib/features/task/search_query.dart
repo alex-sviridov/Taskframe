@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart' show TextRange;
+import 'package:taskframe/features/category/models/category.dart';
 import 'package:taskframe/features/task/token_chars.dart';
 
 /// The status words currently recognized — any other word after `/` is
@@ -158,6 +159,37 @@ ParsedQuery parseSearchQuery(String text) {
     activeToken: activeToken,
     freeText: freeText,
   );
+}
+
+/// Resolves the category id and tags a new task should start with, given
+/// the currently active search query — so a task created while a filter
+/// is active (e.g. `@work #urgent`) starts already matching it. Excluded
+/// tokens (`#!tag`/`@!category`) are ignored, since they describe what to
+/// filter *out*, not what a new task should be. When more than one
+/// non-excluded category token is present, the first one in query order
+/// wins; when it doesn't match any of [categories]' names,
+/// [Category.defaultId] is used, same as creating a task with no filter
+/// active.
+({String categoryId, List<String> tags}) resolveNewTaskDefaults(
+  ParsedQuery parsed,
+  List<Category> categories,
+) {
+  final tags = <String>[];
+  for (final t in parsed.tagTokens) {
+    if (!t.excluded && !tags.contains(t.tag)) tags.add(t.tag);
+  }
+  var categoryId = Category.defaultId;
+  for (final t in parsed.categoryTokens) {
+    if (t.excluded) continue;
+    for (final category in categories) {
+      if (category.name.toLowerCase() == t.category) {
+        categoryId = category.id;
+        break;
+      }
+    }
+    break;
+  }
+  return (categoryId: categoryId, tags: tags);
 }
 
 /// Every recognized token in [parsed] (tag, category, and status alike)
