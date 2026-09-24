@@ -113,6 +113,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
   DateTime? _activeFrom;
   String _repeatUnit = 'w';
   late final FocusNode _titleFocusNode;
+  final ScrollController _titleScrollController = ScrollController();
 
   /// Manages the floating title-suggestions dropdown — same shared
   /// controller the search bar's own dropdown in `tasks_screen.dart`
@@ -173,6 +174,7 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
     _activeFromController.dispose();
     _repeatCountController.dispose();
     _titleFocusNode.dispose();
+    _titleScrollController.dispose();
     _titleSuggestions.dispose();
     super.dispose();
   }
@@ -474,6 +476,14 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         return KeyEventResult.handled;
       }
     }
+    // The title field already saves on every keystroke via `onChanged`, so
+    // Enter has nothing left to commit — swallow it rather than let the
+    // now-multiline field insert a literal newline into the title.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
 
@@ -645,136 +655,147 @@ class _TaskEditModalContentState extends ConsumerState<_TaskEditModalContent> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Checkbox(
-                    shape: const CircleBorder(),
-                    value: _closed,
-                    onChanged: (value) => _onClosedChanged(value ?? !_closed),
-                  ),
-                  Expanded(
-                    child: CompositedTransformTarget(
-                      link: _titleSuggestions.link,
-                      child: Focus(
-                        onKeyEvent: _handleTitleKeyEvent,
-                        child: Container(
-                          key: _titleSuggestions.fieldBoxKey,
-                          child: TextField(
-                            key: const Key('task-title-field'),
-                            controller: _titleController,
-                            focusNode: _titleFocusNode,
-                            style: TextStyle(
-                              decoration: _closed
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              color: _isFutureDated(_activeFrom)
-                                  ? Theme.of(context).disabledColor
-                                  : null,
-                              fontStyle: _isFutureDated(_activeFrom)
-                                  ? FontStyle.italic
-                                  : null,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Checkbox(
+                      shape: const CircleBorder(),
+                      value: _closed,
+                      onChanged: (value) => _onClosedChanged(value ?? !_closed),
+                    ),
+                    Expanded(
+                      child: CompositedTransformTarget(
+                        link: _titleSuggestions.link,
+                        child: Focus(
+                          onKeyEvent: _handleTitleKeyEvent,
+                          child: Container(
+                            key: _titleSuggestions.fieldBoxKey,
+                            child: Scrollbar(
+                              controller: _titleScrollController,
+                              child: TextField(
+                                key: const Key('task-title-field'),
+                                controller: _titleController,
+                                focusNode: _titleFocusNode,
+                                scrollController: _titleScrollController,
+                                minLines: 1,
+                                maxLines: 3,
+                                keyboardType: TextInputType.multiline,
+                                style: TextStyle(
+                                  decoration: _closed
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: _isFutureDated(_activeFrom)
+                                      ? Theme.of(context).disabledColor
+                                      : null,
+                                  fontStyle: _isFutureDated(_activeFrom)
+                                      ? FontStyle.italic
+                                      : null,
+                                ),
+                                onChanged: _onTitleChanged,
+                              ),
                             ),
-                            onChanged: _onTitleChanged,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              if (_tags.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                TagPills(tags: _tags, onRemoved: _onTagRemoved),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('task-active-from-field'),
-                      controller: _activeFromController,
-                      decoration: InputDecoration(
-                        labelText: 'Active from',
-                        hintText: 'dd/mm/yy',
-                        suffixIcon: _activeFromController.text.isEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.calendar_today),
-                                tooltip: 'Pick a date',
-                                onPressed: _pickActiveFrom,
-                              )
-                            : IconButton(
-                                key: const Key('task-active-from-clear'),
-                                icon: const Icon(Icons.clear),
-                                tooltip: 'Clear active-from date',
-                                onPressed: _clearActiveFrom,
-                              ),
-                      ),
-                      onTap: _pickActiveFrom,
-                      onChanged: _onActiveFromFieldChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('task-repeat-number-field'),
-                      controller: _repeatCountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        labelText: 'Repeat',
-                        hintText: '0',
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            DropdownButton<String>(
-                              key: const Key('task-repeat-unit-dropdown'),
-                              value: _repeatUnit,
-                              underline: const SizedBox.shrink(),
-                              items: [
-                                for (final entry in _repeatUnits.entries)
-                                  DropdownMenuItem(
-                                    value: entry.key,
-                                    child: Text(entry.value),
-                                  ),
-                              ],
-                              onChanged: _onRepeatUnitChanged,
-                            ),
-                            if (_repeatCountController.text.isNotEmpty)
-                              IconButton(
-                                key: const Key('task-repeat-clear'),
-                                icon: const Icon(Icons.clear),
-                                tooltip: 'Clear repeat',
-                                onPressed: _clearRepeat,
-                              ),
-                          ],
-                        ),
-                      ),
-                      onChanged: _onRepeatCountChanged,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              BlockCategoryPicker(
-                selectedCategoryId: _categoryId,
-                onSelected: _onCategorySelected,
-              ),
-              if (_task != null) ...[
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: _confirmDelete,
-                    child: const Text('Delete'),
-                  ),
+                  ],
                 ),
+                if (_tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  TagPills(tags: _tags, onRemoved: _onTagRemoved),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('task-active-from-field'),
+                        controller: _activeFromController,
+                        decoration: InputDecoration(
+                          labelText: 'Active from',
+                          hintText: 'dd/mm/yy',
+                          suffixIcon: _activeFromController.text.isEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.calendar_today),
+                                  tooltip: 'Pick a date',
+                                  onPressed: _pickActiveFrom,
+                                )
+                              : IconButton(
+                                  key: const Key('task-active-from-clear'),
+                                  icon: const Icon(Icons.clear),
+                                  tooltip: 'Clear active-from date',
+                                  onPressed: _clearActiveFrom,
+                                ),
+                        ),
+                        onTap: _pickActiveFrom,
+                        onChanged: _onActiveFromFieldChanged,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        key: const Key('task-repeat-number-field'),
+                        controller: _repeatCountController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Repeat',
+                          hintText: '0',
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              DropdownButton<String>(
+                                key: const Key('task-repeat-unit-dropdown'),
+                                value: _repeatUnit,
+                                underline: const SizedBox.shrink(),
+                                items: [
+                                  for (final entry in _repeatUnits.entries)
+                                    DropdownMenuItem(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    ),
+                                ],
+                                onChanged: _onRepeatUnitChanged,
+                              ),
+                              if (_repeatCountController.text.isNotEmpty)
+                                IconButton(
+                                  key: const Key('task-repeat-clear'),
+                                  icon: const Icon(Icons.clear),
+                                  tooltip: 'Clear repeat',
+                                  onPressed: _clearRepeat,
+                                ),
+                            ],
+                          ),
+                        ),
+                        onChanged: _onRepeatCountChanged,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                BlockCategoryPicker(
+                  selectedCategoryId: _categoryId,
+                  onSelected: _onCategorySelected,
+                ),
+                if (_task != null) ...[
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: _confirmDelete,
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
