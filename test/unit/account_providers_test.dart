@@ -66,6 +66,9 @@ void main() {
             wipeCalls++;
             await settings.deleteValue('account_identity');
           }),
+          accountLoginDroppingGuestDataProvider.overrideWithValue(
+            (email, password) async {},
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -95,6 +98,9 @@ void main() {
         accountLogoutProvider.overrideWithValue(() async {
           wipeCalls++;
         }),
+        accountLoginDroppingGuestDataProvider.overrideWithValue(
+          (email, password) async {},
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -105,6 +111,69 @@ void main() {
         .login('me@example.com', 'testpass123');
 
     expect(wipeCalls, 0);
+  });
+
+  test('login() drops local guest data after a successful login, via '
+      'accountLoginDroppingGuestDataProvider', () async {
+    final settings = InMemoryAppSettingsRepository();
+    final client = _FakePocketBaseSyncClient(settings: settings);
+
+    var dropCalls = 0;
+    String? droppedEmail;
+    String? droppedPassword;
+    final container = ProviderContainer(
+      overrides: [
+        pocketBaseSyncClientProvider.overrideWithValue(client),
+        accountLogoutProvider.overrideWithValue(() async {}),
+        accountLoginDroppingGuestDataProvider.overrideWithValue((
+          email,
+          password,
+        ) async {
+          dropCalls++;
+          droppedEmail = email;
+          droppedPassword = password;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(accountProvider.future);
+    await container
+        .read(accountProvider.notifier)
+        .login('me@example.com', 'testpass123');
+
+    expect(dropCalls, 1);
+    expect(droppedEmail, 'me@example.com');
+    expect(droppedPassword, 'testpass123');
+    expect(container.read(accountProvider).value?.email, 'me@example.com');
+  });
+
+  test('register() does NOT drop guest data (it merges into the new '
+      'account on the next sync instead)', () async {
+    final settings = InMemoryAppSettingsRepository();
+    final client = _FakePocketBaseSyncClient(settings: settings);
+
+    var dropCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        pocketBaseSyncClientProvider.overrideWithValue(client),
+        accountLogoutProvider.overrideWithValue(() async {}),
+        accountLoginDroppingGuestDataProvider.overrideWithValue((
+          email,
+          password,
+        ) async {
+          dropCalls++;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(accountProvider.future);
+    await container
+        .read(accountProvider.notifier)
+        .register('brand-new@example.com', 'testpass123');
+
+    expect(dropCalls, 0);
   });
 
   test('registering from a clean guest state (no stored identity) does not '

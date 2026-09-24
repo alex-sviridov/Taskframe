@@ -31,6 +31,17 @@ class _NoopSyncBackend implements SyncBackend {
   ) async => [];
 }
 
+/// Stands in for the real network round-trip: just stores the new
+/// identity, like the real `_authenticate` does, without calling out to
+/// PocketBase.
+class _FakeLoginClient extends PocketBaseSyncClient {
+  new({required super.settings}) : super(baseUrl: 'http://localhost:8090');
+
+  @override
+  Future<void> login(String email, String password) =>
+      settings.setValue('account_identity', email);
+}
+
 void main() {
   test('logout clears every synced store, every sync cursor, and the '
       'session, but leaves unrelated settings alone', () async {
@@ -135,6 +146,70 @@ void main() {
       expect(events, ['sync-running']);
     },
   );
+
+  test('loginDroppingGuestData logs in, then wipes local guest data without '
+      'ever pushing it to the account first', () async {
+    final db = await newDatabaseFactoryMemory().openDatabase('test5.db');
+    final settings = SembastAppSettingsRepository(db);
+    final client = _FakeLoginClient(settings: settings);
+    final backend = _NoopSyncBackend();
+    final syncEngine = SyncEngine(db: db, settings: settings, backend: backend);
+
+    await tasksStore.record('t1').put(db, {'id': 't1', 'title': 'guest task'});
+
+    var pushed = false;
+    backend.onRun = () => pushed = true;
+
+    await loginDroppingGuestData(
+      db: db,
+      settings: settings,
+      client: client,
+      syncEngine: syncEngine,
+      email: 'me@example.com',
+      password: 'testpass123',
+    );
+
+    expect(await tasksStore.record('t1').get(db), isNull);
+    expect(await settings.getValue('account_identity'), 'me@example.com');
+    expect(
+      pushed,
+      isFalse,
+      reason: 'guest data must be dropped, never pushed to the account',
+    );
+  });
+
+  test('loginDroppingGuestData and a concurrent syncAll never interleave '
+      '(SyncEngine.runExclusive serializes them)', () async {
+    final db = await newDatabaseFactoryMemory().openDatabase('test6.db');
+    final settings = SembastAppSettingsRepository(db);
+    final client = _FakeLoginClient(settings: settings);
+    final backend = _NoopSyncBackend();
+    final syncEngine = SyncEngine(db: db, settings: settings, backend: backend);
+
+    await tasksStore.record('t1').put(db, {
+      'id': 't1',
+      'title': 'guest task',
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      'deleted': false,
+    });
+
+    final syncFuture = syncEngine.syncAll([_tasksCollection]);
+    final loginFuture = loginDroppingGuestData(
+      db: db,
+      settings: settings,
+      client: client,
+      syncEngine: syncEngine,
+      email: 'me@example.com',
+      password: 'testpass123',
+    );
+
+    await Future.wait([syncFuture, loginFuture]);
+
+    // Whichever ran first, loginDroppingGuestData is queued to run
+    // exclusively of syncAll, so once both complete the store must end
+    // up empty either way.
+    expect(await tasksStore.record('t1').get(db), isNull);
+  });
 
   test('logout() pushes a not-yet-synced local edit before wiping it, even '
       'when no sync happens to already be in flight', () async {

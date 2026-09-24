@@ -69,6 +69,16 @@ Future<void> main() async {
           syncEngine: syncEngine,
         ),
       ),
+      accountLoginDroppingGuestDataProvider.overrideWithValue(
+        (email, password) => loginDroppingGuestData(
+          db: db,
+          settings: appSettings,
+          client: syncClient,
+          syncEngine: syncEngine,
+          email: email,
+          password: password,
+        ),
+      ),
     ],
   );
 

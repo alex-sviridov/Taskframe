@@ -181,7 +181,10 @@ void main() {
     });
 
     test('logging into an existing account merges local guest data with the '
-        "account's existing data", () async {
+        "account's existing data (the raw PocketBaseSyncClient + SyncEngine "
+        'mechanism — the app-level login flow deliberately avoids this by '
+        'wiping guest data first; see loginDroppingGuestData() in '
+        'account_service.dart)', () async {
       final email = 'merge-${DateTime.now().microsecondsSinceEpoch}@test.local';
 
       // Device A registers and syncs one record - this account now has

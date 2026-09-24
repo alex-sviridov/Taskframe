@@ -6,8 +6,10 @@ The original sync design (`2026-09-15-sync-backend-design.md`) identified a
 device's sync group by a shared pairing code, with no real user accounts.
 This replaces that identity model with native PocketBase email/password
 user accounts, while keeping the app fully usable, local-only, without an
-account ("guest mode"). A guest who later registers or logs in gets their
-local data merged into that account and starts syncing across devices.
+account ("guest mode"). A guest who later registers gets their local data
+carried into that new account and starts syncing across devices; a guest
+who logs into an *existing* account instead drops their local guest data
+and pulls that account's data fresh.
 
 This spec **supersedes** `2026-09-15-sync-backend-design.md`'s "No
 accounts — pairing code as the auth mechanism" decision and everything
@@ -33,8 +35,10 @@ In scope:
 - `logout()`: clears local synced data, sync cursors, and the stored
   session, returning the device to a clean guest state
 - Reusing the existing sync-on-authenticate behavior (cursors at epoch)
-  to merge a guest's local data into whatever account they register for
-  or log into — no separate migration code
+  to carry a guest's local data into whatever account they register for
+  — no separate migration code. Logging into an *existing* account
+  instead drops local guest data first (`loginDroppingGuestData()` in
+  `account_service.dart`), so it never merges with that account's data.
 - An auth screen (email/password, register/login toggle, logout) replacing
   the pairing screen; the nav-shell entry relabeled "Account"
 
@@ -76,8 +80,10 @@ Out of scope:
   start at epoch, the very next sync after register/login naturally
   pushes every local guest record (all "newer than epoch") and pulls
   whatever the account already has — this is what satisfies "guest data
-  merges into whichever account you log into," with no separate
-  migration step to build or test.
+  carries into a newly-registered account," with no separate migration
+  step to build or test. Logging into an *existing* account instead
+  wipes local guest data first (same store-clearing helper `logout()`
+  uses), so it's never pushed — see `loginDroppingGuestData()`.
 - **Logout wipes local synced data**, chosen over "keep local data,
   just stop syncing," because leaving a stale copy of another session's
   private data on a shared/borrowed device is the wrong default for
@@ -149,7 +155,8 @@ Unchanged from the 2026-09-15 spec's push/pull/LWW logic. What's new:
 - Integration tests (extending `test/integration/pocketbase_sync_test.dart`,
   which already runs against a live local PocketBase) covering: register
   → guest data appears on the account; login to an existing account with
-  local guest data present → both merge; logout → local stores are empty
+  local guest data present → guest data is dropped, not pushed, and the
+  account's own data is pulled fresh; logout → local stores are empty
   and a subsequent login re-pulls everything.
 - The existing three cross-device integration scenarios (edit
   propagation, delete propagation, concurrent-edit LWW) are retargeted to
